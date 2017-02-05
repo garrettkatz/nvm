@@ -1,0 +1,5 @@
+if 1 == 1: print('hello')
+  print('goodbye')
+else: print('hiya')
+  print('farewell')
+print('all.')
