@@ -98,5 +98,5 @@ if __name__ == '__main__':
 
     hv = Hypervisor()
     print('Starting...')
-    hv.start(rvm, rvmio)
+    hv.start(rvm, rvmio, period=1.0/10)
     hv.show()

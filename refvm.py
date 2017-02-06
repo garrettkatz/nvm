@@ -149,18 +149,28 @@ class RefVM:
         self.gui_process.join()
         self.viz_on = False
     def gui_state(self):
-        pass
+        def bits(i):
+            b = np.empty((word_size,),dtype=np.uint8)
+            for j in range(word_size):
+                b[j] = 255*(1 & (i >> j))
+            return b
+        state = tuple([
+            (self.human_readable[r], tuple(bits(self.registers[r])))
+            for r in sorted(self.registers.keys(),reverse=True)]
+             + [('{ip}', tuple(bits(self.instruction_pointer)))])
+        return state
     def tick(self):
         # handle visualization
         if self.viz_on:
             if self.vm_pipe_to_gui.poll():
                 msg = self.vm_pipe_to_gui.recv()
-                layer_size = 32
-                state = (
-                    ('{0}', tuple(np.random.randint(0,256,(layer_size,),dtype=np.uint8))),
-                    ('{1}', tuple(np.random.randint(0,256,(layer_size,),dtype=np.uint8))),
-                    ('{ip}', tuple(np.random.randint(0,256,(layer_size,),dtype=np.uint8))),
-                )
+                state = self.gui_state()
+                # layer_size = 32
+                # state = (
+                #     ('{0}', tuple(np.random.randint(0,256,(layer_size,),dtype=np.uint8))),
+                #     ('{1}', tuple(np.random.randint(0,256,(layer_size,),dtype=np.uint8))),
+                #     ('{ip}', tuple(np.random.randint(0,256,(layer_size,),dtype=np.uint8))),
+                # )
                 self.vm_pipe_to_gui.send(state)
         # execute instruction
         self.instruction = []
