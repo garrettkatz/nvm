@@ -19,20 +19,22 @@ class VMGui:
         layer_size_sum = 0
         vm_state = self.gui_pipe_to_vm.recv()
         for ell in range(len(vm_state)):
-            layer = vm_state[ell][1]
+            layer = vm_state[ell][2]
             layer_size = len(layer)
             layer_size_sum += layer_size
         self.root = tk.Tk()
-        self.frame = tk.Frame(self.root, width = history+2*padding+20, height = layer_size_sum+(len(vm_state)+1)*padding)
+        self.label_padding = 40
+        self.frame = tk.Frame(self.root, width = history+2*padding+self.label_padding, height = layer_size_sum+(len(vm_state)+1)*padding)
         layer_size_sum = 0
         for ell in range(len(vm_state)):
-            layer = vm_state[ell][1]
+            layer = vm_state[ell][2]
             layer_size = len(layer)
-            label = tk.Label(self.frame, text=vm_state[ell][0])
+            label = tk.Label(self.frame, text=vm_state[ell][0], justify=tk.LEFT)
             label.place(x=0,y=((ell+1)*self.padding + layer_size_sum))
+            self.layer_labels.append(label)
             width, height = self.history, layer_size
             canvas = tk.Canvas(self.frame, width=width, height=height)
-            canvas.place(x=self.padding+20,y=((ell+1)*self.padding + layer_size_sum))
+            canvas.place(x=self.padding+self.label_padding,y=((ell+1)*self.padding + layer_size_sum))
             self.canvases.append(canvas)
             raster = np.zeros((height, width), dtype=np.uint8)
             self.rasters.append(raster)
@@ -52,15 +54,16 @@ class VMGui:
             vm_state = message
             layer_size_sum = 0
             for ell in range(len(vm_state)):
-                layer = vm_state[ell][1]
+                layer = vm_state[ell][2]
                 layer_size = len(layer)
                 width, height = self.history, layer_size
                 self.rasters[ell] = np.roll(self.rasters[ell], 1, axis=1)
-                tt = np.array(layer)
+                tt = np.array(layer, dtype=np.uint8)
                 self.rasters[ell][:,0] = tt
                 self.imgs[ell] = pil.Image.frombytes('L', (width, height), self.rasters[ell].tobytes())
                 self.photos[ell] = itk.PhotoImage(image=self.imgs[ell])
-                self.canvases[ell].create_image(0,0,image=self.photos[ell], anchor=tk.NW)
+                self.canvases[ell].create_image(1,1,image=self.photos[ell], anchor=tk.NW)
+                self.layer_labels[ell].config(text='%s\n%s'%(vm_state[ell][0], vm_state[ell][1]))
                 layer_size_sum += layer_size
             self.gui_pipe_to_vm.send('ready for up-to-date state')
             self.root.update()

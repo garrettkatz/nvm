@@ -9,7 +9,9 @@ def _run_vm(vm, io, period, pipe_to_hv):
         # flush pipes
         if pipe_to_hv.poll():
             message = pipe_to_hv.recv()
-            if message == 'q': break
+            if message == 'q':
+                vm.hide_gui()
+                break
             if message == 'd':
                 print('%s seconds elapsed'%(time.time()-start_time))
                 vm.disp()
@@ -45,6 +47,7 @@ class Hypervisor:
         self.pipe_to_vm.send('q')
         self.vm_process.join()
         print('Stopped.')
+        exit()
     def disp(self):
         print('State:')
         self.pipe_to_vm.send('d')
@@ -54,6 +57,7 @@ class Hypervisor:
         self.pipe_to_vm.recv() # confirm finished
     def hide(self):
         self.pipe_to_vm.send('h')
+        self.pipe_to_vm.recv() # confirm finished
     def put(self, data):
         print('Putting %s'%data)
         self.pipe_to_vm.send('p')

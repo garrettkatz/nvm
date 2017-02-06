@@ -2,7 +2,13 @@ import multiprocessing as mp
 import numpy as np
 import vm_gui
 
-word_size = 32
+layer_size = 32
+
+def bits(i):
+    b = np.empty((layer_size,),dtype=np.uint8)
+    for j in range(layer_size):
+        b[j] = 255*(1 & (i >> j))
+    return tuple(b)
 
 class RefVM:
     """
@@ -16,17 +22,17 @@ class RefVM:
             'nop','set','copy','store','prepend','read','write','next','compare','jump','nor', 'get', 'put'] # instructions
         literals += register_names # registers
         literals += ['FALSE','TRUE'] # booleans
-        literals += ['NIL',''] # placeholders
+        literals += ['NIL','_'] # placeholders
         for literal in literals:
             self.add_literal(literal)
         self.viz_on = False
         # setup machine state
         self.instruction_pointer = None
-        self.instruction = [self.machine_readable['']]*4
+        self.instruction = [self.machine_readable['_']]*4
         self.memory = {} # memory[pointer] = (value, next_pointer)
         self.free_key = 0
         self.instruction_size = 4
-        self.registers = {self.machine_readable[r]:self.machine_readable[''] for r in register_names}
+        self.registers = {self.machine_readable[r]:self.machine_readable['_'] for r in register_names}
         self.devices = {}
         # init with nop program
         assembly_code = "nop"
@@ -35,7 +41,7 @@ class RefVM:
     def add_literal(self, literal):
         if literal not in self.literals:
             ell = -len(self.machine_readable)
-            # ell = tuple(np.tanh(np.random.randn(word_size)))
+            # ell = tuple(np.tanh(np.random.randn(layer_size)))
             self.human_readable[ell] = literal
             self.machine_readable[literal] = ell
             self.literals.append(literal)
@@ -68,7 +74,7 @@ class RefVM:
         self.memory[pointer] = (value, self._get_tail(pointer))
     def _cons(self, head, tail=None):
         pointer = self.free_key
-        # pointer = tuple(np.tanh(np.random.randn(word_size)))
+        # pointer = tuple(np.tanh(np.random.randn(layer_size)))
         if tail is None: tail = pointer
         self.memory[pointer] = (head, tail)
         self.free_key += 1
@@ -109,7 +115,7 @@ class RefVM:
             # store operands
             operands = instruction.split(' ')
             for op in range(len(operands), self.instruction_size):
-                operands.append('')
+                operands.append('_')
             object_code.append(operands)
             offset += 1
         # convert literals to machine-readable
@@ -140,77 +146,109 @@ class RefVM:
         # initialize instruction pointer
         self.instruction_pointer = keys[0]
     def show_gui(self):
-        self.viz_on = True
-        self.vm_pipe_to_gui, gui_pipe_to_vm = mp.Pipe()
-        self.gui_process = mp.Process(target=_run_gui, args=(gui_pipe_to_vm,))
-        self.gui_process.start()
+        if not self.viz_on:
+            self.viz_on = True
+            self.vm_pipe_to_gui, gui_pipe_to_vm = mp.Pipe()
+            self.gui_process = mp.Process(target=_run_gui, args=(gui_pipe_to_vm,))
+            self.gui_process.start()
     def hide_gui(self):
-        self.vm_pipe_to_gui.send('q')
-        self.gui_process.join()
-        self.viz_on = False
+        if self.viz_on:
+            self.vm_pipe_to_gui.send('q')
+            self.gui_process.join()
+            self.viz_on = False
     def gui_state(self):
-        def bits(i):
-            b = np.empty((word_size,),dtype=np.uint8)
-            for j in range(word_size):
-                b[j] = 255*(1 & (i >> j))
-            return b
-        state = tuple([
-            (self.human_readable[r], tuple(bits(self.registers[r])))
-            for r in sorted(self.registers.keys(),reverse=True)]
-             + [('{ip}', tuple(bits(self.instruction_pointer)))])
-        return state
+        layers = [('{ip}', self.hr(self.instruction_pointer), tuple(bits(self.instruction_pointer)))]
+        for op in range(self.instruction_size):
+            layers.append(('{i%d}'%op, self.hr(self.instruction[op]), tuple(bits(self.instruction[op]))))
+        for r in sorted(self.registers.keys(),reverse=True):
+            layers.append((self.hr(r), self.hr(self.registers[r]), tuple(bits(self.registers[r]))))
+        return tuple(layers)
     def tick(self):
         # handle visualization
         if self.viz_on:
             if self.vm_pipe_to_gui.poll():
                 msg = self.vm_pipe_to_gui.recv()
                 state = self.gui_state()
-                # layer_size = 32
-                # state = (
-                #     ('{0}', tuple(np.random.randint(0,256,(layer_size,),dtype=np.uint8))),
-                #     ('{1}', tuple(np.random.randint(0,256,(layer_size,),dtype=np.uint8))),
-                #     ('{ip}', tuple(np.random.randint(0,256,(layer_size,),dtype=np.uint8))),
-                # )
                 self.vm_pipe_to_gui.send(state)
         # execute instruction
         self.instruction = []
         for op in range(4):
+            # gated NN behaviors:
+            # attractor activity
+            # hetero-associative activity
+            # copy layer
             self.instruction.append(self._get_head(self.instruction_pointer))
             self.instruction_pointer = self._get_tail(self.instruction_pointer)
         operation, operands = self.instruction[0], self.instruction[1:]
         if operation == self.machine_readable['nop']:
             pass
         if operation == self.machine_readable['set']: # value, register
+            # gated NN behaviors:
+            # copy layer
             self.registers[operands[1]] = operands[0]
         if operation == self.machine_readable['copy']: # source register, target register
+            # gated NN behaviors:
+            # copy layer
             self.registers[operands[1]] = self.registers[operands[0]]
         if operation == self.machine_readable['store']: # value register, pointer register
+            # gated NN behaviors:
+            # unused waypoint activation
+            # fast attractor learning
+            # fast hetero-associative learning
+            # copy layer
             self.registers[operands[1]] = self._cons(self.registers[operands[0]])
         if operation == self.machine_readable['prepend']: # value register, pointer register
+            # gated NN behaviors:
+            # unused waypoint activation
+            # fast attractor learning
+            # fast hetero-associative learning
+            # copy layer
             self.registers[operands[1]] = self._cons(self.registers[operands[0]], self.registers[operands[1]])
         if operation == self.machine_readable['read']: # value register, pointer register
+            # gated NN behaviors:
+            # attractor activity
+            # hetero-associative activity
+            # copy layer
             self.registers[operands[0]] = self._get_head(self.registers[operands[1]])
         if operation == self.machine_readable['write']: # value register, pointer register
+            # gated NN behaviors:
+            # fast hetero-associative learning
+            # copy layer
             self._set_head(self.registers[operands[1]], self.registers[operands[0]])
         if operation == self.machine_readable['next']: # pointer register
+            # gated NN behaviors:
+            # attractor activity
+            # copy layer
             self.registers[operands[0]] = self._get_tail(self.registers[operands[0]])
         if operation == self.machine_readable['compare']: # value register, value register, result register
+            # gated NN behaviors:
+            # comparison circuit            
+            # copy layer
             if self.registers[operands[0]] == self.registers[operands[1]]:
                 self.registers[operands[2]] = self.machine_readable['TRUE']
             else:
                 self.registers[operands[2]] = self.machine_readable['FALSE']
         if operation == self.machine_readable['jump']: # condition register, instruction pointer
+            # gated NN behaviors:
+            # conditional copy layer
             if self.registers[operands[0]] != self.machine_readable['FALSE']:
                 self.instruction_pointer = operands[1]
         if operation == self.machine_readable['nor']: # disjunct register, disjunct register, result register
+            # gated NN behaviors:
+            # nor circuit
+            # copy layer
             disjuncts = [(self.registers[op] != self.machine_readable['FALSE']) for op in operands[:2]]
             if not (disjuncts[1] or disjuncts[0]):
                 self.registers[operands[2]] = self.machine_readable['TRUE']
             else:
                 self.registers[operands[2]] = self.machine_readable['FALSE']
         if operation == self.machine_readable['get']: # device_name, register
+            # gated NN behaviors:
+            # copy layer
             self.registers[operands[1]] = self.devices[operands[0]].output_layer
         if operation == self.machine_readable['put']: # device_name, register
+            # gated NN behaviors:
+            # copy layer
             self.devices[operands[0]].input_layer = self.registers[operands[1]]
 
 def _run_gui(gui_pipe_to_vm):
@@ -221,8 +259,8 @@ class RefIODevice:
     def __init__(self, machine_readable, human_readable):
         self.machine_readable = machine_readable
         self.human_readable = human_readable
-        self.input_layer = self.machine_readable['']
-        self.output_layer = self.machine_readable['']
+        self.input_layer = self.machine_readable['_']
+        self.output_layer = self.machine_readable['_']
     def put(self, hr):
         self.output_layer = self.machine_readable[hr]
     def peek(self):
