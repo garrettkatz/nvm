@@ -8,6 +8,7 @@ import time
 import mock_net as mn
 import nvm_viz as nv
 
+
 class NVM:
     """
     """
