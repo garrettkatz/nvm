@@ -63,9 +63,9 @@ if __name__ == '__main__':
     num_registers = 4
     layer_size = 32
     encoding = mn.MockEncoding(layer_size)
-    net = mn.MockNet(encoding, num_registers, layer_size, input_layers={'in':mn.MockLayer('in',layer_size)})
+    net = mn.MockNet(encoding, num_registers, layer_size, input_layers={})
     nvm = NVM(net, encoding)
     print(nvm)
     # print(nvm.viz_state())
-    nvm.show_viz()
+    # nvm.show_viz()
  # 
