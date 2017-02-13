@@ -68,3 +68,4 @@ if __name__ == '__main__':
     print(nvm)
     # print(nvm.viz_state())
     nvm.show_viz()
+ # 
