@@ -32,32 +32,38 @@ class MockEncoding:
         return self.human_readable_of[machine_readable.tobytes()]
 
 class MockNet:
-    def __init__(self, encoding, num_registers, layer_size=32, input_layers={}, output_layers={}):
-        self.encoding = encoding
-        self.num_registers = num_registers
-        self.layer_size = layer_size
-        self.layer_groups = [['IP','OPC','OP1','OP2','OP3'],
-                            ['{%d}'%r for r in range(num_registers)],
-                            ['K','V'],
-                            ['C1','C2','CO'],
-                            ['N1','N2','NO'],
-                            input_layers.keys(),
-                            output_layers.keys()]
-        self.layers = {}
-        for layer_group in self.layer_groups:
-            for layer_name in layer_group:
-                self.layers[layer_name] = np.empty((layer_size,))
-    def encode(self, human_readable):
-        return self.encoding.encode(human_readable)
-    def decode(self, machine_readable):
-        return self.encoding.decode(machine_readable)
-    def get_layers(self):
-        return {layer_name: activity.copy() for (layer_name, activity) in self.layers.iteritems()}
-    def __str__(self):
-        text = ''
-        for group in self.layer_groups:
-            text += '[' + ', '.join(group) + ']: '
-            text += '[' + ', '.join(self.decode(self.layers[layer_name]) for layer_name in group) + ']\n'
-        return text
+    def __init__(self):
+        pass
     def tick(self):
         pass
+
+# class MockNet:
+#     def __init__(self, encoding, num_registers, layer_size=32, input_layers={}, output_layers={}):
+#         self.encoding = encoding
+#         self.num_registers = num_registers
+#         self.layer_size = layer_size
+#         self.layer_groups = [['IP','OPC','OP1','OP2','OP3'],
+#                             ['{%d}'%r for r in range(num_registers)],
+#                             ['K','V'],
+#                             ['C1','C2','CO'],
+#                             ['N1','N2','NO'],
+#                             input_layers.keys(),
+#                             output_layers.keys()]
+#         self.layers = {}
+#         for layer_group in self.layer_groups:
+#             for layer_name in layer_group:
+#                 self.layers[layer_name] = np.empty((layer_size,))
+#     def encode(self, human_readable):
+#         return self.encoding.encode(human_readable)
+#     def decode(self, machine_readable):
+#         return self.encoding.decode(machine_readable)
+#     def get_layers(self):
+#         return {layer_name: activity.copy() for (layer_name, activity) in self.layers.iteritems()}
+#     def __str__(self):
+#         text = ''
+#         for group in self.layer_groups:
+#             text += '[' + ', '.join(group) + ']: '
+#             text += '[' + ', '.join(self.decode(self.layers[layer_name]) for layer_name in group) + ']\n'
+#         return text
+#     def tick(self):
+#         pass
