@@ -1,4 +1,5 @@
 import multiprocessing as mp
+import numpy as np
 import visualizer as vz
 import mock_net as mn
 
@@ -8,17 +9,26 @@ class NVM:
         self.network = network
         self.visualizing = False
     def tick(self):
-        pass
+        # answer any visualizer request
+        if self.visualizing:
+            if self.viz_pipe.poll():
+                # flush request
+                self.viz_pipe.recv()
+                # respond with data
+                self.send_viz_data()
+        # network update
+        self.network.tick()
     def send_viz_data(self):
         """
         Protocol: <# layers>, <name>, <value>, <pattern>, <name>, <value>, <pattern>, ...
         """
         if not self.visualizing: return
-        self.viz_pipe.send(2)
-        for i in [1,2]:
+        idxs = [1,2,4]
+        self.viz_pipe.send(len(idxs))
+        for i in idxs:
             self.viz_pipe.send('lay%d'%i) # name
             self.viz_pipe.send('asd%d'%(10+i)) # value
-            pattern = np.array([3,2,1],dtype=np.uint8).tobytes()
+            pattern = np.random.randint(0,255,(32,),dtype=np.uint8).tobytes()
             self.viz_pipe.send_bytes(pattern) # bytes
     def show(self):
         self.hide() # flush any outdated viz process
@@ -26,6 +36,8 @@ class NVM:
         self.viz_process = mp.Process(target=run_viz, args=(other_end,))
         self.viz_process.start()
         self.visualizing = True
+        # send initial data for window layout
+        self.send_viz_data()
     def hide(self):
         if not self.visualizing: return
         self.viz_pipe.send('shutdown')

@@ -74,6 +74,7 @@ if __name__ == '__main__':
     hv = Hypervisor()
     hv.print_nvm()
     hv.show()
+    # hv.hide()
     # hv.terminate()
 
 # import multiprocessing as mp
