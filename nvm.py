@@ -1,61 +1,50 @@
 import multiprocessing as mp
-import matplotlib.pyplot as plt
-import Tkinter as tk
-import PIL as pil
-import PIL.ImageTk as itk # on fedora 24 needed $ dnf install python-pillow-tk
-import numpy as np
-import time
+import visualizer as vz
 import mock_net as mn
-import nvm_viz as nv
 
-class Hypervisor:
-    def __init__(self):
-        self.tick_pipe, other_end = mp.Pipe()
-        self.tick_process = mp.Process(target=run_tick_process, args=(other_end,))
-        self.tick_process.start()
-    def start(self):
+class NVM:
+    def __init__(self, coding, network):
+        self.coding = coding
+        self.network = network
+        self.visualizing = False
+    def tick(self):
+        pass
+    def send_viz_data(self):
         """
-        Start ticking
+        Protocol: <# layers>, <name>, <value>, <pattern>, <name>, <value>, <pattern>, ...
         """
-        self.tick_pipe.send('start')
-    def stop(self):
-        """
-        Stop ticking
-        """
-        self.tick_pipe.send('stop')
-    def destroy(self):
-        """
-        Stop tick process
-        """
-        self.tick_pipe.send('destroy')
-        self.tick_process.join()
-    def print(self):
-        self.tick_pipe.send('print')
-        print_string = self.tick_pipe.recv()
-        print(print_string)
+        if not self.visualizing: return
+        self.viz_pipe.send(2)
+        for i in [1,2]:
+            self.viz_pipe.send('lay%d'%i) # name
+            self.viz_pipe.send('asd%d'%(10+i)) # value
+            pattern = np.array([3,2,1],dtype=np.uint8).tobytes()
+            self.viz_pipe.send_bytes(pattern) # bytes
+    def show(self):
+        self.hide() # flush any outdated viz process
+        self.viz_pipe, other_end = mp.Pipe()
+        self.viz_process = mp.Process(target=run_viz, args=(other_end,))
+        self.viz_process.start()
+        self.visualizing = True
+    def hide(self):
+        if not self.visualizing: return
+        self.viz_pipe.send('shutdown')
+        self.viz_process.join()
+        self.viz_pipe = None
+        self.viz_process = None
+        self.visualizing = False
 
-def run_tick_process(nvm_pipe):
-    # init
-    net = mn.MockNet()
-    while True:
-        # process messages
-        message = nvm_pipe.recv()
-        print(message)
-        if message == 'destroy':
-            break
-        # step the network
-        net.tick()
-    
-def run_viz():
-    # Init viz
-    # Start main tk loop
-    pass
+def mock_nvm(layer_size=32):
+    return NVM(mn.MockCoding(layer_size), mn.MockNet())
+
+def run_viz(nvm_pipe):
+    viz = vz.Visualizer(nvm_pipe)
+    viz.launch()
 
 if __name__ == '__main__':
     nvm = NVM()
-    nvm.start()
-    nvm.stop()
-    nvm.destroy()
+    nvm.show()
+    nvm.hide()
 
 # class NVM:
 #     """

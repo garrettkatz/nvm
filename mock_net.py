@@ -1,6 +1,6 @@
 import numpy as np
 
-class MockEncoding:
+class MockCoding:
     """
     Mapping between machine- and human-readable constants
     """
