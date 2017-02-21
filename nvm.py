@@ -8,6 +8,15 @@ class NVM:
         self.coding = coding
         self.network = network
         self.visualizing = False
+        # Encode layer names and constants
+        symbols = self.network.layer_names + ['TRUE','FALSE','NIL']
+        for symbol in symbols:
+            self.coding.encode(symbol)
+        # clear layers
+        nil_pattern = self.coding.encode('NIL')
+        layers = self.network.get_layers()
+        layers = [(name, nil_pattern) for (name,_) in layers]
+        self.network.set_layers(layers)
     def tick(self):
         # answer any visualizer request
         if self.visualizing:
@@ -23,15 +32,15 @@ class NVM:
         Protocol: <# layers>, <name>, <value>, <pattern>, <name>, <value>, <pattern>, ...
         """
         if not self.visualizing: return
-        idxs = [1,2,4]
-        self.viz_pipe.send(len(idxs))
-        for i in idxs:
-            self.viz_pipe.send('lay%d'%i) # name
-            self.viz_pipe.send('asd%d'%(10+i)) # value
-            pattern = np.random.randint(0,255,(32,),dtype=np.uint8).tobytes()
+        layers = self.network.get_layers()
+        self.viz_pipe.send(len(layers))
+        for (name, pattern) in layers:
+            self.viz_pipe.send(name)
+            self.viz_pipe.send(self.coding.decode(pattern)) # value
+            pattern = (128*(pattern + 1.0)).astype(np.uint8).tobytes()
             self.viz_pipe.send_bytes(pattern) # bytes
     def show(self):
-        self.hide() # flush any outdated viz process
+        self.hide() # flush any windowless viz process
         self.viz_pipe, other_end = mp.Pipe()
         self.viz_process = mp.Process(target=run_viz, args=(other_end,))
         self.viz_process.start()
@@ -46,17 +55,17 @@ class NVM:
         self.viz_process = None
         self.visualizing = False
 
-def mock_nvm(layer_size=32):
-    return NVM(mn.MockCoding(layer_size), mn.MockNet())
+def mock_nvm(num_registers=3, layer_size=32):
+    return NVM(mn.MockCoding(layer_size), mn.MockNet(num_registers, layer_size))
 
 def run_viz(nvm_pipe):
     viz = vz.Visualizer(nvm_pipe)
     viz.launch()
 
 if __name__ == '__main__':
-    nvm = NVM()
-    nvm.show()
-    nvm.hide()
+    nvm = mock_nvm()
+    # nvm.show()
+    # nvm.hide()
 
 # class NVM:
 #     """

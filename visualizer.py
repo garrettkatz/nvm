@@ -6,7 +6,7 @@ import numpy as np
 import time
 
 class Visualizer:
-    def __init__(self, nvm_pipe, history=512, padding=16, label_padding=40):
+    def __init__(self, nvm_pipe, history=256, padding=8, label_padding=40):
         self.nvm_pipe = nvm_pipe
         self.nvm_shutdown = False
         self.history = history

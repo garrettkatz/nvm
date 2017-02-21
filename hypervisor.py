@@ -5,7 +5,7 @@ NVM (network, encoding, build tools)
 <-> network state, viz directives
 VIZ (viz)
 """
-import sys
+import sys, time
 import multiprocessing as mp
 import nvm
 
@@ -15,9 +15,9 @@ class NotRunningError(Exception):
 class Hypervisor:
     def __init__(self):
         self.startup()
-    def startup(self):
+    def startup(self, period=1):
         self.nvm_pipe, other_end = mp.Pipe()
-        self.nvm_process = mp.Process(target=run_nvm, args=(other_end,))
+        self.nvm_process = mp.Process(target=run_nvm, args=(other_end, period))
         self.nvm_process.start()
         self.running = True
     def exchange(self, message):
@@ -44,12 +44,13 @@ class Hypervisor:
         if self.running: self.shutdown()
         sys.exit(0)
 
-def run_nvm(hv_pipe):
+def run_nvm(hv_pipe, period):
     # Init NVM
     vm = nvm.mock_nvm()
     done = False
     while not done:
         # step the network
+        start_time = time.time()
         vm.tick()
         # process next message
         if hv_pipe.poll():
@@ -67,6 +68,10 @@ def run_nvm(hv_pipe):
                 vm.hide() # shutdown visualizer if running
                 done = True
                 hv_pipe.send('shutdown')
+        # wait up to period
+        duration = time.time() - start_time
+        if duration < period:
+            time.sleep(period - duration)
 
 if __name__ == '__main__':
 

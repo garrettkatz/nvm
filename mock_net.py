@@ -6,7 +6,7 @@ class MockCoding:
     """
     def __init__(self, layer_size):
         self.layer_size = layer_size
-        self.next_key = -1
+        self.next_key = 0
         self.machine_readable_of = {}
         self.human_readable_of = {}
     def encode(self, human_readable):
@@ -15,7 +15,7 @@ class MockCoding:
             return self.machine_readable_of[human_readable]
         # encode with next key
         key = self.next_key
-        self.next_key -= 1
+        self.next_key += 1
         # convert integer key to activity pattern
         machine_readable = np.random.rand(self.layer_size)
         for unit in range(self.layer_size):
@@ -32,10 +32,27 @@ class MockCoding:
         return self.human_readable_of[machine_readable.tobytes()]
 
 class MockNet:
-    def __init__(self):
-        pass
+    def __init__(self, num_registers, layer_size=32, io_layers=[]):
+        self.num_registers = num_registers
+        self.layer_size = layer_size
+        self.layer_groups = [['IP','OPC','OP1','OP2','OP3'],
+                            ['{%d}'%r for r in range(num_registers)],
+                            ['K','V'],
+                            ['C1','C2','CO'],
+                            ['N1','N2','NO'],
+                            [layer.name for layer in io_layers]]
+        self.layer_names = [name for group in self.layer_groups for name in group]
+        # self.layers = {name: np.tanh(np.random.randn(self.layer_size)) for name in self.layer_names}
+        self.layers = {name: -np.ones((self.layer_size,)) for name in self.layer_names}
+    def get_layers(self):
+        return [(name, self.layers[name].copy()) for name in self.layer_names]
+    def set_layers(self, layers):
+        for (name, pattern) in layers:
+            self.layers[name] = pattern.copy()
     def tick(self):
+        # self.layers = {name: np.tanh(np.random.randn(self.layer_size)) for name in self.layer_names}
         pass
+        
 
 # class MockNet:
 #     def __init__(self, encoding, num_registers, layer_size=32, input_layers={}, output_layers={}):
