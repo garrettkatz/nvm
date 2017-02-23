@@ -3,17 +3,33 @@ import numpy as np
 import visualizer as vz
 import mock_net as mn
 
+class IOLayer:
+    def __init__(self, name, pipe, layer_size):
+        self.name = name
+        self.pipe = pipe
+        self.recv_layer = np.empty((layer_size,))
+        self.send_layer = np.empty((layer_size,))
+    def recv_input_pattern():
+        # flush pipe and save last pattern
+        while self.pipe.poll():
+            pattern = self.pipe.recv_bytes()
+            pattern = np.fromstring(pattern)
+            self.recv_layer = pattern.copy()
+    def send_output_pattern(pattern):
+        self.send_layer = pattern.copy()
+        self.pipe.send_bytes(pattern.tobytes())
+                
 class NVM:
     def __init__(self, coding, network):
         self.coding = coding
         self.network = network
         self.visualizing = False
         # Encode layer names and constants
-        symbols = self.network.layer_names + ['TRUE','FALSE','NIL']
+        symbols = self.network.layer_names + ['TRUE','FALSE','NIL','_']
         for symbol in symbols:
             self.coding.encode(symbol)
         # clear layers
-        nil_pattern = self.coding.encode('NIL')
+        nil_pattern = self.coding.encode('_')
         layers = self.network.get_layers()
         layers = [(name, nil_pattern) for (name,_) in layers]
         self.network.set_layers(layers)

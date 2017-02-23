@@ -42,7 +42,6 @@ class MockNet:
                             ['N1','N2','NO'],
                             [layer.name for layer in io_layers]]
         self.layer_names = [name for group in self.layer_groups for name in group]
-        # self.layers = {name: np.tanh(np.random.randn(self.layer_size)) for name in self.layer_names}
         self.layers = {name: -np.ones((self.layer_size,)) for name in self.layer_names}
     def get_layers(self):
         return [(name, self.layers[name].copy()) for name in self.layer_names]
