@@ -4,20 +4,33 @@ import visualizer as vz
 import mock_net as mn
 
 class IOLayer:
-    def __init__(self, name, pipe, layer_size):
+    """
+    Figure out en/decode with human readable.
+    hypervisor: one end of pipe, sends/recvs human-readable
+    nvm: other end of pipe, decodes before send/encodes after receipt
+    """
+    def __init__(self, name, pipe, layer_size, coding=None):
         self.name = name
         self.pipe = pipe
         self.recv_layer = np.empty((layer_size,))
         self.send_layer = np.empty((layer_size,))
+        self.coding = coding
     def recv_input_pattern():
         # flush pipe and save last pattern
         while self.pipe.poll():
-            pattern = self.pipe.recv_bytes()
-            pattern = np.fromstring(pattern)
+            if self.coding is not None:
+                token = self.pipe.recv()
+                pattern = self.coding.encode(token)
+            else:
+                pattern = self.pipe.recv_bytes()
+                pattern = np.fromstring(pattern)
             self.recv_layer = pattern.copy()
     def send_output_pattern(pattern):
         self.send_layer = pattern.copy()
-        self.pipe.send_bytes(pattern.tobytes())
+        if self.coding is not None:
+            self.pipe.send(self.coding.decode(pattern))            
+        else:
+            self.pipe.send_bytes(pattern.tobytes())
                 
 class NVM:
     def __init__(self, coding, network):
