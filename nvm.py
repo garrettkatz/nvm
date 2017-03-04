@@ -3,35 +3,6 @@ import numpy as np
 import visualizer as vz
 import mock_net as mn
 
-class IOLayer:
-    """
-    Figure out en/decode with human readable.
-    hypervisor: one end of pipe, sends/recvs human-readable
-    nvm: other end of pipe, decodes before send/encodes after receipt
-    """
-    def __init__(self, name, pipe, layer_size, coding=None):
-        self.name = name
-        self.pipe = pipe
-        self.recv_layer = np.empty((layer_size,))
-        self.send_layer = np.empty((layer_size,))
-        self.coding = coding
-    def recv_input_pattern():
-        # flush pipe and save last pattern
-        while self.pipe.poll():
-            if self.coding is not None:
-                token = self.pipe.recv()
-                pattern = self.coding.encode(token)
-            else:
-                pattern = self.pipe.recv_bytes()
-                pattern = np.fromstring(pattern)
-            self.recv_layer = pattern.copy()
-    def send_output_pattern(pattern):
-        self.send_layer = pattern.copy()
-        if self.coding is not None:
-            self.pipe.send(self.coding.decode(pattern))            
-        else:
-            self.pipe.send_bytes(pattern.tobytes())
-                
 class NVM:
     def __init__(self, coding, network):
         self.coding = coding
@@ -42,9 +13,8 @@ class NVM:
         for symbol in symbols:
             self.coding.encode(symbol)
         # clear layers
-        nil_pattern = self.coding.encode('_')
         layers = self.network.get_layers()
-        layers = [(name, nil_pattern) for (name,_) in layers]
+        layers = [(name, self.coding.encode('_')) for (name,_) in layers]
         self.network.set_layers(layers)
     def tick(self):
         # answer any visualizer request
@@ -95,6 +65,33 @@ if __name__ == '__main__':
     nvm = mock_nvm()
     # nvm.show()
     # nvm.hide()
+
+class IOLayer:
+    def __init__(self, name, pipe, layer_size, coding=None):
+        """
+        if coding is not None, assumes other end is human-readable
+        """
+        self.name = name
+        self.pipe = pipe
+        self.recv_layer = np.empty((layer_size,))
+        self.send_layer = np.empty((layer_size,))
+        self.coding = coding
+    def recv_input_pattern():
+        # flush pipe and save last pattern
+        while self.pipe.poll():
+            if self.coding is not None:
+                token = self.pipe.recv()
+                pattern = self.coding.encode(token)
+            else:
+                pattern = self.pipe.recv_bytes()
+                pattern = np.fromstring(pattern)
+            self.recv_layer = pattern.copy()
+    def send_output_pattern(pattern):
+        self.send_layer = pattern.copy()
+        if self.coding is not None:
+            self.pipe.send(self.coding.decode(pattern))            
+        else:
+            self.pipe.send_bytes(pattern.tobytes())
 
 # class NVM:
 #     """

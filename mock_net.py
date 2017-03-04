@@ -32,26 +32,42 @@ class MockCoding:
         return self.human_readable_of[machine_readable.tobytes()]
 
 class MockNet:
-    def __init__(self, num_registers, layer_size=32, io_layers=[]):
+    def __init__(self, num_registers, layer_size=32, io_modules=[]):
         self.num_registers = num_registers
         self.layer_size = layer_size
-        self.layer_groups = [['IP','OPC','OP1','OP2','OP3'],
-                            ['{%d}'%r for r in range(num_registers)],
-                            ['K','V'],
-                            ['C1','C2','CO'],
-                            ['N1','N2','NO'],
-                            [layer.name for layer in io_layers]]
-        self.layer_names = [name for group in self.layer_groups for name in group]
-        self.layers = {name: -np.ones((self.layer_size,)) for name in self.layer_names}
+        register_names = ['IP','OPC','OP1','OP2','OP3'] + ['{%d}'%r for r in range(num_registers)]
+        self.control_module = MockModule(register_names, layer_size)
+        self.compare_module = MockModule(['C1','C2','CO'],layer_size)
+        self.nand_module = MockModule(['N1','N2','NO'],layer_size)
+        self.memory_module = MockModule(['K','V'],layer_size)
+        self.io_modules = io_modules
     def get_layers(self):
-        return [(name, self.layers[name].copy()) for name in self.layer_names]
+        layers = []
+        layers += self.control_module.get_layers()
+        layers += self.compare_module.get_layers()
+        layers += self.nand_module.get_layers()
+        layers += self.memory_module.get_layers()
+        for io_module in self.io_modules:
+            layers += io_module.get_layers()
+        return layers
     def set_layers(self, layers):
-        for (name, pattern) in layers:
+        for (name, pattern) in layers.:
             self.layers[name] = pattern.copy()
     def tick(self):
-        # self.layers = {name: np.tanh(np.random.randn(self.layer_size)) for name in self.layer_names}
+        self.layers = {name: np.tanh(np.random.randn(self.layer_size)) for name in self.layer_names}
         pass
         
+class MockModule:
+    def __init__(self, layer_names, layer_size=32):
+        self.layer_names = layer_names
+        self.layer_size = layer_size
+        self.layers = {name: -np.ones((layer_size,)) for name in layer_names}
+    def get_layers(self):
+        return [(name, self.layers[name].copy()) for name in self.layer_names]
+    def set_layers(self, layer_patterns):
+        for (name, pattern) in layer_patterns:
+            self.layers[name] = pattern.copy()
+    
 
 # class MockNet:
 #     def __init__(self, encoding, num_registers, layer_size=32, input_layers={}, output_layers={}):
