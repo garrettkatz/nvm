@@ -9,12 +9,12 @@ class NVM:
         self.network = network
         self.visualizing = False
         # Encode layer names and constants
-        symbols = self.network.layer_names + ['TRUE','FALSE','NIL','_']
+        symbols = self.network.get_layer_names() + ['TRUE','FALSE','NIL','_']
         for symbol in symbols:
             self.coding.encode(symbol)
         # clear layers
         layers = self.network.get_layers()
-        layers = [(name, self.coding.encode('_')) for (name,_) in layers]
+        layers = [(module_name, layer_name, self.coding.encode('_')) for (module_name, layer_name,_) in layers]
         self.network.set_layers(layers)
     def tick(self):
         # answer any visualizer request
@@ -33,8 +33,8 @@ class NVM:
         if not self.visualizing: return
         layers = self.network.get_layers()
         self.viz_pipe.send(len(layers))
-        for (name, pattern) in layers:
-            self.viz_pipe.send(name)
+        for (_, layer_name, pattern) in layers:
+            self.viz_pipe.send(layer_name)
             self.viz_pipe.send(self.coding.decode(pattern)) # value
             pattern = (128*(pattern + 1.0)).astype(np.uint8).tobytes()
             self.viz_pipe.send_bytes(pattern) # bytes
@@ -53,9 +53,24 @@ class NVM:
         self.viz_pipe = None
         self.viz_process = None
         self.visualizing = False
+    def set_input(self, message, io_module_name, from_human_readable=True):
+        if from_human_readable:
+            pattern = self.coding.encode(message)
+        else:
+            pattern = np.fromstring(pattern,dtype=float)
+        self.network.set_layers([(io_module_name, 'in', pattern)])
+    def get_output(self, io_module_name, to_human_readable=True):
+        pattern = self.network.get_layer(io_module_name, 'out')
+        if to_human_readable:
+            message = self.coding.decode(pattern)
+        else:
+            message = pattern.tobytes()
+        return message
 
 def mock_nvm(num_registers=3, layer_size=32):
-    return NVM(mn.MockCoding(layer_size), mn.MockNet(num_registers, layer_size))
+    stdio = mn.MockModule('stdio', ['in','out'], layer_size)
+    net = mn.MockNet(num_registers, layer_size, io_modules=[stdio])
+    return NVM(mn.MockCoding(layer_size), net)
 
 def run_viz(nvm_pipe):
     viz = vz.Visualizer(nvm_pipe)
@@ -63,93 +78,7 @@ def run_viz(nvm_pipe):
 
 if __name__ == '__main__':
     nvm = mock_nvm()
+    nvm.set_input('blah','stdio',from_human_readable=True)
+    print(nvm.get_output('stdio',to_human_readable=True))
     # nvm.show()
     # nvm.hide()
-
-class IOLayer:
-    def __init__(self, name, pipe, layer_size, coding=None):
-        """
-        if coding is not None, assumes other end is human-readable
-        """
-        self.name = name
-        self.pipe = pipe
-        self.recv_layer = np.empty((layer_size,))
-        self.send_layer = np.empty((layer_size,))
-        self.coding = coding
-    def recv_input_pattern():
-        # flush pipe and save last pattern
-        while self.pipe.poll():
-            if self.coding is not None:
-                token = self.pipe.recv()
-                pattern = self.coding.encode(token)
-            else:
-                pattern = self.pipe.recv_bytes()
-                pattern = np.fromstring(pattern)
-            self.recv_layer = pattern.copy()
-    def send_output_pattern(pattern):
-        self.send_layer = pattern.copy()
-        if self.coding is not None:
-            self.pipe.send(self.coding.decode(pattern))            
-        else:
-            self.pipe.send_bytes(pattern.tobytes())
-
-# class NVM:
-#     """
-#     """
-#     def __init__(self, net, encoding):
-#         self.net = net
-#         # in which process should encoding/decoding happen???
-#         self.encoding = encoding
-#         self.viz_on = False
-#         self.pipe_to_viz = None
-#         self.viz_process = None
-#     def __str__(self):
-#         return str(self.net)
-#     def encode(self, human_readable):
-#         return self.encoding.encode(human_readable)
-#     def decode(self, machine_readable):
-#         return self.encoding.decode(machine_readable)
-#     def assemble(self, assembly_code):
-#         pass
-#     def load(self, object_code, label_table):
-#         pass
-#     def show_viz(self):
-#         if not self.viz_on:
-#             self.viz_on = True
-#             self.pipe_to_viz, pipe_for_viz = mp.Pipe()
-#             self.viz_process = mp.Process(target=run_viz, args=(pipe_for_viz,))
-#             self.viz_process.start()
-#     def hide_viz(self):
-#         if self.viz_on:
-#             self.pipe_to_viz.send('q')
-#             self.viz_process.join()
-#             self.viz_on = False
-#     def viz_state(self):
-#         activations = self.net.get_activations()
-#         state = []
-#         for layer_name in activations:
-#             bits = tuple(np.uint8(255*(activations[layer_name]+1)/2))
-#             state.append(tuple([layer_name, self.decode(activations[layer_name]), bits]))
-#         return tuple(state)        
-#     def tick(self):
-#         # handle visualization
-#         if self.viz_on:
-#             if self.pipe_to_viz.poll():
-#                 _ = self.pipe_to_viz.recv()
-#                 self.pipe_to_viz.send(self.viz_state())
-#         # execute instruction
-#         self.net.tick()
-
-# def run_viz(pipe_to_nvm):
-#     nv.NVMViz(pipe_to_nvm, history=512)
-
-# if __name__ == '__main__':
-#     num_registers = 4
-#     layer_size = 32
-#     encoding = mn.MockEncoding(layer_size)
-#     net = mn.MockNet(encoding, num_registers, layer_size, input_layers={})
-#     nvm = NVM(net, encoding)
-#     print(nvm)
-#     # print(nvm.viz_state())
-#     # nvm.show_viz()
-#  # 
