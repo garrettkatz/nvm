@@ -3,19 +3,20 @@ import numpy as np
 import visualizer as vz
 import mock_net as mn
 
+constants = ['TRUE','FALSE','NIL','_']
+
 class NVM:
     def __init__(self, coding, network):
         self.coding = coding
         self.network = network
         self.visualizing = False
         # Encode layer names and constants
-        symbols = self.network.get_layer_names() + ['TRUE','FALSE','NIL','_']
-        for symbol in symbols:
+        for symbol in self.network.get_layer_names() + constants:
             self.coding.encode(symbol)
         # clear layers
-        layers = self.network.get_layers()
-        layers = [(module_name, layer_name, self.coding.encode('_')) for (module_name, layer_name,_) in layers]
-        self.network.set_layers(layers)
+        pattern_list = self.network.list_patterns()
+        pattern_list = [(module_name, layer_name, self.coding.encode('_')) for (module_name, layer_name,_) in pattern_list]
+        self.network.set_patterns(pattern_list)
     def tick(self):
         # answer any visualizer request
         if self.visualizing:
@@ -28,10 +29,11 @@ class NVM:
         self.network.tick()
     def send_viz_data(self):
         """
-        Protocol: <# layers>, <name>, <value>, <pattern>, <name>, <value>, <pattern>, ...
+        Protocol:
+            <# layers>, <name>, <value>, <pattern>, <name>, <value>, <pattern>, ...
         """
         if not self.visualizing: return
-        layers = self.network.get_layers()
+        layers = self.network.list_patterns()
         self.viz_pipe.send(len(layers))
         for (_, layer_name, pattern) in layers:
             self.viz_pipe.send(layer_name)
@@ -58,17 +60,22 @@ class NVM:
             pattern = self.coding.encode(message)
         else:
             pattern = np.fromstring(pattern,dtype=float)
-        self.network.set_layers([(io_module_name, 'in', pattern)])
+        self.network.set_patterns([(io_module_name, 'STDIN', pattern)])
     def get_output(self, io_module_name, to_human_readable=True):
-        pattern = self.network.get_layer(io_module_name, 'out')
+        pattern = self.network.get_pattern(io_module_name, 'STDOUT')
         if to_human_readable:
             message = self.coding.decode(pattern)
         else:
             message = pattern.tobytes()
         return message
+    def set_operation(self, opcode, *operands):
+        pattern_list = [('control','OPC',self.coding.encode(opcode))]
+        for op in range(len(operands)):
+            pattern_list.append(('control','OP%d'%op, self.coding.encode(operands[op])))
+        self.network.set_patterns(pattern_list)
 
 def mock_nvm(num_registers=3, layer_size=32):
-    stdio = mn.MockModule('stdio', ['in','out'], layer_size)
+    stdio = mn.MockIOModule(module_name='stdio', layer_size=layer_size)
     net = mn.MockNet(num_registers, layer_size, io_modules=[stdio])
     return NVM(mn.MockCoding(layer_size), net)
 
@@ -80,5 +87,6 @@ if __name__ == '__main__':
     nvm = mock_nvm()
     nvm.set_input('blah','stdio',from_human_readable=True)
     print(nvm.get_output('stdio',to_human_readable=True))
-    # nvm.show()
+    nvm.set_operation('nop')
+    nvm.show()
     # nvm.hide()

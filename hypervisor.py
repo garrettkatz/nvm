@@ -13,8 +13,6 @@ class NotRunningError(Exception):
     pass
 
 class Hypervisor:
-    def __init__(self):
-        self.startup()
     def startup(self, period=1):
         self.nvm_pipe, other_end = mp.Pipe()
         self.nvm_process = mp.Process(target=run_nvm, args=(other_end, period))
@@ -35,12 +33,18 @@ class Hypervisor:
         response = self.exchange_with_nvm('hide')
         print(response)
     def input(self, token):
-        response1 = self.exchange_with_nvm('input')
-        response2 = self.exchange_with_nvm(token)
-        print(response1,response2)
+        ready = self.exchange_with_nvm('input')
+        response = self.exchange_with_nvm(token)
+        print(ready,response)
     def output(self):
         response = self.exchange_with_nvm('output')
         return response
+    def set_operation(self, opcode, *operands):
+        ready = self.exchange_with_nvm('set_operation')
+        opcode_response = self.exchange_with_nvm(opcode)
+        for operand in operands:
+            operand_response = self.exchange_with_nvm(operand)
+        response = self.exchange_with_nvm('end operation')
     def shutdown(self):
         self.exchange_with_nvm('shutdown')
         self.nvm_process.join()
@@ -79,6 +83,18 @@ def run_nvm(hv_pipe, period):
             if message == 'output':
                 token = vm.get_output('stdio',to_human_readable=True)
                 hv_pipe.send(token)
+            if message == 'set_operation':
+                hv_pipe.send('accepting operation')
+                opcode = hv_pipe.recv()
+                hv_pipe.send('recieved opcode')
+                operands = []
+                while True:
+                    message = hv_pipe.recv()
+                    hv_pipe.send('received operand')
+                    if message == 'end operation': break
+                    operands.append(message)
+                vm.set_operation(opcode, *operands)
+                hv_pipe.send('received operation')
             if message == 'shutdown':
                 vm.hide() # shutdown visualizer if running
                 done = True
@@ -90,12 +106,18 @@ def run_nvm(hv_pipe, period):
 
 if __name__ == '__main__':
 
+    period = .1
+    
     # Start hypervisor
     hv = Hypervisor()
-    hv.print_nvm()
+    hv.startup(period=period)
     hv.show()
-    # hv.hide()
-    # hv.terminate()
+    time.sleep(period)
+    hv.input('TRUE')
+    time.sleep(period)
+    hv.set_operation('nop')
+    time.sleep(period)
+    # hv.shutdown()
 
 listener_program = """
 set NIL {0} # NIL for exiting loop
