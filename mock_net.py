@@ -35,23 +35,25 @@ class MockCoding:
         return self.human_readable_of[machine_readable.tobytes()]
 
 class MockNet:
-    def __init__(self, mock_coding, num_registers, layer_size=16, io_modules=[]):
+    def __init__(self, num_registers, layer_size=16, io_modules=[]):
         self.num_registers = num_registers
         self.register_names = ['IP','OPC','OP1','OP2','OP3'] + ['{%d}'%r for r in range(num_registers)]
         self.layer_size = layer_size
         self.module_names = []
         self.modules = {}
-        for register_name in self.register_names: mock_coding.encode(register_name)
+        self.layer_module_map = {}
         self.add_module(MockModule('control',self.register_names, layer_size))
         self.add_module(MockModule('compare',['C1','C2','CO'],layer_size))
         self.add_module(MockModule('nand',['N1','N2','NO'],layer_size))
         self.add_module(MockMemoryModule(layer_size))
         for io_module in io_modules:
             self.add_module(io_module)
-        self.add_module(MockGatingModule(mock_coding, self.get_layer_names()))
+        self.add_module(MockGatingModule(self.get_layer_names()))
     def add_module(self, module):
         self.module_names.append(module.module_name)
         self.modules[module.module_name] = module
+        for layer_name in module.layer_names:
+            self.layer_module_map[layer_name] = module.module_name
     def get_module(self, module_name):
         return self.modules[module_name]
     def get_layer_names(self):
@@ -59,32 +61,31 @@ class MockNet:
         for name in self.modules:
             layer_names += self.modules[name].layer_names
         return layer_names
-    def get_pattern(self, module_name, layer_name):
+    def get_pattern(self, layer_name):
+        module_name = self.layer_module_map[layer_name]
         return self.modules[module_name].get_pattern(layer_name)
     def list_patterns(self):
         pattern_list = []
-        for name in self.module_names:
-            pattern_list += [(name, layer_name, pattern) for (layer_name, pattern) in self.modules[name].list_patterns()]
+        for module_name in self.module_names:
+            pattern_list += self.modules[module_name].list_patterns()
         return pattern_list
     def hash_patterns(self):
-        pattern_list = self.list_patterns()
-        return {layer_name: pattern for (_, layer_name, pattern) in pattern_list}
+        return dict(self.list_patterns())
     def set_pattern(self,layer_name, pattern):
-        for module_name in self.modules:
-            if layer_name in self.modules[module_name].layer_names:
-                self.modules[module_name].set_pattern(layer_name, pattern)
-                return
+        module_name = self.layer_module_map[layer_name]
+        self.modules[module_name].set_pattern(layer_name, pattern)
     def set_patterns(self, pattern_list):
-        for (module_name, layer_name, pattern) in pattern_list:
-            self.modules[module_name].set_pattern(layer_name, pattern)
+        for (layer_name, pattern) in pattern_list:
+            self.set_pattern(layer_name, pattern)
     def tick(self):
         old_pattern_list = self.list_patterns()
         old_pattern_hash = self.hash_patterns()
         new_pattern_list = []
-        for (module_name, layer_name, pattern) in old_pattern_list:
+        for (layer_name, pattern) in old_pattern_list:
+            module_name = self.layer_module_map[layer_name]
             if module_name in ['compare','nand','memory']:
                 new_pattern = np.tanh(np.random.randn(len(pattern)))
-                new_pattern_list.append((module_name, layer_name, new_pattern))
+                new_pattern_list.append((layer_name, new_pattern))
         self.set_patterns(new_pattern_list)
         # layer copies
         for to_layer_name in self.modules['gating'].net_layer_names:
@@ -110,13 +111,13 @@ class MockModule:
         # module dynamics
         for pattern_list, next_pattern_list in self.transitions:
             matches = True
-            for (_, layer_name, pattern) in pattern_list:
+            for (layer_name, pattern) in pattern_list:
                 if layer_name in pattern_hash and not eq(pattern_hash[layer_name], pattern):
                     matches = False
                     break
             if matches:
-                for (module_name, layer_name, pattern) in next_pattern_list:
-                    if module_name == self.module_name:
+                for (layer_name, pattern) in next_pattern_list:
+                    if layer_name in self.layer_names:
                         self.set_pattern(layer_name, pattern)
                 break
     def learn(self, pattern_list, next_pattern_list):
@@ -126,8 +127,8 @@ class MockModule:
         after training, when presented with the same patterns in pattern_list,
         the module layers will transition to the same patterns in next_pattern_list.
         """        
-        pattern_list = [(module_name, layer_name, pattern.copy()) for (module_name, layer_name, pattern) in pattern_list]
-        next_pattern_list = [(module_name, layer_name, pattern.copy()) for (module_name, layer_name, pattern) in next_pattern_list]
+        pattern_list = [(layer_name, pattern.copy()) for (layer_name, pattern) in pattern_list]
+        next_pattern_list = [(layer_name, pattern.copy()) for (layer_name, pattern) in next_pattern_list]
         self.transitions.insert(0,(pattern_list, next_pattern_list))
 
 if __name__ == '__main__':
@@ -159,9 +160,8 @@ if __name__ == '__main__':
     print(mod.get_pattern('V'))
 
 class MockGatingModule(MockModule):
-    def __init__(self, mock_coding, net_layer_names):
+    def __init__(self, net_layer_names):
         MockModule.__init__(self, module_name='gating', layer_names=['V','L'], layer_size=len(net_layer_names)**2)
-        self.coding = mock_coding
         self.net_layer_names = net_layer_names
         self.gate_index = {}
         index = 0
@@ -176,22 +176,10 @@ class MockGatingModule(MockModule):
     def get_gate(self, gate_layer_name, to_layer_name, from_layer_name):
         index = self.gate_index[to_layer_name,from_layer_name]
         return self.layers[gate_layer_name][index]
-    # def tick(self, pattern_hash):
-    #     self.set_pattern('V',-np.ones(self.layer_size)) # clear gates
-    #     self.set_pattern('L',-np.ones(self.layer_size)) # clear gates
-    #     opcode = pattern_hash['OPC']
-    #     if eq(opcode, self.coding.encode('set')):
-    #         to_layer_name = self.coding.decode(pattern_hash['OP2'])
-    #         from_layer_name = 'OP1'
-    #         self.set_gate('V',to_layer_name, from_layer_name, 0.9)
 
 class MockMemoryModule(MockModule):
     def __init__(self, layer_size=16):
         MockModule.__init__(self, module_name='memory', layer_names=['K','V'], layer_size=layer_size)
-    # def tick(self, layers, gates):
-    #     # activity gates: key <- key, value <- key, value <- value, key <- copy, value <- copy
-    #     # learning gates: key <- key, value <- key, value <- value
-    #     pass
 
 class MockIOModule(MockModule):
     def __init__(self, module_name, layer_size=16):

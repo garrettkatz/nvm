@@ -31,9 +31,9 @@ class NVM:
             <# layers>, <name>, <value>, <pattern>, <name>, <value>, <pattern>, ...
         """
         if not self.visualizing: return
-        layers = self.network.list_patterns()
-        self.viz_pipe.send(len(layers))
-        for (_, layer_name, pattern) in layers:
+        pattern_list = self.network.list_patterns()
+        self.viz_pipe.send(len(pattern_list))
+        for (layer_name, pattern) in pattern_list:
             self.viz_pipe.send(layer_name)
             self.viz_pipe.send(self.coding.decode(pattern)) # value
             # down sample pattern
@@ -61,9 +61,9 @@ class NVM:
             pattern = self.coding.encode(message)
         else:
             pattern = np.fromstring(pattern,dtype=float)
-        self.network.set_patterns([(io_module_name, 'STDI', pattern)])
+        self.network.set_patterns([('STDI', pattern)])
     def get_output(self, io_module_name, to_human_readable=True):
-        pattern = self.network.get_pattern(io_module_name, 'STDO')
+        pattern = self.network.get_pattern('STDO')
         if to_human_readable:
             message = self.coding.decode(pattern)
         else:
@@ -71,11 +71,11 @@ class NVM:
         return message
     def set_operation(self, opcode, *operands):
         # set operation
-        pattern_list = [('control','OPC',self.coding.encode(opcode))]
+        pattern_list = [('OPC',self.coding.encode(opcode))]
         for op in range(len(operands)):
-            pattern_list.append(('control','OP%d'%(op+1), self.coding.encode(operands[op])))
+            pattern_list.append(('OP%d'%(op+1), self.coding.encode(operands[op])))
         # clear gates
-        pattern_list.append(('gating','V',np.zeros(self.network.get_module('gating').layer_size)))
+        pattern_list.append(('V',self.network.get_pattern('V')*0))
         self.network.set_patterns(pattern_list)
     def learn(self, module_name, pattern_list, next_pattern_list):
         # train module with module.learn
@@ -87,7 +87,7 @@ class NVM:
 def mock_nvm(num_registers=3, layer_size=32):
     coding = mn.MockCoding(layer_size)
     stdio = mn.MockIOModule(module_name='stdio', layer_size=layer_size)
-    net = mn.MockNet(coding, num_registers, layer_size, io_modules=[stdio])
+    net = mn.MockNet(num_registers, layer_size, io_modules=[stdio])
     return NVM(coding, net)
 
 def run_viz(nvm_pipe):
@@ -106,8 +106,8 @@ def flash(vm):
         gate_pattern[:] = 0
         gate_pattern[gate_index[to_register_name,'OP1']] = omega
         vm.learn('gating',
-            [('control','OPC',set_pattern),('control','OP2',to_register_pattern)],
-            [('gating','V',gate_pattern)])    
+            [('OPC',set_pattern),('OP2',to_register_pattern)],
+            [('V',gate_pattern)])    
     # copy from_register to_register
     copy_pattern = vm.coding.encode('copy')
     for to_register_name in vm.network.register_names:
@@ -117,8 +117,8 @@ def flash(vm):
             gate_pattern[:] = 0
             gate_pattern[gate_index[to_register_name,from_register_name]] = omega
             vm.learn('gating',
-                [('control','OPC',copy_pattern),('control','OP1',from_register_pattern),('control','OP2',to_register_pattern)],
-                [('gating','V',gate_pattern)])
+                [('OPC',copy_pattern),('OP1',from_register_pattern),('OP2',to_register_pattern)],
+                [('V',gate_pattern)])
         # if operation == self.machine_readable['get']: # device_name, register
         #     # gated NN behaviors:
         #     # copy layer
