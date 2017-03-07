@@ -40,7 +40,8 @@ class MockNet:
         self.modules['control'] = MockModule('control',register_names, layer_size)
         self.modules['compare'] = MockModule('compare',['C1','C2','CO'],layer_size)
         self.modules['nand'] = MockModule('nand',['N1','N2','NO'],layer_size)
-        self.modules['memory'] = MockModule('memory',['K','V'],layer_size)
+        # self.modules['memory'] = MockModule('memory',['K','V'],layer_size)
+        self.modules['memory'] = MockMemoryModule(layer_size)
         self.module_names = ['control','compare','nand','memory']
         for io_module in io_modules:
             self.modules[io_module.module_name] = io_module
@@ -64,10 +65,9 @@ class MockNet:
         old_layers = self.get_layers()
         new_layers = []
         for (module_name, layer_name, pattern) in old_layers:
-            if not module_name == 'stdio':
+            if module_name in ['control','compare','nand','memory']:
                 new_layers.append((module_name, layer_name, np.tanh(np.random.randn(self.layer_size))))
-            else:
-                new_layers.append((module_name, layer_name, pattern))
+        new_layers.append(('stdio', 'in', self.get_layer('stdio','in')))
         self.set_layers(new_layers)
         
 class MockModule:
@@ -85,3 +85,14 @@ class MockModule:
     def set_layers(self, layer_patterns):
         for (name, pattern) in layer_patterns:
             self.layers[name] = pattern.copy()
+
+class MockMemoryModule(MockModule):
+    def __init__(self, layer_size=32):
+        MockModule.__init__(self, module_name='memory', layer_names=['key','value'], layer_size=32)
+    def tick(self, layers, gates):
+        # activity update
+        # weight update
+        pass
+
+class MockIOModule(MockModule):
+    pass
