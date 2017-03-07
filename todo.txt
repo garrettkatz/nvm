@@ -1,0 +1,1 @@
+show weight matrices in viz

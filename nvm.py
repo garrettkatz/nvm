@@ -1,4 +1,4 @@
-import sys
+import sys, time
 import multiprocessing as mp
 import numpy as np
 import scipy as sp
@@ -70,27 +70,85 @@ class NVM:
             message = pattern.tobytes()
         return message
     def set_operation(self, opcode, *operands):
+        # set operation
         pattern_list = [('control','OPC',self.coding.encode(opcode))]
         for op in range(len(operands)):
-            pattern_list.append(('control','OP%d'%op, self.coding.encode(operands[op])))
+            pattern_list.append(('control','OP%d'%(op+1), self.coding.encode(operands[op])))
+        # clear gates
+        pattern_list.append(('gating','V',np.zeros(self.network.get_module('gating').layer_size)))
         self.network.set_patterns(pattern_list)
+    def learn(self, module_name, pattern_list, next_pattern_list):
+        # train module with module.learn
+        self.network.get_module(module_name).learn(pattern_list, next_pattern_list)
     def quit(self):
         self.hide()
         sys.exit(0)
 
 def mock_nvm(num_registers=3, layer_size=32):
+    coding = mn.MockCoding(layer_size)
     stdio = mn.MockIOModule(module_name='stdio', layer_size=layer_size)
-    net = mn.MockNet(num_registers, layer_size, io_modules=[stdio])
-    return NVM(mn.MockCoding(layer_size), net)
+    net = mn.MockNet(coding, num_registers, layer_size, io_modules=[stdio])
+    return NVM(coding, net)
 
 def run_viz(nvm_pipe):
     viz = vz.Visualizer(nvm_pipe)
     viz.launch()
 
+def flash(vm):
+    # train vm on instruction set
+    omega = np.tanh(1)
+    gate_index = vm.network.modules['gating'].gate_index
+    gate_pattern = np.zeros(vm.network.modules['gating'].layer_size)
+    # set value to_register
+    set_pattern = vm.coding.encode('set')
+    for to_register_name in vm.network.register_names:
+        to_register_pattern = vm.coding.encode(to_register_name)
+        gate_pattern[:] = 0
+        gate_pattern[gate_index[to_register_name,'OP1']] = omega
+        vm.learn('gating',
+            [('control','OPC',set_pattern),('control','OP2',to_register_pattern)],
+            [('gating','V',gate_pattern)])    
+    # copy from_register to_register
+    copy_pattern = vm.coding.encode('copy')
+    for to_register_name in vm.network.register_names:
+        to_register_pattern = vm.coding.encode(to_register_name)
+        for from_register_name in vm.network.register_names:
+            from_register_pattern = vm.coding.encode(from_register_name)
+            gate_pattern[:] = 0
+            gate_pattern[gate_index[to_register_name,from_register_name]] = omega
+            vm.learn('gating',
+                [('control','OPC',copy_pattern),('control','OP1',from_register_pattern),('control','OP2',to_register_pattern)],
+                [('gating','V',gate_pattern)])
+        # if operation == self.machine_readable['get']: # device_name, register
+        #     # gated NN behaviors:
+        #     # copy layer
+        #     self.registers[operands[1]] = self.devices[operands[0]].output_layer
+        # if operation == self.machine_readable['put']: # device_name, register
+        #     # gated NN behaviors:
+        #     # copy layer
+        #     self.devices[operands[0]].input_layer = self.registers[operands[1]]
+
+def show_tick(vm):
+    period = 1
+    for t in range(4):
+        vm.tick()
+        time.sleep(period)
+    
 if __name__ == '__main__':
-    nvm = mock_nvm()
-    nvm.set_input('blah','stdio',from_human_readable=True)
-    print(nvm.get_output('stdio',to_human_readable=True))
-    nvm.set_operation('nop')
-    nvm.show()
-    # nvm.hide()
+    mvm = mock_nvm()
+    mvm.set_input('NIL','stdio',from_human_readable=True)
+    # print(mvm.get_output('stdio',to_human_readable=True))
+    flash(mvm)
+    mvm.show()
+    mvm.set_operation('set','NIL','{0}')
+    show_tick(mvm)
+    mvm.set_operation('set','TRUE','{1}')
+    show_tick(mvm)
+    mvm.set_operation('set','FALSE','{2}')
+    show_tick(mvm)
+    mvm.set_operation('copy','{1}','{2}')
+    show_tick(mvm)
+
+    
+    
+    # mvm.hide()

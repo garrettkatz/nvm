@@ -115,7 +115,7 @@ if __name__ == '__main__':
     time.sleep(period)
     hv.input('TRUE')
     time.sleep(period)
-    hv.set_operation('nop')
+    hv.set_operation('set','NIL','{0}')
     time.sleep(period)
     # hv.shutdown()
 
