@@ -6,7 +6,7 @@ import numpy as np
 import time
 
 class Visualizer:
-    def __init__(self, nvm_pipe, history=256, padding=8, label_padding=40):
+    def __init__(self, nvm_pipe, history=256, padding=8, label_padding=80):
         self.nvm_pipe = nvm_pipe
         self.nvm_shutdown = False
         self.history = history
@@ -30,7 +30,7 @@ class Visualizer:
             width, height = self.history, len(pattern)
             raster = np.zeros((height, width), dtype=np.uint8)
             canvas = tk.Canvas(self.tk_frame, width=width, height=height)
-            label = tk.Label(self.tk_frame, text='%s\n%s'%(name,value), justify=tk.LEFT)
+            label = tk.Label(self.tk_frame, text='%s:%s'%(name,value), justify=tk.LEFT)
             canvas.place(x=self.padding+self.label_padding,y=y)
             label.place(x=0,y=y)
             self.rasters.append(raster)
@@ -83,7 +83,7 @@ class Visualizer:
                 self.images[index] = pil.Image.frombytes('L', (width, height), self.rasters[index].tobytes())
                 self.photos[index] = itk.PhotoImage(image=self.images[index])
                 self.canvases[index].create_image(1,1,image=self.photos[index], anchor=tk.NW)
-                self.labels[index].config(text='%s\n%s'%(name, value))
+                self.labels[index].config(text='%s:%s'%(name, value))
             # update and request more data
             self.tk_root.update()
             self.request()

@@ -32,20 +32,22 @@ class MockCoding:
         return self.human_readable_of[machine_readable.tobytes()]
 
 class MockNet:
-    def __init__(self, num_registers, layer_size=32, io_modules=[]):
+    def __init__(self, num_registers, layer_size=16, io_modules=[]):
         self.num_registers = num_registers
         self.layer_size = layer_size
+        self.module_names = []
         self.modules = {}
         register_names = ['IP','OPC','OP1','OP2','OP3'] + ['{%d}'%r for r in range(num_registers)]
-        self.modules['control'] = MockModule('control',register_names, layer_size)
-        self.modules['compare'] = MockModule('compare',['C1','C2','CO'],layer_size)
-        self.modules['nand'] = MockModule('nand',['N1','N2','NO'],layer_size)
-        # self.modules['memory'] = MockModule('memory',['K','V'],layer_size)
-        self.modules['memory'] = MockMemoryModule(layer_size)
-        self.module_names = ['control','compare','nand','memory']
+        self.add_module(MockModule('control',register_names, layer_size))
+        self.add_module(MockModule('compare',['C1','C2','CO'],layer_size))
+        self.add_module(MockModule('nand',['N1','N2','NO'],layer_size))
+        self.add_module(MockMemoryModule(layer_size))
         for io_module in io_modules:
-            self.modules[io_module.module_name] = io_module
-            self.module_names.append(io_module.module_name)
+            self.add_module(io_module)
+        self.add_module(MockGatingModule(self.get_layer_names()))
+    def add_module(self, module):
+        self.module_names.append(module.module_name)
+        self.modules[module.module_name] = module
     def get_layer_names(self):
         layer_names = []
         for name in self.modules:
@@ -64,14 +66,14 @@ class MockNet:
     def tick(self):
         old_patterns = self.list_patterns()
         new_patterns = []
-        for (module_name, layer_name, _) in old_patterns:
-            if module_name in ['compare','nand','memory']:
-                pattern = np.tanh(np.random.randn(self.layer_size))
-                new_patterns.append((module_name, layer_name, pattern))
+        for (module_name, layer_name, pattern) in old_patterns:
+            if module_name in ['compare','nand','memory','gating']:
+                new_pattern = np.tanh(np.random.randn(len(pattern)))
+                new_patterns.append((module_name, layer_name, new_pattern))
         self.set_patterns(new_patterns)
         
 class MockModule:
-    def __init__(self, module_name, layer_names, layer_size=32):
+    def __init__(self, module_name, layer_names, layer_size=16):
         self.module_name = module_name
         self.layer_names = layer_names
         self.layer_size = layer_size
@@ -86,10 +88,21 @@ class MockModule:
         pass
 
 class MockGatingModule(MockModule):
-    pass
+    def __init__(self, net_layer_names):
+        MockModule.__init__(self, module_name='gating', layer_names=['A','L'], layer_size=len(net_layer_names)**2)
+        self.net_layer_names = net_layer_names
+    def hash_gates(self):
+        gates = {}
+        for layer_name in self.layer_names:
+            idx = 0
+            pattern = self.get_pattern(layer_name)
+            for to_layer_name in self.net_layer_names:
+                for from_layer_name in self.net_layer_names:
+                    gates[layer_name,to_layer_name,from_layer_name2] = pattern[idx]
+        return gates
 
 class MockMemoryModule(MockModule):
-    def __init__(self, layer_size=32):
+    def __init__(self, layer_size=16):
         MockModule.__init__(self, module_name='memory', layer_names=['K','V'], layer_size=layer_size)
     def tick(self, layers, gates):
         # activity gates: key <- key, value <- key, value <- value, key <- copy, value <- copy
@@ -97,8 +110,8 @@ class MockMemoryModule(MockModule):
         pass
 
 class MockIOModule(MockModule):
-    def __init__(self, module_name, layer_size=32):
-        MockModule.__init__(self, module_name, layer_names=['STDIN','STDOUT'], layer_size=layer_size)
+    def __init__(self, module_name, layer_size=16):
+        MockModule.__init__(self, module_name, layer_names=['STDI','STDO'], layer_size=layer_size)
 
 if __name__ == '__main__':
     mem = MockMemoryModule()

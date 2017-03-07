@@ -57,7 +57,7 @@ class Hypervisor:
 
 def run_nvm(hv_pipe, period):
     # Init NVM
-    vm = nvm.mock_nvm()
+    vm = nvm.mock_nvm(layer_size=24)
     done = False
     while not done:
         # step the network
