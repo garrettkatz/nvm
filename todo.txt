@@ -1,1 +1,3 @@
 show weight matrices in viz
+separate mocknet factory from constructor?
+    constructor only assigns modules given as input, factory makes the modules correctly?

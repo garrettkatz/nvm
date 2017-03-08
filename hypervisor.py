@@ -39,8 +39,8 @@ class Hypervisor:
     def output(self):
         response = self.exchange_with_nvm('output')
         return response
-    def set_operation(self, opcode, *operands):
-        ready = self.exchange_with_nvm('set_operation')
+    def set_instruction(self, opcode, *operands):
+        ready = self.exchange_with_nvm('set_instruction')
         opcode_response = self.exchange_with_nvm(opcode)
         for operand in operands:
             operand_response = self.exchange_with_nvm(operand)
@@ -83,7 +83,7 @@ def run_nvm(hv_pipe, period):
             if message == 'output':
                 token = vm.get_output('stdio',to_human_readable=True)
                 hv_pipe.send(token)
-            if message == 'set_operation':
+            if message == 'set_instruction':
                 hv_pipe.send('accepting operation')
                 opcode = hv_pipe.recv()
                 hv_pipe.send('recieved opcode')
@@ -93,7 +93,7 @@ def run_nvm(hv_pipe, period):
                     hv_pipe.send('received operand')
                     if message == 'end operation': break
                     operands.append(message)
-                vm.set_operation(opcode, *operands)
+                vm.set_instruction(opcode, *operands)
                 hv_pipe.send('received operation')
             if message == 'shutdown':
                 vm.hide() # shutdown visualizer if running
@@ -115,7 +115,7 @@ if __name__ == '__main__':
     time.sleep(period)
     hv.input('TRUE')
     time.sleep(period)
-    hv.set_operation('set','NIL','{0}')
+    hv.set_instruction('set','NIL','{0}')
     time.sleep(period)
     # hv.shutdown()
 

@@ -69,14 +69,14 @@ class NVM:
         else:
             message = pattern.tobytes()
         return message
-    def set_operation(self, opcode, *operands):
+    def set_instruction(self, opcode, *operands):
         # set operation
         pattern_list = [('OPC',self.coding.encode(opcode))]
         for op in range(len(operands)):
             pattern_list.append(('OP%d'%(op+1), self.coding.encode(operands[op])))
+        self.network.set_patterns(pattern_list)
         # clear gates
         pattern_list.append(('V',self.network.get_pattern('V')*0))
-        self.network.set_patterns(pattern_list)
     def learn(self, module_name, pattern_list, next_pattern_list):
         # train module with module.learn
         self.network.get_module(module_name).learn(pattern_list, next_pattern_list)
@@ -140,13 +140,13 @@ if __name__ == '__main__':
     # print(mvm.get_output('stdio',to_human_readable=True))
     flash(mvm)
     mvm.show()
-    mvm.set_operation('set','NIL','{0}')
+    mvm.set_instruction('set','NIL','{0}')
     show_tick(mvm)
-    mvm.set_operation('set','TRUE','{1}')
+    mvm.set_instruction('set','TRUE','{1}')
     show_tick(mvm)
-    mvm.set_operation('set','FALSE','{2}')
+    mvm.set_instruction('set','FALSE','{2}')
     show_tick(mvm)
-    mvm.set_operation('copy','{1}','{2}')
+    mvm.set_instruction('copy','{1}','{2}')
     show_tick(mvm)
 
     
