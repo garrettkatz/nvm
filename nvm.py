@@ -5,16 +5,18 @@ import scipy as sp
 import visualizer as vz
 import mock_net as mn
 
-constants = ['TRUE','FALSE','NIL','_']
-
 class NVM:
     def __init__(self, coding, network):
         self.coding = coding
         self.network = network
         self.visualizing = False
         # Encode layer names and constants
-        for symbol in self.network.get_layer_names() + constants:
+        for symbol in self.network.get_layer_names():
             self.coding.encode(symbol)
+    def encode(self,human_readable):
+        return self.coding.encode(human_readable)
+    def decode(self, machine_readable):
+        return self.coding.decode(machine_readable)
     def tick(self):
         # answer any visualizer request
         if self.visualizing:
@@ -35,7 +37,7 @@ class NVM:
         self.viz_pipe.send(len(pattern_list))
         for (layer_name, pattern) in pattern_list:
             self.viz_pipe.send(layer_name)
-            self.viz_pipe.send(self.coding.decode(pattern)) # value
+            self.viz_pipe.send(self.decode(pattern)) # value
             # down sample pattern
             pattern = np.concatenate((pattern, np.nan*np.ones(len(pattern) % down_sample)))
             pattern = pattern.reshape((len(pattern)/down_sample, down_sample)).mean(axis=1)
@@ -58,25 +60,25 @@ class NVM:
         self.visualizing = False
     def set_input(self, message, io_module_name, from_human_readable=True):
         if from_human_readable:
-            pattern = self.coding.encode(message)
+            pattern = self.encode(message)
         else:
             pattern = np.fromstring(pattern,dtype=float)
         self.network.set_patterns([('STDI', pattern)])
     def get_output(self, io_module_name, to_human_readable=True):
         pattern = self.network.get_pattern('STDO')
         if to_human_readable:
-            message = self.coding.decode(pattern)
+            message = self.decode(pattern)
         else:
             message = pattern.tobytes()
         return message
     def set_instruction(self, opcode, *operands):
-        # set operation
-        pattern_list = [('OPC',self.coding.encode(opcode))]
-        for op in range(len(operands)):
-            pattern_list.append(('OP%d'%(op+1), self.coding.encode(operands[op])))
-        self.network.set_patterns(pattern_list)
         # clear gates
-        pattern_list.append(('V',self.network.get_pattern('V')*0))
+        pattern_list = [('A',self.network.get_pattern('A')*0)]
+        # set operation
+        pattern_list.append(('OPC',self.encode(opcode)))
+        for op in range(len(operands)):
+            pattern_list.append(('OP%d'%(op+1), self.encode(operands[op])))
+        self.network.set_patterns(pattern_list)
     def learn(self, module_name, pattern_list, next_pattern_list):
         # train module with module.learn
         self.network.get_module(module_name).learn(pattern_list, next_pattern_list)
@@ -94,59 +96,76 @@ def run_viz(nvm_pipe):
     viz = vz.Visualizer(nvm_pipe)
     viz.launch()
 
-def flash(vm):
+def flash_nrom(vm):
     # train vm on instruction set
     omega = np.tanh(1)
-    gate_index = vm.network.modules['gating'].gate_index
-    gate_pattern = np.zeros(vm.network.modules['gating'].layer_size)
-    # set value to_register
-    set_pattern = vm.coding.encode('set')
-    for to_register_name in vm.network.register_names:
-        to_register_pattern = vm.coding.encode(to_register_name)
+    gate_index = vm.network.get_module('gating').gate_index
+    gate_pattern = np.zeros(vm.network.get_module('gating').layer_size)
+    # get non-gate layer names
+    layer_names = vm.network.get_layer_names()
+    for layer_name in vm.network.get_module('gating').layer_names:
+        layer_names.remove(layer_name)
+    # set value to_layer_name
+    for to_layer_name in layer_names:
         gate_pattern[:] = 0
-        gate_pattern[gate_index[to_register_name,'OP1']] = omega
+        gate_pattern[gate_index[to_layer_name,'OP1']] = omega
         vm.learn('gating',
-            [('OPC',set_pattern),('OP2',to_register_pattern)],
-            [('V',gate_pattern)])    
-    # copy from_register to_register
-    copy_pattern = vm.coding.encode('copy')
-    for to_register_name in vm.network.register_names:
-        to_register_pattern = vm.coding.encode(to_register_name)
-        for from_register_name in vm.network.register_names:
-            from_register_pattern = vm.coding.encode(from_register_name)
-            gate_pattern[:] = 0
-            gate_pattern[gate_index[to_register_name,from_register_name]] = omega
-            vm.learn('gating',
-                [('OPC',copy_pattern),('OP1',from_register_pattern),('OP2',to_register_pattern)],
-                [('V',gate_pattern)])
-        # if operation == self.machine_readable['get']: # device_name, register
-        #     # gated NN behaviors:
-        #     # copy layer
-        #     self.registers[operands[1]] = self.devices[operands[0]].output_layer
-        # if operation == self.machine_readable['put']: # device_name, register
-        #     # gated NN behaviors:
-        #     # copy layer
-        #     self.devices[operands[0]].input_layer = self.registers[operands[1]]
+            [('OPC',vm.encode('set')),('OP2',vm.encode(to_layer_name))],
+            [('A',gate_pattern)])    
+    # ccp from_layer_name to_layer_name condition_layer_name (conditional copy)
+    for to_layer_name in layer_names:
+        for from_layer_name in layer_names:
+            for cond_layer_name in layer_names:
+                gate_pattern[:] = 0
+                gate_pattern[gate_index[to_layer_name,from_layer_name]] = omega
+                vm.learn('gating',
+                    [('OPC',vm.encode('ccp')),
+                     ('OP1',vm.encode(from_layer_name)),
+                     ('OP2',vm.encode(to_layer_name)),
+                     ('OP3',vm.encode(cond_layer_name)),
+                     (cond_layer_name, vm.encode('TRUE'))],
+                    [('A',gate_pattern)])
+    # compare circuitry
+    vm.learn('compare', [], [('CO',vm.encode('FALSE'))]) # default FALSE behavior
+    vm.learn('compare', [('C1','pattern'),('C2','pattern')], [('CO',vm.encode('TRUE'))]) # unless equal
 
 def show_tick(vm):
-    period = 1
-    for t in range(4):
+    period = .1
+    for t in range(1):
         vm.tick()
-        time.sleep(period)
+        raw_input('.')
+        # time.sleep(period)
     
 if __name__ == '__main__':
     mvm = mock_nvm()
     mvm.set_input('NIL','stdio',from_human_readable=True)
     # print(mvm.get_output('stdio',to_human_readable=True))
-    flash(mvm)
+    flash_nrom(mvm)
     mvm.show()
-    mvm.set_instruction('set','NIL','{0}')
+    # # conditional copies
+    # mvm.set_instruction('set','NIL','{0}')
+    # show_tick(mvm)
+    # mvm.set_instruction('set','TRUE','{1}')
+    # show_tick(mvm)
+    # mvm.set_instruction('set','FALSE','{2}')
+    # show_tick(mvm)
+    # raw_input('...')
+    # mvm.set_instruction('ccp','{0}','{1}','{2}')
+    # show_tick(mvm)
+    # mvm.set_instruction('ccp','{0}','{2}','{1}')
+    # show_tick(mvm)
+    
+    # compare/logic
+    mvm.set_instruction('set','NIL','C1')
     show_tick(mvm)
-    mvm.set_instruction('set','TRUE','{1}')
     show_tick(mvm)
-    mvm.set_instruction('set','FALSE','{2}')
+    mvm.set_instruction('set','TRUE','C2')
     show_tick(mvm)
-    mvm.set_instruction('copy','{1}','{2}')
+    show_tick(mvm)
+    mvm.set_instruction('set','NIL','C2')
+    show_tick(mvm)
+    show_tick(mvm)
+    show_tick(mvm)
     show_tick(mvm)
 
     
