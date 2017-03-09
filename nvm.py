@@ -79,9 +79,9 @@ class NVM:
         for op in range(len(operands)):
             pattern_list.append(('OP%d'%(op+1), self.encode(operands[op])))
         self.network.set_patterns(pattern_list)
-    def learn(self, module_name, pattern_list, next_pattern_list):
-        # train module with module.learn
-        self.network.get_module(module_name).learn(pattern_list, next_pattern_list)
+    def train(self, module_name, pattern_list, next_pattern_list):
+        # train module with module.train
+        self.network.get_module(module_name).train(pattern_list, next_pattern_list)
     def quit(self):
         self.hide()
         sys.exit(0)
@@ -109,7 +109,7 @@ def flash_nrom(vm):
     for to_layer_name in layer_names:
         gate_pattern[:] = 0
         gate_pattern[gate_index[to_layer_name,'OP1']] = omega
-        vm.learn('gating',
+        vm.train('gating',
             [('OPC',vm.encode('set')),('OP2',vm.encode(to_layer_name))],
             [('A',gate_pattern)])    
     # ccp from_layer_name to_layer_name condition_layer_name (conditional copy)
@@ -118,7 +118,7 @@ def flash_nrom(vm):
             for cond_layer_name in layer_names:
                 gate_pattern[:] = 0
                 gate_pattern[gate_index[to_layer_name,from_layer_name]] = omega
-                vm.learn('gating',
+                vm.train('gating',
                     [('OPC',vm.encode('ccp')),
                      ('OP1',vm.encode(from_layer_name)),
                      ('OP2',vm.encode(to_layer_name)),
@@ -126,8 +126,11 @@ def flash_nrom(vm):
                      (cond_layer_name, vm.encode('TRUE'))],
                     [('A',gate_pattern)])
     # compare circuitry
-    vm.learn('compare', [], [('CO',vm.encode('FALSE'))]) # default FALSE behavior
-    vm.learn('compare', [('C1','pattern'),('C2','pattern')], [('CO',vm.encode('TRUE'))]) # unless equal
+    vm.train('compare', [], [('CO',vm.encode('FALSE'))]) # default FALSE behavior
+    vm.train('compare', [('C1','pattern'),('C2','pattern')], [('CO',vm.encode('TRUE'))]) # unless equal
+    # nand circuitry
+    vm.train('nand', [], [('NO',vm.encode('TRUE'))]) # default TRUE behavior
+    vm.train('nand', [('N1','TRUE'),('N2','TRUE')], [('NO',vm.encode('FALSE'))]) # unless both
 
 def show_tick(vm):
     period = .1
@@ -156,13 +159,13 @@ if __name__ == '__main__':
     # show_tick(mvm)
     
     # compare/logic
-    mvm.set_instruction('set','NIL','C1')
+    mvm.set_instruction('set','TRUE','N1')
     show_tick(mvm)
     show_tick(mvm)
-    mvm.set_instruction('set','TRUE','C2')
+    mvm.set_instruction('set','TRUE','N2')
     show_tick(mvm)
     show_tick(mvm)
-    mvm.set_instruction('set','NIL','C2')
+    mvm.set_instruction('set','NIL','N2')
     show_tick(mvm)
     show_tick(mvm)
     show_tick(mvm)

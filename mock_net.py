@@ -91,12 +91,14 @@ class MockNet:
         # randoms
         for (layer_name, pattern) in old_pattern_list:
             module_name = self.layer_module_map[layer_name]
-            if module_name in ['nand','memory']:
+            if module_name in ['memory']:
                 new_pattern = np.tanh(np.random.randn(len(pattern)))
                 new_pattern_list.append((layer_name, new_pattern))
         self.set_patterns(new_pattern_list)
         # compare
         self.modules['compare'].tick(old_pattern_hash)
+        # nand
+        self.modules['nand'].tick(old_pattern_hash)
         # gates
         self.modules['gating'].tick(old_pattern_hash)
         
@@ -133,7 +135,7 @@ class MockModule:
                     self.set_pattern(layer_name, pattern)
                 return
         print('%s: no rule fired'%self.module_name)
-    def learn(self, pattern_list, next_pattern_list):
+    def train(self, pattern_list, next_pattern_list):
         """
         train the module dynamics on the given transition.
         both pattern_lists should include patterns for every layer in this module.
@@ -145,6 +147,11 @@ class MockModule:
         pattern_list = [(layer_name, cp(pattern)) for (layer_name, pattern) in pattern_list]
         next_pattern_list = [(layer_name, cp(pattern)) for (layer_name, pattern) in next_pattern_list]
         self.transitions.insert(0,(pattern_list, next_pattern_list))
+    def learn(self):
+        """
+        Associate current and previous activity patterns
+        """
+        pass
 
 if __name__ == '__main__':
     mod = MockModule(module_name='mod', layer_names=['V'], layer_size=4)
@@ -155,7 +162,7 @@ if __name__ == '__main__':
         [[('oth','U',-ones)],[('mod','V', -ones)]],
     ]
     for pattern_list, next_pattern_list in transitions:
-        mod.learn(pattern_list, next_pattern_list)
+        mod.train(pattern_list, next_pattern_list)
     print('flashed')
     mod.set_pattern('V',-ones)
     pattern_hash = {'V':-ones, 'U': +ones}
