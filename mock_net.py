@@ -84,7 +84,7 @@ class MockNet:
         new_pattern_hash = {}
         # activate modules
         for module_name in self.modules:
-            new_pattern_hash.update(self.modules[module_name].activate(old_pattern_hash))
+            new_pattern_hash.update(self.modules[module_name].activate(old_pattern_hash))            
         # layer copies
         for to_layer_name in self.modules['gating'].net_layer_names:
             for from_layer_name in self.modules['gating'].net_layer_names:
@@ -94,6 +94,7 @@ class MockNet:
         for module_name in self.modules:
             self.modules[module_name].advance_tick_mark()
             self.modules[module_name].set_hashed_patterns(new_pattern_hash)
+        # associations
         
 class MockModule:
     def __init__(self, module_name, layer_names, layer_size=16, history=2):
@@ -106,8 +107,9 @@ class MockModule:
         # default transition: no change
         pattern_list = zip(self.layer_names,self.layer_names)
         self.transitions = [(pattern_list, pattern_list)]
-    def get_pattern(self, layer_name):
-        return self.layers[layer_name][self.tick_mark].copy()
+    def get_pattern(self, layer_name, tick_offset=0):
+        tick_mark = (self.tick_mark + tick_offset) % self.history
+        return self.layers[layer_name][tick_mark].copy()
     def set_pattern(self, layer_name, layer_pattern):
         self.layers[layer_name][self.tick_mark] = layer_pattern.copy()
     def list_patterns(self):
@@ -158,49 +160,71 @@ class MockModule:
         pattern_list = [(layer_name, cp(pattern)) for (layer_name, pattern) in pattern_list]
         next_pattern_list = [(layer_name, cp(pattern)) for (layer_name, pattern) in next_pattern_list]
         self.transitions.insert(0,(pattern_list, next_pattern_list))
-    def learn(self):
+    def associate(self, gate_hash):
         """
-        Associate current and previous activity patterns
+        Associate current and previous activity patterns within module
         """
         pass
+        # for to_layer_name in self.layer_names:
+        #     current_pattern_list = [(to_layer_name, self.
+        #     current_pattern_list, previous_pattern_list = [], []
+        #     for from_layer_name in self.layer_names:
+        #         if gate_hash['W',to_layer_name,from_layer_name] > .5:
+        #     current_pattern_list.append((layer_name, self.get_pattern(layer_name)))
+        #     previous_pattern_list.append((layer_name, self.get_pattern(layer_name, tick_offset=-1)))
+        # self.transitions.insert(0,(previous_pattern_list, current_pattern_list))
 
 if __name__ == '__main__':
-    mod = MockModule(module_name='mod', layer_names=['V'], layer_size=4)
+
+    # Association
+    mod = MockModule(module_name='mod', layer_names=['U','V'], layer_size=4)
     ones = np.ones(mod.layer_size)
-    transitions = [
-        [[('V', -ones),('U',+ones)],[('V', +ones)]],
-        [[('V', +ones),('U',+ones)],[('V', -ones)]],
-        [[('U',-ones)],[('V', -ones)]],
-    ]
-    for pattern_list, next_pattern_list in transitions:
-        mod.train(pattern_list, next_pattern_list)
-    print('flashed')
-    mod.set_pattern('V',-ones)
-    pattern_hash = {'V':-ones, 'U': +ones}
-    new_hash = mod.activate(pattern_hash)
+    mod.set_hashed_patterns({'U':ones, 'V':ones})
     mod.advance_tick_mark()
-    mod.set_hashed_patterns(new_hash)
-    print(mod.get_pattern('V'))
-    pattern_hash = {'V':+ones, 'U': +ones}
-    new_hash = mod.activate(pattern_hash)
+    mod.set_hashed_patterns({'U':ones, 'V':-ones})
+    mod.associate()
+    print(mod.transitions)
+    new_hash = mod.activate({'U':ones, 'V':ones})
     mod.advance_tick_mark()
-    mod.set_hashed_patterns(new_hash)
-    print(mod.get_pattern('V'))
-    pattern_hash = {'V':-ones, 'U': +ones}
-    new_hash = mod.activate(pattern_hash)
-    mod.advance_tick_mark()
-    mod.set_hashed_patterns(new_hash)
-    print(mod.get_pattern('V'))
-    pattern_hash = {'V':+ones, 'U': -ones}
-    new_hash = mod.activate(pattern_hash)
-    mod.advance_tick_mark()
-    mod.set_hashed_patterns(new_hash)
-    print(mod.get_pattern('V'))
-    pattern_hash = {'V':-ones, 'U': np.array([1,-1,1,-1])}
-    new_hash = mod.activate(pattern_hash)
-    mod.advance_tick_mark()
-    mod.set_hashed_patterns(new_hash)
-    print(mod.get_pattern('V'))
+    print(new_hash)
+
+    # # Training
+    # mod = MockModule(module_name='mod', layer_names=['V'], layer_size=4)
+    # ones = np.ones(mod.layer_size)
+    # transitions = [
+    #     [[('V', -ones),('U',+ones)],[('V', +ones)]],
+    #     [[('V', +ones),('U',+ones)],[('V', -ones)]],
+    #     [[('U',-ones)],[('V', -ones)]],
+    # ]
+    # for pattern_list, next_pattern_list in transitions:
+    #     mod.train(pattern_list, next_pattern_list)
+    # print('flashed')
+    # mod.set_pattern('V',-ones)
+    # pattern_hash = {'V':-ones, 'U': +ones}
+    # new_hash = mod.activate(pattern_hash)
+    # mod.advance_tick_mark()
+    # mod.set_hashed_patterns(new_hash)
+    # print(mod.get_pattern('V'))
+    # pattern_hash = {'V':+ones, 'U': +ones}
+    # new_hash = mod.activate(pattern_hash)
+    # mod.advance_tick_mark()
+    # mod.set_hashed_patterns(new_hash)
+    # print(mod.get_pattern('V'))
+    # pattern_hash = {'V':-ones, 'U': +ones}
+    # new_hash = mod.activate(pattern_hash)
+    # mod.advance_tick_mark()
+    # mod.set_hashed_patterns(new_hash)
+    # print(mod.get_pattern('V'))
+    # pattern_hash = {'V':+ones, 'U': -ones}
+    # new_hash = mod.activate(pattern_hash)
+    # mod.advance_tick_mark()
+    # mod.set_hashed_patterns(new_hash)
+    # print(mod.get_pattern('V'))
+    # pattern_hash = {'V':-ones, 'U': np.array([1,-1,1,-1])}
+    # new_hash = mod.activate(pattern_hash)
+    # mod.advance_tick_mark()
+    # mod.set_hashed_patterns(new_hash)
+    # print(mod.get_pattern('V'))
 
 class MockGatingModule(MockModule):
     def __init__(self, net_layer_names):
@@ -215,6 +239,17 @@ class MockGatingModule(MockModule):
     def get_gate(self, gate_layer_name, to_layer_name, from_layer_name):
         node_index = self.gate_index_map[to_layer_name,from_layer_name]
         return self.layers[gate_layer_name][self.tick_mark, node_index]
+    def hash_gates(self):
+        gate_hash = {}
+        activity_gates = self.hash_patterns('A')
+        weight_gates = self.hash_patterns('W')
+        for to_layer_name in self.net_layer_names:
+            for from_layer_name in self.net_layer_names:
+                index = self.gate_index_map[to_layer_name, from_layer_name]
+                pattern = self.get_pattern('A')
+                gate_hash['A', to_layer_name, from_layer_name] = activity_gates[index]
+                gate_hash['W', to_layer_name, from_layer_name] = weight_gates[index]
+        return gate_hash
 
 class MockMemoryModule(MockModule):
     def __init__(self, layer_size=16):
