@@ -18,6 +18,8 @@ class NVM:
     def decode(self, machine_readable):
         return self.coding.decode(machine_readable)
     def tick(self):
+        # network update
+        self.network.tick()
         # answer any visualizer request
         if self.visualizing:
             if self.viz_pipe.poll():
@@ -25,8 +27,6 @@ class NVM:
                 self.viz_pipe.recv()
                 # respond with data
                 self.send_viz_data()
-        # network update
-        self.network.tick()
     def send_viz_data(self, down_sample=2):
         """
         Protocol:
@@ -63,7 +63,7 @@ class NVM:
             pattern = self.encode(message)
         else:
             pattern = np.fromstring(pattern,dtype=float)
-        self.network.set_patterns([('STDI', pattern)])
+        self.network.set_pattern('STDI', pattern)
     def get_output(self, io_module_name, to_human_readable=True):
         pattern = self.network.get_pattern('STDO')
         if to_human_readable:
@@ -73,12 +73,11 @@ class NVM:
         return message
     def set_instruction(self, opcode, *operands):
         # clear gates
-        pattern_list = [('A',self.network.get_pattern('A')*0)]
-        # set operation
-        pattern_list.append(('OPC',self.encode(opcode)))
+        self.network.set_pattern('A',self.network.get_pattern('A')*0)
+        # set instruction
+        self.network.set_pattern('OPC',self.encode(opcode))
         for op in range(len(operands)):
-            pattern_list.append(('OP%d'%(op+1), self.encode(operands[op])))
-        self.network.set_patterns(pattern_list)
+            self.network.set_pattern('OP%d'%(op+1), self.encode(operands[op]))
     def train(self, module_name, pattern_list, next_pattern_list):
         # train module with module.train
         self.network.get_module(module_name).train(pattern_list, next_pattern_list)
@@ -99,7 +98,7 @@ def run_viz(nvm_pipe):
 def flash_nrom(vm):
     # train vm on instruction set
     omega = np.tanh(1)
-    gate_index = vm.network.get_module('gating').gate_index
+    gate_index_map = vm.network.get_module('gating').gate_index_map
     gate_pattern = np.zeros(vm.network.get_module('gating').layer_size)
     # get non-gate layer names
     layer_names = vm.network.get_layer_names()
@@ -108,7 +107,7 @@ def flash_nrom(vm):
     # set value to_layer_name
     for to_layer_name in layer_names:
         gate_pattern[:] = 0
-        gate_pattern[gate_index[to_layer_name,'OP1']] = omega
+        gate_pattern[gate_index_map[to_layer_name,'OP1']] = omega
         vm.train('gating',
             [('OPC',vm.encode('set')),('OP2',vm.encode(to_layer_name))],
             [('A',gate_pattern)])    
@@ -117,7 +116,7 @@ def flash_nrom(vm):
         for from_layer_name in layer_names:
             for cond_layer_name in layer_names:
                 gate_pattern[:] = 0
-                gate_pattern[gate_index[to_layer_name,from_layer_name]] = omega
+                gate_pattern[gate_index_map[to_layer_name,from_layer_name]] = omega
                 vm.train('gating',
                     [('OPC',vm.encode('ccp')),
                      ('OP1',vm.encode(from_layer_name)),
@@ -130,12 +129,20 @@ def flash_nrom(vm):
     vm.train('compare', [('C1','pattern'),('C2','pattern')], [('CO',vm.encode('TRUE'))]) # unless equal
     # nand circuitry
     vm.train('nand', [], [('NO',vm.encode('TRUE'))]) # default TRUE behavior
-    vm.train('nand', [('N1','TRUE'),('N2','TRUE')], [('NO',vm.encode('FALSE'))]) # unless both
+    vm.train('nand',
+        [('N1',vm.encode('TRUE')),('N2',vm.encode('TRUE'))],
+        [('NO',vm.encode('FALSE'))]) # unless both
 
 def show_tick(vm):
     period = .1
     for t in range(1):
         vm.tick()
+        pattern_list = vm.network.list_patterns()
+        vmstr = ''
+        for (layer_name, pattern) in pattern_list:
+            if vm.decode(pattern)=='<?>': continue
+            vmstr += '%s:%s;'%(layer_name, vm.decode(pattern))
+        print(vmstr)
         raw_input('.')
         # time.sleep(period)
     
@@ -145,6 +152,8 @@ if __name__ == '__main__':
     # print(mvm.get_output('stdio',to_human_readable=True))
     flash_nrom(mvm)
     mvm.show()
+    show_tick(mvm)
+
     # # conditional copies
     # mvm.set_instruction('set','NIL','{0}')
     # show_tick(mvm)
@@ -159,14 +168,20 @@ if __name__ == '__main__':
     # show_tick(mvm)
     
     # compare/logic
+    print('set!')
     mvm.set_instruction('set','TRUE','N1')
     show_tick(mvm)
     show_tick(mvm)
+    show_tick(mvm)
+    show_tick(mvm)
+    print('set!')
     mvm.set_instruction('set','TRUE','N2')
     show_tick(mvm)
     show_tick(mvm)
-    mvm.set_instruction('set','NIL','N2')
     show_tick(mvm)
+    show_tick(mvm)
+    print('set!')
+    mvm.set_instruction('set','NIL','N2')
     show_tick(mvm)
     show_tick(mvm)
     show_tick(mvm)
