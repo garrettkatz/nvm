@@ -107,9 +107,7 @@ def flash_nrom(vm):
     omega = np.tanh(1)
     gate_pattern = vm.network.get_pattern('A')
     # get non-gate layer names
-    layer_names = vm.network.get_layer_names()
-    layer_names.remove('A')
-    layer_names.remove('W')
+    layer_names = vm.network.get_layer_names(omit_gates=True)
     # layer copies
     for to_layer_name in layer_names:
         for from_layer_name in layer_names:

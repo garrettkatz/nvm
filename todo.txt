@@ -1,1 +1,2 @@
 show weight matrices in viz
+map out encapsulating distinguished gate layers

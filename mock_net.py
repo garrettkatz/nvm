@@ -64,8 +64,12 @@ class MockNet:
         for (layer_name, layer_size) in zip(self.layer_names, layer_sizes):
             self.layers[layer_name] = -np.ones((history, layer_size))
             self.transitions[layer_name] = [({layer_name:layer_name}, layer_name)]
-    def get_layer_names(self):
-        return list(self.layer_names)
+    def get_layer_names(self, omit_gates=False):
+        layer_names = list(self.layer_names)
+        if omit_gates:
+            layer_names.remove('A')
+            layer_names.remove('W')
+        return layer_names
     def get_pattern(self, layer_name, tick_offset=0):
         tick_mark = (self.tick_mark + tick_offset) % self.history
         return self.layers[layer_name][tick_mark].copy()
@@ -89,6 +93,22 @@ class MockNet:
         return gate_hash
     def get_gate_index(self, to_layer_name, from_layer_name):
         return self.gate_index_map[to_layer_name, from_layer_name]
+    def train(self, pattern_hash, new_pattern_hash):
+        pattern_hash = {layer_name: cp(pattern_hash[layer_name]) for layer_name in pattern_hash}
+        for layer_name in new_pattern_hash:
+            new_pattern = cp(new_pattern_hash[layer_name])
+            self.transitions[layer_name].insert(0,(pattern_hash, new_pattern))
+    def associate(self):
+        pattern_hash, new_pattern_hash = {}, {}
+        gates = self.get_gates()
+        layer_names = self.get_layer_names(omit_gates=True)
+        for layer_name in layer_names:
+            if any([gates['W',layer_name,from_layer_name] > .5 for from_layer_name in layer_names]):
+                new_pattern_hash[layer_name] = self.get_pattern(layer_name)
+        for layer_name in layer_names:
+            if any([gates['W',to_layer_name,layer_name] > .5 for to_layer_name in layer_names]):
+                pattern_hash[layer_name] = self.get_pattern(layer_name,tick_offset=-1)
+        self.train(pattern_hash, new_pattern_hash)
     def activate(self, layer_name, old_pattern_hash):
         # check transitions
         for pattern_hash, new_pattern in self.transitions[layer_name]:
@@ -131,20 +151,29 @@ class MockNet:
         self.set_patterns(new_pattern_hash)
         # learn associations
         pass
-    def train(self, pattern_hash, new_pattern_hash):
-        pattern_hash = {layer_name: cp(pattern_hash[layer_name]) for layer_name in pattern_hash}
-        for layer_name in new_pattern_hash:
-            new_pattern = cp(new_pattern_hash[layer_name])
-            self.transitions[layer_name].insert(0,(pattern_hash, new_pattern))
     
 if __name__ == '__main__':
     layer_size = 4
-    net = MockNet(['A','B','C'], [layer_size]*3)
+    net = MockNet(['X','Y','Z'], [layer_size]*3)
     ones = np.ones(layer_size)
     print(net.layer_names)
-    old_pattern_hash = {'A':ones,'B':ones,'C':ones}
+    old_pattern_hash = {'X':ones,'Y':ones,'Z':ones}
     print('activate:')
-    print(net.activate('A',old_pattern_hash))
+    print(net.activate('X',old_pattern_hash))
+
+    # association
+    mod.set_hashed_patterns({'U':ones, 'V':ones})
+    mod.advance_tick_mark()
+    mod.set_hashed_patterns({'U':ones, 'V':-ones})
+    gate_hash = {('W','U','U'):0.0,('W','U','V'):0.0,('W','V','U'):1.0,('W','V','V'):1.0}
+    mod.associate(gate_hash)
+    print('transitions:')
+    print(mod.transitions)
+    old_hash = {'U':ones, 'V':ones}
+    new_hash = mod.activate(old_hash)
+    mod.advance_tick_mark()
+    print('newhash:')
+    print(new_hash)
 
     # mvm = make_nvm_mocknet(3)
     # print(mvm.layer_names)
