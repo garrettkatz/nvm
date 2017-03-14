@@ -136,17 +136,7 @@ class MockNet:
         for layer_name in new_pattern_hash:
             new_pattern = cp(new_pattern_hash[layer_name])
             self.transitions[layer_name].insert(0,(pattern_hash, new_pattern))
-
-def make_nvm_mocknet(num_registers, layer_size=32):
-    layer_names = ['IP','OPC','OP1','OP2','OP3'] # instruction
-    layer_names += ['{%d}'%r for r in range(num_registers)] # registers
-    layer_names += ['C1','C2','CO','N1','N2','NO'] # compare+nand
-    layer_names += ['K','V'] # memory
-    layer_names += ['STDI','STDO'] # io
-    layer_sizes = [layer_size]*len(layer_names)
-    mvm = MockNet(layer_names, layer_sizes)
-    return mvm
-
+    
 if __name__ == '__main__':
     layer_size = 4
     net = MockNet(['A','B','C'], [layer_size]*3)

@@ -87,10 +87,14 @@ class NVM:
         sys.exit(0)
 
 def mock_nvm(num_registers=3, layer_size=32):
+    layer_names = ['IP','OPC','OP1','OP2','OP3'] # instruction
+    layer_names += ['{%d}'%r for r in range(num_registers)] # registers
+    layer_names += ['C1','C2','CO','N1','N2','NO'] # compare+nand
+    layer_names += ['K','V'] # memory
+    layer_names += ['STDI','STDO'] # io
+    layer_sizes = [layer_size]*len(layer_names)
+    net = mn.MockNet(layer_names, layer_sizes)
     coding = mn.MockCoding(layer_size)
-    # stdio = mn.MockIOModule(module_name='stdio', layer_size=layer_size)
-    # net = mn.MockNet(num_registers, layer_size, io_modules=[stdio])
-    net = mn.make_nvm_mocknet(num_registers, layer_size=layer_size)
     return NVM(coding, net)
 
 def run_viz(nvm_pipe):
@@ -102,40 +106,42 @@ def flash_nrom(vm):
     # gate_index_map = vm.network.get_module('gating').gate_index_map
     omega = np.tanh(1)
     gate_pattern = vm.network.get_pattern('A')
-    gate_pattern[:] = 0
     # get non-gate layer names
     layer_names = vm.network.get_layer_names()
     layer_names.remove('A')
     layer_names.remove('W')
+    # layer copies
+    for to_layer_name in layer_names:
+        for from_layer_name in layer_names:
+            gate_pattern[:] = 0
+            gate_pattern[vm.network.get_gate_index(to_layer_name,from_layer_name)] = omega
+            vm.train(
+                {from_layer_name:'pattern', 'A':gate_pattern},
+                {to_layer_name:'pattern'})
     # set value to_layer_name
     for to_layer_name in layer_names:
         gate_pattern[:] = 0
         gate_pattern[vm.network.get_gate_index(to_layer_name,'OP1')] = omega
         vm.train({'OPC':vm.encode('set'),'OP2':vm.encode(to_layer_name)},{'A':gate_pattern})
-        # vm.train('gating',
-        #     [('OPC',vm.encode('set')),('OP2',vm.encode(to_layer_name))],
-        #     [('A',gate_pattern)])    
-    # # ccp from_layer_name to_layer_name condition_layer_name (conditional copy)
-    # for to_layer_name in layer_names:
-    #     for from_layer_name in layer_names:
-    #         for cond_layer_name in layer_names:
-    #             gate_pattern[:] = 0
-    #             gate_pattern[gate_index_map[to_layer_name,from_layer_name]] = omega
-    #             vm.train('gating',
-    #                 [('OPC',vm.encode('ccp')),
-    #                  ('OP1',vm.encode(from_layer_name)),
-    #                  ('OP2',vm.encode(to_layer_name)),
-    #                  ('OP3',vm.encode(cond_layer_name)),
-    #                  (cond_layer_name, vm.encode('TRUE'))],
-    #                 [('A',gate_pattern)])
-    # # compare circuitry
-    # vm.train('compare', [], [('CO',vm.encode('FALSE'))]) # default FALSE behavior
-    # vm.train('compare', [('C1','pattern'),('C2','pattern')], [('CO',vm.encode('TRUE'))]) # unless equal
-    # # nand circuitry
-    # vm.train('nand', [], [('NO',vm.encode('TRUE'))]) # default TRUE behavior
-    # vm.train('nand',
-    #     [('N1',vm.encode('TRUE')),('N2',vm.encode('TRUE'))],
-    #     [('NO',vm.encode('FALSE'))]) # unless both
+    # ccp from_layer_name to_layer_name condition_layer_name (conditional copy)
+    for to_layer_name in layer_names:
+        for from_layer_name in layer_names:
+            for cond_layer_name in layer_names:
+                gate_pattern[:] = 0
+                gate_pattern[vm.network.get_gate_index(to_layer_name,from_layer_name)] = omega
+                vm.train({
+                    'OPC':vm.encode('ccp'),
+                    'OP1':vm.encode(from_layer_name),
+                    'OP2':vm.encode(to_layer_name),
+                    'OP3':vm.encode(cond_layer_name),
+                    cond_layer_name:vm.encode('TRUE')},
+                    {'A':gate_pattern})
+    # compare circuitry
+    vm.train({}, {'CO':vm.encode('FALSE')}) # default FALSE behavior
+    vm.train({'C1':'pattern','C2':'pattern'}, {'CO':vm.encode('TRUE')}) # unless equal
+    # nand circuitry
+    vm.train({}, {'NO':vm.encode('TRUE')}) # default TRUE behavior
+    vm.train({'N1':vm.encode('TRUE'),'N2':vm.encode('TRUE')}, {'NO':vm.encode('FALSE')}) # unless both
 
 def show_tick(vm):
     period = .1
@@ -155,15 +161,22 @@ if __name__ == '__main__':
     # mvm.set_standard_input('NIL',from_human_readable=True)
     # print(mvm.get_standard_output(to_human_readable=True))
     flash_nrom(mvm)
+    # print(mvm.network.transitions['{0}'])
     mvm.show()
     show_tick(mvm)
 
     # # conditional copies
     # mvm.set_instruction('set','NIL','{0}')
     # show_tick(mvm)
+    # show_tick(mvm)
+    # show_tick(mvm)
     # mvm.set_instruction('set','TRUE','{1}')
     # show_tick(mvm)
+    # show_tick(mvm)
+    # show_tick(mvm)
     # mvm.set_instruction('set','FALSE','{2}')
+    # show_tick(mvm)
+    # show_tick(mvm)
     # show_tick(mvm)
     # raw_input('...')
     # mvm.set_instruction('ccp','{0}','{1}','{2}')
@@ -174,21 +187,24 @@ if __name__ == '__main__':
     # compare/logic
     print('set!')
     mvm.set_instruction('set','TRUE','N1')
+    # mvm.set_instruction('set','TRUE','C1')
     show_tick(mvm)
     show_tick(mvm)
     show_tick(mvm)
     show_tick(mvm)
-    # print('set!')
-    # mvm.set_instruction('set','TRUE','N2')
-    # show_tick(mvm)
-    # show_tick(mvm)
-    # show_tick(mvm)
-    # show_tick(mvm)
-    # print('set!')
-    # mvm.set_instruction('set','NIL','N2')
-    # show_tick(mvm)
-    # show_tick(mvm)
-    # show_tick(mvm)
+    print('set!')
+    mvm.set_instruction('set','TRUE','N2')
+    # mvm.set_instruction('set','TRUE','C2')
+    show_tick(mvm)
+    show_tick(mvm)
+    show_tick(mvm)
+    show_tick(mvm)
+    print('set!')
+    mvm.set_instruction('set','NIL','N2')
+    # mvm.set_instruction('set','NIL','C2')
+    show_tick(mvm)
+    show_tick(mvm)
+    show_tick(mvm)
 
     
     
