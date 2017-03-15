@@ -151,14 +151,8 @@ class MockNet:
         for layer_name in self.layers:
             new_pattern_hash[layer_name] = self.activate(layer_name, old_pattern_hash)
         # update network
-        print('pre:')
-        print(self.get_pattern('K'))
-        print(self.get_pattern('V'))
         self.advance_tick_mark()
         self.set_patterns(new_pattern_hash)
-        print('post:')
-        print(self.get_pattern('K'))
-        print(self.get_pattern('V'))
         # learn associations
         self.associate()
     

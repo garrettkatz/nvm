@@ -13,6 +13,13 @@ class NVM:
         # Encode layer names and constants
         for symbol in self.network.get_layer_names():
             self.coding.encode(symbol)
+    def __str__(self):
+        pattern_list = self.network.list_patterns()
+        vmstr = ''
+        for (layer_name, pattern) in pattern_list:
+            if self.decode(pattern)=='<?>': continue
+            vmstr += '%s:%s;'%(layer_name, self.decode(pattern))
+        return vmstr
     def encode(self,human_readable):
         return self.coding.encode(human_readable)
     def decode(self, machine_readable):
@@ -194,21 +201,9 @@ def flash_nrom(vm):
 def show_tick(vm):
     period = .1
     for t in range(1):
-        print('pre:')
-        pattern_list = vm.network.list_patterns()
-        vmstr = ''
-        for (layer_name, pattern) in pattern_list:
-            if vm.decode(pattern)=='<?>': continue
-            vmstr += '%s:%s;'%(layer_name, vm.decode(pattern))
-        print(vmstr)
+        print('pre: %s'%vm)
         vm.tick()
-        print('post:')
-        pattern_list = vm.network.list_patterns()
-        vmstr = ''
-        for (layer_name, pattern) in pattern_list:
-            if vm.decode(pattern)=='<?>': continue
-            vmstr += '%s:%s;'%(layer_name, vm.decode(pattern))
-        print(vmstr)
+        print('post: %s'%vm)
         raw_input('.')
         # time.sleep(period)
     
