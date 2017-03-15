@@ -109,18 +109,22 @@ def flash_nrom(vm):
     # get non-gate layer names
     layer_names = vm.network.get_layer_names(omit_gates=True)
     # layer copies
+    zero_gate_pattern = gate_pattern.copy()
+    zero_gate_pattern[:] = 0
     for to_layer_name in layer_names:
         for from_layer_name in layer_names:
             gate_pattern[:] = 0
             gate_pattern[vm.network.get_gate_index(to_layer_name,from_layer_name)] = omega
             vm.train(
                 {from_layer_name:'pattern', 'A':gate_pattern},
-                {to_layer_name:'pattern'})
+                {to_layer_name:'pattern','A':zero_gate_pattern})
     # set value to_layer_name
     for to_layer_name in layer_names:
         gate_pattern[:] = 0
         gate_pattern[vm.network.get_gate_index(to_layer_name,'OP1')] = omega
         vm.train({'OPC':vm.encode('set'),'OP2':vm.encode(to_layer_name)},{'A':gate_pattern})
+        vm.train({'OPC':vm.encode('set'),'OP2':vm.encode(to_layer_name),'A':gate_pattern},
+                {'A':zero_gate_pattern,'OPC':vm.encode('_')})
     # ccp from_layer_name to_layer_name condition_layer_name (conditional copy)
     for to_layer_name in layer_names:
         for from_layer_name in layer_names:
@@ -134,17 +138,71 @@ def flash_nrom(vm):
                     'OP3':vm.encode(cond_layer_name),
                     cond_layer_name:vm.encode('TRUE')},
                     {'A':gate_pattern})
+                vm.train({
+                    'OPC':vm.encode('ccp'),
+                    'OP1':vm.encode(from_layer_name),
+                    'OP2':vm.encode(to_layer_name),
+                    'OP3':vm.encode(cond_layer_name),
+                    cond_layer_name:vm.encode('TRUE'),
+                    'A':gate_pattern},
+                    {'A':zero_gate_pattern,
+                    'OPC':vm.encode('_')})
     # compare circuitry
     vm.train({}, {'CO':vm.encode('FALSE')}) # default FALSE behavior
     vm.train({'C1':'pattern','C2':'pattern'}, {'CO':vm.encode('TRUE')}) # unless equal
     # nand circuitry
     vm.train({}, {'NO':vm.encode('TRUE')}) # default TRUE behavior
     vm.train({'N1':vm.encode('TRUE'),'N2':vm.encode('TRUE')}, {'NO':vm.encode('FALSE')}) # unless both
+    # mwr value_layer_name pointer_layer_name (memory write)
+    gate_pattern[:] = 0
+    key_gate_pattern = gate_pattern.copy()
+    value_gate_pattern = gate_pattern.copy()
+    assoc_gate_pattern = gate_pattern.copy()
+    for pointer_layer_name in layer_names:
+        for value_layer_name in layer_names:
+            key_gate_pattern[:] = 0
+            key_gate_pattern[vm.network.get_gate_index('K',pointer_layer_name)] = omega
+            vm.train({
+                'OPC':vm.encode('mwr'),
+                'OP1':vm.encode(value_layer_name),
+                'OP2':vm.encode(pointer_layer_name)},
+                {'A':key_gate_pattern})
+            value_gate_pattern[:] = 0
+            value_gate_pattern[vm.network.get_gate_index('V',value_layer_name)] = omega
+            assoc_gate_pattern[:] = 0
+            assoc_gate_pattern[vm.network.get_gate_index('V','K')] = omega
+            vm.train({
+                'OPC':vm.encode('mwr'),
+                'OP1':vm.encode(value_layer_name),
+                'OP2':vm.encode(pointer_layer_name),
+                'A':key_gate_pattern},
+                {'A':value_gate_pattern})
+            vm.train({
+                'OPC':vm.encode('mwr'),
+                'OP1':vm.encode(value_layer_name),
+                'OP2':vm.encode(pointer_layer_name),
+                'A':value_gate_pattern},
+                {'W':assoc_gate_pattern})
+            vm.train({
+                'OPC':vm.encode('mwr'),
+                'OP1':vm.encode(value_layer_name),
+                'OP2':vm.encode(pointer_layer_name),
+                'W':assoc_gate_pattern},
+                {'OPC':vm.encode('_'),
+                 'W':zero_gate_pattern})
 
 def show_tick(vm):
     period = .1
     for t in range(1):
+        print('pre:')
+        pattern_list = vm.network.list_patterns()
+        vmstr = ''
+        for (layer_name, pattern) in pattern_list:
+            if vm.decode(pattern)=='<?>': continue
+            vmstr += '%s:%s;'%(layer_name, vm.decode(pattern))
+        print(vmstr)
         vm.tick()
+        print('post:')
         pattern_list = vm.network.list_patterns()
         vmstr = ''
         for (layer_name, pattern) in pattern_list:
@@ -182,24 +240,64 @@ if __name__ == '__main__':
     # mvm.set_instruction('ccp','{0}','{2}','{1}')
     # show_tick(mvm)
     
-    # compare/logic
+    # # compare/logic
+    # print('set!')
+    # mvm.set_instruction('set','TRUE','N1')
+    # # mvm.set_instruction('set','TRUE','C1')
+    # show_tick(mvm)
+    # show_tick(mvm)
+    # show_tick(mvm)
+    # show_tick(mvm)
+    # print('set!')
+    # mvm.set_instruction('set','TRUE','N2')
+    # # mvm.set_instruction('set','TRUE','C2')
+    # show_tick(mvm)
+    # show_tick(mvm)
+    # show_tick(mvm)
+    # show_tick(mvm)
+    # print('set!')
+    # mvm.set_instruction('set','NIL','N2')
+    # # mvm.set_instruction('set','NIL','C2')
+    # show_tick(mvm)
+    # show_tick(mvm)
+    # show_tick(mvm)
+
+    # memory
     print('set!')
-    mvm.set_instruction('set','TRUE','N1')
-    # mvm.set_instruction('set','TRUE','C1')
+    mvm.set_instruction('set','TRUE','{0}')
     show_tick(mvm)
     show_tick(mvm)
     show_tick(mvm)
     show_tick(mvm)
     print('set!')
-    mvm.set_instruction('set','TRUE','N2')
-    # mvm.set_instruction('set','TRUE','C2')
+    mvm.set_instruction('set','NIL','{1}')
     show_tick(mvm)
     show_tick(mvm)
     show_tick(mvm)
     show_tick(mvm)
     print('set!')
-    mvm.set_instruction('set','NIL','N2')
-    # mvm.set_instruction('set','NIL','C2')
+    mvm.set_instruction('mwr','{0}','{1}')
+    show_tick(mvm)
+    show_tick(mvm)
+    show_tick(mvm)
+    show_tick(mvm)
+    show_tick(mvm)
+    show_tick(mvm)
+    print('set!')
+    mvm.set_instruction('set','_','K')
+    show_tick(mvm)
+    show_tick(mvm)
+    show_tick(mvm)
+    show_tick(mvm)
+    print('set!')
+    mvm.set_instruction('set','FALSE','V')
+    show_tick(mvm)
+    show_tick(mvm)
+    show_tick(mvm)
+    show_tick(mvm)
+    print('set!')
+    mvm.set_instruction('set','NIL','K')
+    show_tick(mvm)
     show_tick(mvm)
     show_tick(mvm)
     show_tick(mvm)
