@@ -108,10 +108,10 @@ class MockNet:
         for layer_name in layer_names:
             if any([gates['W',to_layer_name,layer_name] > .5 for to_layer_name in layer_names]):
                 pattern_hash[layer_name] = self.get_pattern(layer_name,tick_offset=-1)
-        if len(pattern_hash) > 0:
-            print('New association!')
-            print(pattern_hash)
-            print(new_pattern_hash)
+        # if len(pattern_hash) > 0:
+        #     print('New association!')
+        #     print(pattern_hash)
+        #     print(new_pattern_hash)
         self.train(pattern_hash, new_pattern_hash)
     def activate(self, layer_name, old_pattern_hash):
         # check transitions

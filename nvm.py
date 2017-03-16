@@ -197,11 +197,45 @@ def flash_nrom(vm):
                 'W':assoc_gate_pattern},
                 {'OPC':vm.encode('_'),
                  'W':zero_gate_pattern})
+    # mrd value_layer_name pointer_layer_name (memory read)
+    gate_pattern[:] = 0
+    key_gate_pattern = gate_pattern.copy()
+    value_gate_pattern = gate_pattern.copy()
+    for pointer_layer_name in layer_names:
+        for value_layer_name in layer_names:
+            key_gate_pattern[:] = 0
+            key_gate_pattern[vm.network.get_gate_index('K',pointer_layer_name)] = omega
+            vm.train({
+                'OPC':vm.encode('mrd'),
+                'OP1':vm.encode(value_layer_name),
+                'OP2':vm.encode(pointer_layer_name)},
+                {'A':key_gate_pattern})
+            value_gate_pattern[:] = 0
+            value_gate_pattern[vm.network.get_gate_index(value_layer_name,'V')] = omega
+            vm.train({
+                'OPC':vm.encode('mrd'),
+                'OP1':vm.encode(value_layer_name),
+                'OP2':vm.encode(pointer_layer_name),
+                'A':key_gate_pattern},
+                {'A':-key_gate_pattern}) # placeholder until hidden layer
+            vm.train({
+                'OPC':vm.encode('mrd'),
+                'OP1':vm.encode(value_layer_name),
+                'OP2':vm.encode(pointer_layer_name),
+                'A':-key_gate_pattern},
+                {'A':value_gate_pattern})
+            vm.train({
+                'OPC':vm.encode('mrd'),
+                'OP1':vm.encode(value_layer_name),
+                'OP2':vm.encode(pointer_layer_name),
+                'A':value_gate_pattern},
+                {'OPC':vm.encode('_'),
+                 'A':zero_gate_pattern})
 
 def show_tick(vm):
     period = .1
     for t in range(1):
-        print('pre: %s'%vm)
+        print('pre : %s'%vm)
         vm.tick()
         print('post: %s'%vm)
         raw_input('.')
@@ -285,13 +319,14 @@ if __name__ == '__main__':
     show_tick(mvm)
     show_tick(mvm)
     print('set!')
-    mvm.set_instruction('set','FALSE','V')
+    mvm.set_instruction('set','_','V')
     show_tick(mvm)
     show_tick(mvm)
     show_tick(mvm)
     show_tick(mvm)
     print('set!')
-    mvm.set_instruction('set','NIL','K')
+    mvm.set_instruction('mrd','{2}','{1}')
+    show_tick(mvm)
     show_tick(mvm)
     show_tick(mvm)
     show_tick(mvm)

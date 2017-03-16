@@ -1,2 +1,2 @@
 show weight matrices in viz
-map out encapsulating distinguished gate layers
+handle activity gating outside the transition function?
