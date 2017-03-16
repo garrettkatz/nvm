@@ -1,2 +1,3 @@
 show weight matrices in viz
 handle activity gating outside the transition function?
+hidden layer to avoid workarounds
