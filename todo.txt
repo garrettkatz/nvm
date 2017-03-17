@@ -1,3 +1,12 @@
 show weight matrices in viz
 handle activity gating outside the transition function?
 hidden layer to avoid workarounds
+
+realnet:
+Contrastive hebbian learning in fully connected recurrent hopfield with key, value, and hidden layer, first two clamped.  Test hypothesis that weight dropout prevents overwrite/interference.  Look for connection with # distinct output patterns that need to be stored (if small, e.g. true/false/nil/_)
+
+Look for way to leverage history, time locality not limited to one.
+
+Output should become fixed, previously stored become just barely not fixed to avoid overwrite
+
+competition idea: delta w_ij proportional to sum_t x_i^t W_ij^t x_j^t over recent t.  If this number is large, x_j is in agreement with others about the affect on x_i.  If it is small, x_j is in disagreement, competing.  So "more important", i.e. it's absence could be missed in the borderline cases
