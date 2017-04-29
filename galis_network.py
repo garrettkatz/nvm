@@ -5,6 +5,7 @@ Confusion about 2016 (ISM):
 for V, uses a_old*a_new.T, shouldn't it be a_new*a_old.T?
 confusing that the same t is used, but multiple stages in the update process.  is theta updated three times, before h, between h and f, and after f?  or only two?  and when? are all three of these thetas referred to as theta(t)?
 """
+import numpy as np
 
 class GALISNN:
     def __init__(self, N, k_d, k_theta, k_w, beta_1, beta_2, history=2):
@@ -38,9 +39,39 @@ class GALISNN:
         """
         a_new = self.a[:,[self.t]]
         a_old = self.a[:,[(self.t - 1) % self.history]]
-        self.W = (1-self.k_d)*self.W + (1/self.N)*a_new*a_new.T*(1-np.identity(self.N))
-        self.V = (1-self.k_d)*self.V + (1/self.N)*a_new*a_old.T
-
+        self.W = (1-self.k_d)*self.W + (1./self.N)*a_new*a_new.T*(1-np.identity(self.N))
+        self.V = (1-self.k_d)*self.V + (1./self.N)*a_new*a_old.T
+    def get_pattern(self):
+        return self.a[:,[self.t]]
+    def set_pattern(self, a):
+        self.a[:,[self.t]] = a
+    def advance_tick_mark(self):
+        self.t = (self.t + 1) % self.history
 
 if __name__ == '__main__':
-    pass
+
+    # random pattern sequence
+    N = 128
+    T = 6
+    A = np.sign(np.random.randn(N,T))
+    gnn = GALISNN(N, k_d=0.15, k_theta=0.09, k_w=0.175, beta_1=0.5, beta_2=1, history=T)
+    # Learning
+    for t in range(T):
+        gnn.set_pattern(A[:,[t]])
+        if t > 0: gnn.associate()
+        gnn.advance_tick_mark()
+    # Recall
+    print(gnn.W)
+    print(gnn.V)
+    gnn.set_pattern(A[:,[0]])
+    old_match_index = 0
+    for t in range(50):
+        a = gnn.get_pattern()
+        # print(a.flatten())
+        # print(gnn.theta[:,gnn.t])
+        if (a == A).all(axis=0).any():
+            match_index = (a == A).all(axis=0).argmax()
+            if match_index != old_match_index:
+                print('%d: matches %d'%(t,match_index))
+        gnn.activate()
+        # raw_input('.')
