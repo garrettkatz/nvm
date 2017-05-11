@@ -1,4 +1,5 @@
 import numpy as np
+import matplotlib.pyplot as plt
 
 class KVNet:
     """
@@ -14,6 +15,7 @@ class KVNet:
         self.f = f
         self.df = df
         self.af = af
+        # self.W = [np.random.randn(N[k+1],N[k])/(N[k+1]*N[k]) for k in range(self.L)]
         self.W = [np.eye(N[k+1],N[k]) for k in range(self.L)]
         self.O = [np.zeros((N[k+1],N[k])) for k in range(self.L)]
     def forward_pass(self, x_0):
@@ -25,7 +27,6 @@ class KVNet:
     def backward_pass(self, x, d):
         # x[k]: k^th layer activity pattern from forward pass
         # d: target pattern for L^th layer
-        # D[k] = diag(df(Wx)
         k = self.L
         e = (x[k] - d)
         y = {}
@@ -34,8 +35,11 @@ class KVNet:
             e = (self.W[k-1]+self.O[k-1]).T.dot(y[k])
         return y
     def error_gradient(self, x, y):
+        # x,y from forward/backward pass
+        # returns error gradient wrt omega
         return [y[k+1] * x[k].T for k in range(self.L)]
     def gradient_descent(self, x_0, d, eta=0.01, num_epochs=10000, verbose=2):
+        for k in range(L): self.O[k] *= 0.
         for epoch in range(num_epochs):
             x = self.forward_pass(x_0)
             y = self.backward_pass(x, d)
@@ -48,63 +52,110 @@ class KVNet:
             G = self.error_gradient(x, y)
             for k in range(self.L):
                 kvn.O[k] += - eta * G[k]
-    def memorize(self, x_0, d, eta=0.01, num_epochs=2000, verbose=1):
+        # Persist weight changes
+        for k in range(self.L):
+            kvn.W[k] += kvn.O[k]
+            kvn.O[k] *= 0
+    def memorize(self, x_0, d, eta=0.01, num_epochs=5000, dot_term=0.999, verbose=1):
         x = self.forward_pass(x_0)
-        for k in range(L-1): self.O[k][:,:] = 0.
+        for k in range(L-1): self.O[k] *= 0.
         self.O[L-1]  = (self.af[L-1](d) - self.W[L-1].dot(x[L-1])) * x[L-1].T / (x[L-1].T.dot(x[L-1]))
+        learning_curve = []
         for epoch in range(num_epochs):
             # progress
+            x = self.forward_pass(x_0)
+            y = self.backward_pass(x,d)
+            g = self.error_gradient(x,y)
+            E = 0.5*((x[self.L]-d)**2).sum()
+            O = sum([(self.O[k]**2).sum() for k in range(self.L)])
+            G = sum([(g[k]**2).sum() for k in range(self.L)])
+            GO = sum([(g[k]*self.O[k]).sum() for k in range(self.L)])
             if epoch == 0 or epoch % int(num_epochs/10) == 0:
-                x = self.forward_pass(x_0)
-                y = self.backward_pass(x,d)
-                G = self.error_gradient(x,y)
-                E = 0.5*((x[self.L]-d)**2).sum()
-                M = 0.5*sum([(self.O[k]**2).sum() for k in range(self.L)])
-                # P = sum([(G[k]*self.O[k]).sum() for k in range(self.L)])
-                if verbose > 0: print('%d: E=%f,M=%f'%(epoch,E,M))
+                # P = sum([(g[k]*self.O[k]).sum() for k in range(self.L)])
+                if verbose > 0: print('%d: E=%f,O=%f,term=%f'%(epoch,E,O,GO**2/(G*O)))
                 if verbose > 1:
                     print(x[self.L].T)
                     print(d.T)
+            learning_curve.append((E,O,G,GO))
+            # termination
+            if G*O > 0 and GO**2/(G*O) > dot_term: break
             # predictor
-            x = self.forward_pass(x_0)
-            y = self.backward_pass(x,d)
-            G = self.error_gradient(x,y)
-            H = sum([(G[k]*self.O[k]).sum() for k in range(self.L)])/sum([(G[k]*G[k]).sum() for k in range(self.L)])
+            H = GO/G if G > 0 else 0
             for k in range(self.L):
                 self.O[k] *= 1 - eta
-                self.O[k] += eta * G[k] * H
+                self.O[k] += eta * g[k] * H
             # corrector
             x = self.forward_pass(x_0)
             y = self.backward_pass(x, d)
-            G = self.error_gradient(x, y)
+            g = self.error_gradient(x, y)
             for k in range(self.L):
-                self.O[k] += -G[k]
+                self.O[k] += - eta * g[k]
+        # Persist weight changes
+        for k in range(self.L):
+            kvn.W[k] += kvn.O[k]
+            kvn.O[k] *= 0
+        return learning_curve
+
+# Activation functions
+def slog_f(x): return (-1.)**(x < 0)*np.log(np.fabs(x)+1.)
+def slog_df(x): return 1./(np.fabs(x)+1.)
+def slog_af(y): return (-1.)**(y < 0)*(np.exp(np.fabs(y))-1.)
+def tanh_df(x): return 1. - np.tanh(x)**2.
 
 if __name__=='__main__':
-    f = np.tanh
-    df = lambda x: 1 - np.tanh(x)**2
-    af = np.arctanh
-    N = [2,2,1]
+    np.set_printoptions(linewidth=200)
+    # Network size
+    N = [32]*4
     L = len(N)-1
-    kvn = KVNet(N, [f]*L, [df]*L, [af]*L)
-    x_0 = np.random.randn(N[0],1)
-    d = np.array([[.5]])
-    # kvn.gradient_descent(x_0, d)
-    kvn.memorize(x_0, d)
+    M = 15 #sum(N) # num training examples
+    keys = np.sign(np.random.randn(N[0],M))
+    vals = 0.9*np.sign(np.random.randn(N[L],M)) #*(1./N[L])
+    for num_epochs in [1, 10000]:
+        for (f, df, af) in [
+            # ([slog_f]*L, [slog_df]*L, [slog_af]*L),
+            ([np.tanh]*L, [tanh_df]*L, [np.arctanh]*L)
+        ]:
+            kvn = KVNet(N, f, df, af)
+            for m in range(M):            
+                learning_curve = kvn.memorize(keys[:,[m]], vals[:,[m]],eta=0.001,num_epochs=num_epochs,verbose=1,dot_term=.99)
+                if num_epochs > 0:
+                    E, O, G, GO = zip(*learning_curve)
+                else:
+                    E, O, G, GO = [1],[1],[1],[1]
+                # # for k in range(L):
+                # #     print(kvn.W[k])
+                # # plt.ion()
+                # plt.plot(E)
+                # plt.plot(O)
+                # plt.plot(G)
+                # plt.legend(['Error','Omega norm','Gradient norm'])
+                # plt.show()        
+                outs = np.concatenate([kvn.forward_pass(keys[:,[_m]])[L] for _m in range(m+1)], axis=1)
+                E = 0.5*((outs - vals[:,:m+1])**2).sum(axis=0)
+                A = 1.0*(np.sign(outs) == np.sign(vals[:,:m+1])).sum(axis=0)/N[L]
+                print('%d: %d iters, O = %f, G = %f, term=%f, avg E = %f, avg A = %f'%(m,len(learning_curve), O[-1], G[-1], GO[-1]**2/(G[-1]*O[-1]),E.mean(),A.mean()))
+                # print(E)
+                print(A)
+        # print(keys)
+        # print(vals)
+        # outs = np.concatenate([kvn.forward_pass(keys[:,[m]])[L] for m in range(M)], axis=1)
+        # E = 0.5*((outs - vals)**2).sum(axis=0)
+        # A = 1.0*(np.sign(outs) == np.sign(vals)).sum(axis=0)/N[L]
+        # print(E)
+        # print(A)
     
+        # kvn.gradient_descent(x_0, d)
     
-    
-    # eta = 0.01
-    # num_epochs = 1000
-    # for epoch in range(num_epochs):
-    #     x = kvn.forward_pass(x_0)
-    #     if epoch % (num_epochs/10) == 0:
-    #         print('epoch %d: d = %f, x[L] = %f, E = %f'%(epoch, d[0,0], x[L][0,0], 0.5*((x[L]-d)**2).sum()))
-    #     y = kvn.backward_pass(x, d)
-    #     for k in range(kvn.L):
-    #         dOk = -y[k+1] * x[k].T
-    #         kvn.O[k] += eta * dOk
-            
+        # x_0, d = keys[:,[0]], vals[:,[0]]
+        # learning_curve = kvn.memorize(x_0, d, eta=0.001,num_epochs=10000,verbose=1,dot_term=.99)
+        # E, O, G, GO = zip(*learning_curve)
+        # # plt.ion()
+        # plt.plot(E)
+        # plt.plot(O)
+        # plt.plot(G)
+        # plt.plot(np.array(GO)**2/(np.array(G)*np.array(O)))
+        # plt.legend(['Error','Omega norm','Gradient norm','Term'])
+        # plt.show()
 
 def weight_update(W, G, X, Y):
     # learn X -> Y, each N x K
