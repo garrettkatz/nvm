@@ -61,7 +61,8 @@ class KVNet:
         for k in range(L-1): self.O[k] *= 0.
         self.O[L-1]  = (self.af[L-1](d) - self.W[L-1].dot(x[L-1])) * x[L-1].T / (x[L-1].T.dot(x[L-1]))
         learning_curve = []
-        for epoch in range(num_epochs):
+        epoch = 0
+        while True:
             # progress
             x = self.forward_pass(x_0)
             y = self.backward_pass(x,d)
@@ -70,14 +71,17 @@ class KVNet:
             O = sum([(self.O[k]**2).sum() for k in range(self.L)])
             G = sum([(g[k]**2).sum() for k in range(self.L)])
             GO = sum([(g[k]*self.O[k]).sum() for k in range(self.L)])
-            if epoch == 0 or epoch % int(num_epochs/10) == 0:
+            if epoch % int(np.ceil(num_epochs/10. + 1)) == 0:
                 # P = sum([(g[k]*self.O[k]).sum() for k in range(self.L)])
-                if verbose > 0: print('%d: E=%f,O=%f,term=%f'%(epoch,E,O,GO**2/(G*O)))
+                if verbose > 0:
+                    term = GO**2/(G*O) if G*O > 0 else 0
+                    print('%d: E=%f,O=%f,term=%f'%(epoch,E,O,term))
                 if verbose > 1:
                     print(x[self.L].T)
                     print(d.T)
             learning_curve.append((E,O,G,GO))
             # termination
+            if epoch == num_epochs: break
             if G*O > 0 and GO**2/(G*O) > dot_term: break
             # predictor
             H = GO/G if G > 0 else 0
@@ -90,6 +94,7 @@ class KVNet:
             g = self.error_gradient(x, y)
             for k in range(self.L):
                 self.O[k] += - eta * g[k]
+            epoch += 1
         # Persist weight changes
         for k in range(self.L):
             kvn.W[k] += kvn.O[k]
@@ -105,12 +110,12 @@ def tanh_df(x): return 1. - np.tanh(x)**2.
 if __name__=='__main__':
     np.set_printoptions(linewidth=200)
     # Network size
-    N = [32]*4
+    N = [10]*3
     L = len(N)-1
-    M = 15 #sum(N) # num training examples
+    M = 5 #sum(N) # num training examples
     keys = np.sign(np.random.randn(N[0],M))
     vals = 0.9*np.sign(np.random.randn(N[L],M)) #*(1./N[L])
-    for num_epochs in [1, 10000]:
+    for num_epochs in [0, 10000]:
         for (f, df, af) in [
             # ([slog_f]*L, [slog_df]*L, [slog_af]*L),
             ([np.tanh]*L, [tanh_df]*L, [np.arctanh]*L)
@@ -118,10 +123,7 @@ if __name__=='__main__':
             kvn = KVNet(N, f, df, af)
             for m in range(M):            
                 learning_curve = kvn.memorize(keys[:,[m]], vals[:,[m]],eta=0.001,num_epochs=num_epochs,verbose=1,dot_term=.99)
-                if num_epochs > 0:
-                    E, O, G, GO = zip(*learning_curve)
-                else:
-                    E, O, G, GO = [1],[1],[1],[1]
+                E, O, G, GO = zip(*learning_curve)
                 # # for k in range(L):
                 # #     print(kvn.W[k])
                 # # plt.ion()
@@ -133,7 +135,8 @@ if __name__=='__main__':
                 outs = np.concatenate([kvn.forward_pass(keys[:,[_m]])[L] for _m in range(m+1)], axis=1)
                 E = 0.5*((outs - vals[:,:m+1])**2).sum(axis=0)
                 A = 1.0*(np.sign(outs) == np.sign(vals[:,:m+1])).sum(axis=0)/N[L]
-                print('%d: %d iters, O = %f, G = %f, term=%f, avg E = %f, avg A = %f'%(m,len(learning_curve), O[-1], G[-1], GO[-1]**2/(G[-1]*O[-1]),E.mean(),A.mean()))
+                term = GO[-1]**2/(G[-1]*O[-1]) if G[-1]*O[-1] > 0 else 0
+                print('%d: %d iters, O = %f, G = %f, term=%f, avg E = %f, avg A = %f'%(m,len(learning_curve), O[-1], G[-1], term, E.mean(),A.mean()))
                 # print(E)
                 print(A)
         # print(keys)
