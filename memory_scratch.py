@@ -1,6 +1,8 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
+np.set_printoptions(linewidth=200)
+
 class KVNet:
     """
     Feed-forward net for neural key-value memory
@@ -107,7 +109,184 @@ def slog_df(x): return 1./(np.fabs(x)+1.)
 def slog_af(y): return (-1.)**(y < 0)*(np.exp(np.fabs(y))-1.)
 def tanh_df(x): return 1. - np.tanh(x)**2.
 
+def int_to_pattern(N, i):
+    return (-1)**(1 & (i >> np.arange(N)[:,np.newaxis]))
+def pattern_to_int(N, p):
+    return (2**np.arange(N)).dot(p < 1).flat[0]
+def hashable(p):
+    return tuple(p.flatten())
+
+class MockMemoryNet:
+    def __init__(self, N, noise=0):
+        self.N = N
+        self.noise = noise
+        self.key_value_map = {} # key-value "network"
+    def _noise(self,p):
+        return p * (-1)**(np.random.rand(self.N,1) < self.noise)
+    def read(self,k):
+        k = hashable(self._noise(k))
+        if k in self.key_value_map:
+            return self._noise(self.key_value_map[k])
+        else:
+            return np.sign(np.random.randn(self.N,1))
+    def write(self,k,v):
+        self.key_value_map[hashable(self._noise(k))] = self._noise(v)
+    def next(self, k):
+        return self._noise(int_to_pattern(self.N, pattern_to_int(self.N,k)+1))
+    def first(self):
+        return self._noise(int_to_pattern(self.N, 0))
+    def passive_tick(self):
+        pass
+    # def new(self):
+    #     return int_to_pattern(self.N, len(self.key_value_map))
+
+def linked_list_trial_data(N, num_lists, max_prepends, max_passive_ticks):
+    """
+    Generate random trial data for different nets with the same layer size N    
+    """
+    num_prepends = []
+    num_cdrs = 1
+    cdr_index = []
+    patterns = []
+    num_passive_ticks = []
+    for n in range(num_lists):
+        num_prepends.append(np.random.randint(1,max_prepends+1))
+        cdr_index.append(np.random.randint(num_cdrs))
+        # construct new list
+        for p in range(num_prepends[-1]):
+            num_cdrs += 1
+            patterns.append(np.sign(np.random.randn(N,1)))
+        num_passive_ticks.append(np.random.randint(max_passive_ticks+1))
+    return num_prepends, cdr_index, patterns, num_passive_ticks
+        
+def linked_list_trial(net, num_prepends, cdr_index, patterns, num_passive_ticks):
+    """
+    Test linked list construction and retrieval.
+    "NIL" terminal is net.first()
+    "cons cells" are (car=v, cdr=k_next) pairs stored in consecutive memory locations
+    Constructs multiple overlapping linked lists
+    The n^th list is prepended to the cdr_index[n]^th cdr used so far
+    New "cons cells" for n^th list are prepended num_prepends[n] times
+    Cell contents are drawn from patterns in order
+    After n^th list num_passive_ticks[n] time steps are allowed
+    For evaluation, return full sequence of next() outputs and full dictionary of write() inputs
+    """
+    k_first = net.first() # very first memory address
+    k_last = k_first # last key written to
+    key_value_map = {}
+    key_sequence = [k_first]
+    cdrs = [k_first]
+    patterns = list(patterns) # copy before popping
+    for n in range(len(num_prepends)):
+        # initialize tail for new list 
+        k_tail = cdrs[cdr_index[n]]
+        # construct new list
+        for p in range(num_prepends[n]):
+            # get memory addresses for cons cell
+            k_car = net.next(k_last)
+            k_cdr = net.next(k_car)
+            cdrs.append(k_cdr)
+            key_sequence.extend([k_car, k_cdr])
+            k_last = k_cdr # update last address used
+            # store pattern and prepend to tail
+            pattern = patterns.pop(0)
+            net.write(k_car, pattern)
+            net.write(k_cdr, k_tail)
+            key_value_map.update({hashable(k_car):pattern, hashable(k_cdr):k_tail})
+            k_tail = k_car # update tail
+        # run network in passive mode
+        for _ in range(num_passive_ticks[n]):
+            net.passive_tick()
+    return key_sequence, key_value_map
+    
 if __name__=='__main__':
+    N = 6
+    mmn = MockMemoryNet(N, noise=0.005)
+
+    trial_data = linked_list_trial_data(N, num_lists=3, max_prepends=4, max_passive_ticks=0)
+    num_prepends, cdr_index, patterns, num_passive_ticks = trial_data
+
+    key_sequence, key_value_map = linked_list_trial(mmn, *trial_data)
+
+    print('num prep',num_prepends)
+    print('cdr_index',cdr_index)
+    print('num_passive_ticks',num_passive_ticks)
+    print('patterns:')
+    print(np.concatenate(patterns,axis=1))
+    
+    # evaluate performance
+    print('next results:')
+    actual_sequence = [mmn.first()] + [mmn.next(k) for k in key_sequence[:-1]]
+    print(np.concatenate(key_sequence,axis=1)==np.concatenate(actual_sequence,axis=1))
+    
+    print('mapping results:')
+    key_values = np.concatenate([key_value_map[hashable(k)] for k in key_sequence[1:]],axis=1)
+    actual_values = np.concatenate([mmn.read(k) for k in key_sequence[1:]],axis=1)
+    print(key_values)
+    print(actual_values)
+    print(key_values==actual_values)
+    
+    # print(key_sequence, key_value_map)
+    # meaningful k,v pairs:
+
+    # # storing/retrieving from an array
+    # k_first = mmn.first()
+    # k_curr = k_first
+    # for i in range(7,-1,-1):
+    #     mmn.write(k_curr, int_to_pattern(N,i))
+    #     k_curr = mmn.next(k_curr)
+    # k_curr = k_first
+    # for k in range(8):
+    #     print(k_curr.T, mmn.read(k_curr).T)
+    #     k_curr = mmn.next(k_curr)
+
+    # # constructing/storing/retrieving from a linked list
+    # # linked list: stores v, k_next at adjacent memory locations
+    # k_first = mmn.first()
+    # k_last = k_first
+    # k_tail = k_first
+    # L = 5
+    # # construct len-5 list
+    # for i in range(5):
+    #     k_car = mmn.next(k_last)
+    #     k_cdr = mmn.next(k_car)
+    #     k_last = k_cdr
+    #     mmn.write(k_car, int_to_pattern(N,3*i))
+    #     mmn.write(k_cdr, k_tail)
+    #     k_tail = k_car
+    # k_list_1 = k_tail
+    # # traverse forward 2 elements
+    # for i in range(2):
+    #     k_tail = mmn.read(mmn.next(k_tail))
+    # # branch off with len-3 list
+    # for i in range(3):
+    #     k_car = mmn.next(k_last)
+    #     k_cdr = mmn.next(k_car)
+    #     k_last = k_cdr
+    #     mmn.write(k_car, int_to_pattern(N,5*i))
+    #     mmn.write(k_cdr, k_tail)
+    #     k_tail = k_car
+    # k_list_2 = k_tail
+    # # read back first list
+    # print('list 1')
+    # k_curr = k_list_1
+    # k_car = k_curr
+    # while not (k_curr == k_first).all():
+    #     car, k_curr = mmn.read(k_car), mmn.read(mmn.next(k_car))
+    #     print(k_car.T, car.T, k_curr.T)
+    #     k_car = k_curr
+    # # read back second list
+    # print('list 2')
+    # k_curr = k_list_2
+    # k_car = k_curr
+    # while not (k_curr == k_first).all():
+    #     car, k_curr = mmn.read(k_car), mmn.read(mmn.next(k_car))
+    #     print(k_car.T, car.T, k_curr.T)
+    #     k_car = k_curr
+            
+    # constructing/storing/retrieving from a graph
+
+def kvn_test():
     np.set_printoptions(linewidth=200)
     # Network size
     N = [4]*5

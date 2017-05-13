@@ -7,35 +7,23 @@ Nodes can have continuous values, but keys are binary, and value read-outs are a
 Abstraction layer ops:
 v = read(k)
 write(k,v)
-strengthen(k,v)
+k = first()
 k' = next(k)
-k = new()
+# k = new()
 
-Operating modes: "Active" mode performs an operation.  "Passive" mode recalls and strengthens previously stored k,v pairs
+* "new" key: one which has not already been written with a value.  next(new) should also be new, and so on
+* or, no "new" construct, memory management complete responsibility of programmer.  just a first() that returns the very first address.
 
-Operational procedure:
-k_first: first memory "address"
-k_last: last used memory "address"
-k_passive: current memory "address" in passive mode
-loop
-    if op requested: # active
-        perform op
-    else: # passive
-        strengthen(k_passive, read(k_passive))
-        if k_passive == k_last, k_passive = k_first, else k_passive = next(k_passive)
-
-Before anything else, make mock memory and confirm abstraction layer is sufficient.
+Operating modes: "Active" mode performs an operation.  "Passive" mode recalls and strengthens previously stored memories
 
 KVN Test setup:
-Run operational procedure for some time-steps; at each make a random decision whether to request an op
-Assess integrity of memory (of all memories that were stored, how many are still stored and with what fidelity)
-
-KVN test inputs:
-random k,v pairs
-meaningful k,v pairs:
-    storing/retrieving from an array
-    constructing/storing/retrieving from a linked list
-    constructing/storing/retrieving from a graph
+Linked list construction and retrieval
+Random number of lists
+Random tails for each list (including "NIL" equivalent as well as other "cons cell" equivalents previously constructed
+Random passive time between each list
+During construction, save every key-value pair written, and the full key sequence from every next() call
+During evaluation, test next() on every consecutive key in the sequence, and read() on every key-value pair written
+As sanity check, also traverse each list and make sure they contain expected contents
 
 KKN experiment:
 Look into predetermined key sequences that aren't learned
