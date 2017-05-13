@@ -110,7 +110,7 @@ def tanh_df(x): return 1. - np.tanh(x)**2.
 if __name__=='__main__':
     np.set_printoptions(linewidth=200)
     # Network size
-    N = [10]*3
+    N = [4]*5
     L = len(N)-1
     M = 5 #sum(N) # num training examples
     keys = np.sign(np.random.randn(N[0],M))

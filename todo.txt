@@ -1,3 +1,69 @@
+EXPERIMENTAL METHODS FOR MEMORY STUDY
+
+Nutshell:
+Key-value memory with sequenced keys
+Nodes can have continuous values, but keys are binary, and value read-outs are also binary by passing through sign (+/-1) or round (0/1).
+
+Abstraction layer ops:
+v = read(k)
+write(k,v)
+strengthen(k,v)
+k' = next(k)
+k = new()
+
+Operating modes: "Active" mode performs an operation.  "Passive" mode recalls and strengthens previously stored k,v pairs
+
+Operational procedure:
+k_first: first memory "address"
+k_last: last used memory "address"
+k_passive: current memory "address" in passive mode
+loop
+    if op requested: # active
+        perform op
+    else: # passive
+        strengthen(k_passive, read(k_passive))
+        if k_passive == k_last, k_passive = k_first, else k_passive = next(k_passive)
+
+Before anything else, make mock memory and confirm abstraction layer is sufficient.
+
+KVN Test setup:
+Run operational procedure for some time-steps; at each make a random decision whether to request an op
+Assess integrity of memory (of all memories that were stored, how many are still stored and with what fidelity)
+
+KVN test inputs:
+random k,v pairs
+meaningful k,v pairs:
+    storing/retrieving from an array
+    constructing/storing/retrieving from a linked list
+    constructing/storing/retrieving from a graph
+
+KKN experiment:
+Look into predetermined key sequences that aren't learned
+empirical study of optimal capacity
+does optimal sequence length trade off performance of key-value? can't really evaluate in isolation
+
+Memory models:
+
+GALIS: like cue/response, but keys are cues (so cues are sequenced) and values are responses.
+v = read(k): clamp k, v is fixed point?
+write(k,v): learn fixed v with clamped k
+strengthen(k,v): learn fixed v with clamped k (maybe smaller learning rate)
+k' = next(k): unclamp k and iterate
+k = new(): learn k_last -> random new k? iterate dynamics from k_last without learning?
+
+GALIS for key-key only (next and new), hetero-associative for key-value
+
+Heteroassociative key-value, "toggles" for write and/or strengthen:
+CHL vs back propogation
+different learning rates
+FF vs recurrent connections
+vanilla (error mimimization)
+error minimization with dropout
+weight minimization, error constraint
+weighted weights ("competition" terms)
+
+FULL NVM
+
 show weight matrices in viz
 handle activity gating outside the transition function?
 hidden layer to avoid workarounds
@@ -7,6 +73,6 @@ Contrastive hebbian learning in fully connected recurrent hopfield with key, val
 
 Look for way to leverage history, time locality not limited to one.
 
-Output should become fixed, previously stored become just barely not fixed to avoid overwrite
+seq: Output should become fixed, previously stored become just barely not fixed to avoid overwrite
 
 competition idea: delta w_ij proportional to sum_t x_i^t W_ij^t x_j^t over recent t.  If this number is large, x_j is in agreement with others about the affect on x_i.  If it is small, x_j is in disagreement, competing.  So "more important", i.e. it's absence could be missed in the borderline cases
