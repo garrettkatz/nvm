@@ -40,11 +40,12 @@ GALIS: like cue/response, but keys are cues (so cues are sequenced) and values a
 v = read(k): clamp k, v is fixed point?
 write(k,v): learn fixed v with clamped k
 strengthen(k,v): learn fixed v with clamped k (maybe smaller learning rate)
-k' = next(k): unclamp k and iterate
+k' = next(k): unclamp k and iterate (but no learning?)
 k = new(): learn k_last -> random new k? iterate dynamics from k_last without learning?
 
 GALIS for key-key only (next and new), hetero-associative for key-value
 
+FF key sequence, just maps one to the next, new ones are chosen randomly?
 Heteroassociative key-value, "toggles" for write and/or strengthen:
 CHL vs back propogation
 different learning rates
