@@ -24,7 +24,7 @@ class MockMemoryNet:
         return self._noise(ut.int_to_pattern(self.N, ut.pattern_to_int(self.N,k)+1))
     def first(self):
         return self._noise(ut.int_to_pattern(self.N, 0))
-    def passive_tick(self):
+    def passive_ticks(self, num_ticks):
         pass
 
 class MemoryNetTrace:
@@ -48,8 +48,8 @@ class MemoryNetTrace:
         return k_next
     def first(self):
         return self.net.first()
-    def passive_tick(self):
-        self.net.passive_tick()
+    def passive_ticks(self, num_ticks):
+        self.net.passive_ticks(num_ticks)
     def memory_string(self, to_int=True):
         def _val(k):
             if ut.hash_pattern(k) in self.key_value_map:
@@ -97,9 +97,36 @@ def run_kv_trial(mnt, keys, values, num_passive_ticks):
     kv_accuracy = np.empty(M)
     for m in range(M):
         mnt.write(keys[:,[m]], values[:,[m]])
-        for t in range(num_passive_ticks[m]):
-            mnt.passive_tick()
+        mnt.passive_ticks(num_passive_ticks[m])
         kv_accuracy[m] = mnt.key_value_accuracy()
+    return kv_accuracy
+
+def array_trial_data(N, array_length, max_passive_ticks):
+    values = np.sign(np.random.randn(N, array_length))
+    num_passive_ticks = np.random.randint(max_passive_ticks, size=(2*array_length,))
+    return values, num_passive_ticks
+    
+def run_array_trial(mnt, values, num_passive_ticks):
+    M = values.shape[1]
+    kv_accuracy = []
+    # write values to array
+    k = mnt.first()
+    for m in range(M):
+        mnt.write(k, values[:,[m]])
+        mnt.passive_tick(num_passive_ticks[m])
+        kv_accuracy[m] = mnt.key_value_accuracy()
+        k = mnt.next(k)
+    # rotate array
+    k = mnt.first()
+    v_prev = mnt.read(k)
+    for m in range(M, 2*M):
+        k = mnt.next(k)
+        v = mnt.read(k)
+        mnt.write(k, v_prev)
+        mnt.passive_tick(num_passive_ticks[m])
+        kv_accuracy[m] = mnt.key_value_accuracy()
+        v_prev = v
+    mnt.write(mnt.first(), v_prev)
     return kv_accuracy
 
 def run_pooled_trial(trial_fun_and_kwargs):
