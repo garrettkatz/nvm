@@ -25,6 +25,10 @@ During construction, save every key-value pair written, and the full key sequenc
 During evaluation, test next() on every consecutive key in the sequence, and read() on every key-value pair written
 As sanity check, also traverse each list and make sure they contain expected contents
 
+linked list setup doesn't test overwriting previous memories...
+follow-up tests that manipulate the linked lists written.  E.g., reversing one or rotating one.
+also one setup where the linked lists are not random, but a causal relation, and the follow-up manipulations are serving queries 
+
 KKN experiment:
 Look into predetermined key sequences that aren't learned
 empirical study of optimal capacity

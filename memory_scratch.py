@@ -113,8 +113,10 @@ def int_to_pattern(N, i):
     return (-1)**(1 & (i >> np.arange(N)[:,np.newaxis]))
 def pattern_to_int(N, p):
     return (2**np.arange(N)).dot(p < 1).flat[0]
-def hashable(p):
+def hash_pattern(p):
     return tuple(p.flatten())
+def unhash_pattern(p):
+    return np.array((p,)).T
 
 class MockMemoryNet:
     def __init__(self, N, noise=0):
@@ -124,13 +126,13 @@ class MockMemoryNet:
     def _noise(self,p):
         return p * (-1)**(np.random.rand(self.N,1) < self.noise)
     def read(self,k):
-        k = hashable(self._noise(k))
+        k = hash_pattern(self._noise(k))
         if k in self.key_value_map:
             return self._noise(self.key_value_map[k])
         else:
             return np.sign(np.random.randn(self.N,1))
     def write(self,k,v):
-        self.key_value_map[hashable(self._noise(k))] = self._noise(v)
+        self.key_value_map[hash_pattern(self._noise(k))] = self._noise(v)
     def next(self, k):
         return self._noise(int_to_pattern(self.N, pattern_to_int(self.N,k)+1))
     def first(self):
@@ -139,6 +141,37 @@ class MockMemoryNet:
         pass
     # def new(self):
     #     return int_to_pattern(self.N, len(self.key_value_map))
+
+class MemoryNetTrace:
+    """
+    Wrap network to record key sequence and ideal key value mapping
+    """
+    def __init__(self, net):
+        self.net = net
+        self.key_sequence = {} # k -> next k
+        self.key_value_map = {} # k -> value
+    def read(self, k):
+        return self.net.read(k)
+    def write(self, k, v):
+        self.net.write(k,v)
+        self.key_value_map[hash_pattern(k)] = v
+    def next(self, k):
+        k_next = self.net.next(k)
+        self.key_sequence[hash_pattern(k)] = k_next
+        return k_next
+    def first(self):
+        return self.net.first()
+    def accuracy(self):
+        keys = self.key_sequence.keys()
+        test_sequence = np.concatenate([self.key_sequence[k] for k in keys],axis=1)
+        net_sequence = np.concatenate([self.net.next(unhash_pattern(k)) for k in keys],axis=1)
+        keys = self.key_value_map.keys()
+        test_map = np.concatenate([self.key_value_map[k] for k in keys],axis=1)
+        net_map = np.concatenate([self.net.read(unhash_pattern(k)) for k in keys],axis=1)
+        acc = lambda x: 1.0*x.sum()/x.size
+        sequence_accuracy = acc(test_sequence==net_sequence)
+        map_accuracy = acc(test_map==net_map)
+        return sequence_accuracy, map_accuracy
 
 def linked_list_trial_data(N, num_lists, max_prepends, max_passive_ticks):
     """
@@ -158,11 +191,12 @@ def linked_list_trial_data(N, num_lists, max_prepends, max_passive_ticks):
             patterns.append(np.sign(np.random.randn(N,1)))
         num_passive_ticks.append(np.random.randint(max_passive_ticks+1))
     return num_prepends, cdr_index, patterns, num_passive_ticks
-        
-def linked_list_trial(net, num_prepends, cdr_index, patterns, num_passive_ticks):
+
+def linked_list_trial(mnt, num_prepends, cdr_index, patterns, num_passive_ticks):
     """
     Test linked list construction and retrieval.
-    "NIL" terminal is net.first()
+    mnt is a MemoryNetTrace wrapping the network being tested
+    "NIL" terminal is mnt.first()
     "cons cells" are (car=v, cdr=k_next) pairs stored in consecutive memory locations
     Constructs multiple overlapping linked lists
     The n^th list is prepended to the cdr_index[n]^th cdr used so far
@@ -171,10 +205,8 @@ def linked_list_trial(net, num_prepends, cdr_index, patterns, num_passive_ticks)
     After n^th list num_passive_ticks[n] time steps are allowed
     For evaluation, return full sequence of next() outputs and full dictionary of write() inputs
     """
-    k_first = net.first() # very first memory address
+    k_first = mnt.first() # very first memory address
     k_last = k_first # last key written to
-    key_value_map = {}
-    key_sequence = [k_first]
     cdrs = [k_first]
     patterns = list(patterns) # copy before popping
     for n in range(len(num_prepends)):
@@ -183,48 +215,50 @@ def linked_list_trial(net, num_prepends, cdr_index, patterns, num_passive_ticks)
         # construct new list
         for p in range(num_prepends[n]):
             # get memory addresses for cons cell
-            k_car = net.next(k_last)
-            k_cdr = net.next(k_car)
+            k_car = mnt.next(k_last)
+            k_cdr = mnt.next(k_car)
             cdrs.append(k_cdr)
-            key_sequence.extend([k_car, k_cdr])
             k_last = k_cdr # update last address used
             # store pattern and prepend to tail
             pattern = patterns.pop(0)
-            net.write(k_car, pattern)
-            net.write(k_cdr, k_tail)
-            key_value_map.update({hashable(k_car):pattern, hashable(k_cdr):k_tail})
+            mnt.write(k_car, pattern)
+            mnt.write(k_cdr, k_tail)
             k_tail = k_car # update tail
         # run network in passive mode
         for _ in range(num_passive_ticks[n]):
-            net.passive_tick()
-    return key_sequence, key_value_map
+            mnt.passive_tick()
     
 if __name__=='__main__':
+
     N = 6
     mmn = MockMemoryNet(N, noise=0.005)
-
+    mnt = MemoryNetTrace(mmn)
+    
     trial_data = linked_list_trial_data(N, num_lists=3, max_prepends=4, max_passive_ticks=0)
     num_prepends, cdr_index, patterns, num_passive_ticks = trial_data
+    linked_list_trial(mnt, *trial_data)
+    print(mnt.accuracy())
 
-    key_sequence, key_value_map = linked_list_trial(mmn, *trial_data)
+    # print('num prep',num_prepends)
+    # print('cdr_index',cdr_index)
+    # print('num_passive_ticks',num_passive_ticks)
+    # print('patterns:')
+    # print(np.concatenate(patterns,axis=1))
+    
+    # # evaluate performance
+    # print('next results:')
+    # test_sequence = np.concatenate(key_sequence,axis=1)
+    # net_sequence = np.concatenate([mmn.first()] + [mmn.next(k) for k in key_sequence[:-1]],axis=1)
+    # print(test_sequence==net_sequence)
+    
+    # print('mapping results:')
+    # test_values = np.concatenate([key_value_map[hash_pattern(k)] for k in key_sequence[1:]],axis=1)
+    # net_values = np.concatenate([mmn.read(k) for k in key_sequence[1:]],axis=1)
+    # print(test_values==net_values)
 
-    print('num prep',num_prepends)
-    print('cdr_index',cdr_index)
-    print('num_passive_ticks',num_passive_ticks)
-    print('patterns:')
-    print(np.concatenate(patterns,axis=1))
-    
-    # evaluate performance
-    print('next results:')
-    actual_sequence = [mmn.first()] + [mmn.next(k) for k in key_sequence[:-1]]
-    print(np.concatenate(key_sequence,axis=1)==np.concatenate(actual_sequence,axis=1))
-    
-    print('mapping results:')
-    key_values = np.concatenate([key_value_map[hashable(k)] for k in key_sequence[1:]],axis=1)
-    actual_values = np.concatenate([mmn.read(k) for k in key_sequence[1:]],axis=1)
-    print(key_values)
-    print(actual_values)
-    print(key_values==actual_values)
+    # acc = lambda x: 1.0*x.sum()/x.size
+    # print('sequence accuracy = %f'%acc(test_sequence==net_sequence))
+    # print('value accuracy = %f'%acc(test_values==net_values))
     
     # print(key_sequence, key_value_map)
     # meaningful k,v pairs:
