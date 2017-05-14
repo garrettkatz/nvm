@@ -1,3 +1,11 @@
+simplest trials: kv in isolation with random ops
+include simpler array rotate trials (not linked list, no pointer values)
+    whenever values can be pointers, any noise whatsoever completely destroys integrity of data structure
+current mnt acc can be 1 even with garbage memory.  need more fine grained trace: keep track of full op history, not just current kk/kv maps, but what they were at each time point
+wrap in multiprocess many-trial runners
+BackPropKVNet with mock sequencer
+HebbKVNet with mock sequencer
+
 EXPERIMENTAL METHODS FOR MEMORY STUDY
 
 Nutshell:
@@ -54,6 +62,10 @@ vanilla (error mimimization)
 error minimization with dropout
 weight minimization, error constraint
 weighted weights ("competition" terms)
+
+EXPERIMENTAL ISSUES
+testing kv map in isolation: wanted to just feed in random k,v pairs to learn, and see if old ones still recalled correctly.
+issue: in production setting, errors in what was already learned will affect what gets fed in later.  does it still mean isolation setting isn't valuable?
 
 FULL NVM
 

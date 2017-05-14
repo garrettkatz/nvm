@@ -1,7 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
-np.set_printoptions(linewidth=200)
+np.set_printoptions(linewidth=1000)
 
 class KVNet:
     """
@@ -112,7 +112,8 @@ def tanh_df(x): return 1. - np.tanh(x)**2.
 def int_to_pattern(N, i):
     return (-1)**(1 & (i >> np.arange(N)[:,np.newaxis]))
 def pattern_to_int(N, p):
-    return (2**np.arange(N)).dot(p < 1).flat[0]
+    if np.isnan(p).any(): return -1
+    else: return (2**np.arange(N)).dot(p < 1).flat[0]
 def hash_pattern(p):
     return tuple(p.flatten())
 def unhash_pattern(p):
@@ -126,11 +127,15 @@ class MockMemoryNet:
     def _noise(self,p):
         return p * (-1)**(np.random.rand(self.N,1) < self.noise)
     def read(self,k):
-        k = hash_pattern(self._noise(k))
-        if k in self.key_value_map:
-            return self._noise(self.key_value_map[k])
+        if hash_pattern(k) in self.key_value_map:
+            return self.key_value_map[hash_pattern(k)]
         else:
             return np.sign(np.random.randn(self.N,1))
+        # k = hash_pattern(self._noise(k))
+        # if k in self.key_value_map:
+        #     return self._noise(self.key_value_map[k])
+        # else:
+        #     return np.sign(np.random.randn(self.N,1))
     def write(self,k,v):
         self.key_value_map[hash_pattern(self._noise(k))] = self._noise(v)
     def next(self, k):
@@ -155,12 +160,37 @@ class MemoryNetTrace:
     def write(self, k, v):
         self.net.write(k,v)
         self.key_value_map[hash_pattern(k)] = v
+        if len(self.key_value_map) >= 2**self.net.N:
+            print('Warning: Address capacity reached!')
     def next(self, k):
         k_next = self.net.next(k)
         self.key_sequence[hash_pattern(k)] = k_next
         return k_next
     def first(self):
         return self.net.first()
+    def memory_string(self, to_int=True):
+        def _val(k):
+            if hash_pattern(k) in self.key_value_map:
+                return self.key_value_map[hash_pattern(k)]
+            else: return np.nan*np.ones((self.net.N,1))
+        k = self.first()
+        keys = [k]
+        values = [_val(k)]
+        while hash_pattern(k) in self.key_sequence:
+            k = self.key_sequence[hash_pattern(k)]
+            keys.append(k)
+            values.append(_val(k))
+        if to_int:
+            string = 'keys/values:\n'
+            string += str(np.array([
+                [pattern_to_int(self.net.N,k) for k in keys],
+                [pattern_to_int(self.net.N,v) for v in values]]))
+        else:
+            string = 'keys:\n'
+            string += str(np.concatenate(keys,axis=1))
+            string += '\nvalues:\n'
+            string += str(np.concatenate(values,axis=1))
+        return string
     def accuracy(self):
         keys = self.key_sequence.keys()
         test_sequence = np.concatenate([self.key_sequence[k] for k in keys],axis=1)
@@ -178,47 +208,48 @@ def linked_list_trial_data(N, num_lists, max_prepends, max_passive_ticks):
     Generate random trial data for different nets with the same layer size N    
     """
     num_prepends = []
-    num_cdrs = 1
-    cdr_index = []
+    num_cells = 1
+    tail_index = []
     patterns = []
     num_passive_ticks = []
     for n in range(num_lists):
         num_prepends.append(np.random.randint(1,max_prepends+1))
-        cdr_index.append(np.random.randint(num_cdrs))
+        tail_index.append(np.random.randint(num_cells))
         # construct new list
         for p in range(num_prepends[-1]):
-            num_cdrs += 1
+            num_cells += 1
             patterns.append(np.sign(np.random.randn(N,1)))
         num_passive_ticks.append(np.random.randint(max_passive_ticks+1))
-    return num_prepends, cdr_index, patterns, num_passive_ticks
+    return num_prepends, tail_index, patterns, num_passive_ticks
 
-def linked_list_trial(mnt, num_prepends, cdr_index, patterns, num_passive_ticks):
+def linked_list_trial(mnt, num_prepends, tail_index, patterns, num_passive_ticks):
     """
     Test linked list construction and retrieval.
     mnt is a MemoryNetTrace wrapping the network being tested
     "NIL" terminal is mnt.first()
     "cons cells" are (car=v, cdr=k_next) pairs stored in consecutive memory locations
     Constructs multiple overlapping linked lists
-    The n^th list is prepended to the cdr_index[n]^th cdr used so far
+    The n^th list is prepended to the tail_index[n]^th cell used so far
     New "cons cells" for n^th list are prepended num_prepends[n] times
     Cell contents are drawn from patterns in order
     After n^th list num_passive_ticks[n] time steps are allowed
+    After all lists constructed, traverses and circularly rotates the last one
     For evaluation, return full sequence of next() outputs and full dictionary of write() inputs
     """
     k_first = mnt.first() # very first memory address
     k_last = k_first # last key written to
-    cdrs = [k_first]
+    cell_keys = [k_first] # "NIL" "cell"
     patterns = list(patterns) # copy before popping
     for n in range(len(num_prepends)):
         # initialize tail for new list 
-        k_tail = cdrs[cdr_index[n]]
+        k_tail = cell_keys[tail_index[n]]
         # construct new list
         for p in range(num_prepends[n]):
             # get memory addresses for cons cell
             k_car = mnt.next(k_last)
             k_cdr = mnt.next(k_car)
-            cdrs.append(k_cdr)
             k_last = k_cdr # update last address used
+            cell_keys.append(k_car) # update cells used so far
             # store pattern and prepend to tail
             pattern = patterns.pop(0)
             mnt.write(k_car, pattern)
@@ -227,20 +258,67 @@ def linked_list_trial(mnt, num_prepends, cdr_index, patterns, num_passive_ticks)
         # run network in passive mode
         for _ in range(num_passive_ticks[n]):
             mnt.passive_tick()
+    # Traverse last list
+    k_head = k_tail
+    last_list = [[],[]]
+    k_car = k_head
+    while not (k_car == k_first).all():
+        last_list[0].append(k_car)
+        last_list[1].append(mnt.read(k_car))
+        k_car = mnt.read(mnt.next(k_car))
+    # Circularly rotate the last list
+    k_car = mnt.read(mnt.next(k_head))
+    v_prev = mnt.read(k_head)
+    while not (k_car == k_first).all():
+        v_curr = mnt.read(k_car)
+        mnt.write(k_car, v_prev)
+        k_car = mnt.read(mnt.next(k_car))
+        v_prev = v_curr
+    mnt.write(k_head, v_prev)
+    # traverse rotated list
+    last_list_rotated = [[],[]]
+    k_car = k_head
+    while not (k_car == k_first).all():
+        last_list_rotated[0].append(k_car)
+        last_list_rotated[1].append(mnt.read(k_car))
+        k_car = mnt.read(mnt.next(k_car))
+    return last_list, last_list_rotated
     
 if __name__=='__main__':
 
-    N = 6
-    mmn = MockMemoryNet(N, noise=0.005)
-    mnt = MemoryNetTrace(mmn)
-    
-    trial_data = linked_list_trial_data(N, num_lists=3, max_prepends=4, max_passive_ticks=0)
-    num_prepends, cdr_index, patterns, num_passive_ticks = trial_data
-    linked_list_trial(mnt, *trial_data)
-    print(mnt.accuracy())
+    while True:
+        N = 8
+        mmn = MockMemoryNet(N, noise=0.0005)
+        mnt = MemoryNetTrace(mmn)
+        
+        trial_data = linked_list_trial_data(N, num_lists=4, max_prepends=8, max_passive_ticks=0)
+        num_prepends, tail_index, patterns, num_passive_ticks = trial_data
+        last_list, last_list_rotated = linked_list_trial(mnt, *trial_data)
+        # last_list = np.concatenate([np.concatenate(last_list[0],axis=1),np.concatenate(last_list[1],axis=1)],axis=0)
+        # last_list_rotated = np.concatenate([np.concatenate(last_list_rotated[0],axis=1),np.concatenate(last_list_rotated[1],axis=1)],axis=0)
+        last_list_values = np.concatenate(last_list[1],axis=1)
+        last_list_rotated_values = np.concatenate(last_list_rotated[1],axis=1)
+        # print('list rotation:')
+        # print(last_list)
+        # print(last_list_rotated)
+        # print(np.roll(last_list,1,axis=1)==last_list_rotated)
+        print('tail_index',tail_index)
+        print('prepends:',num_prepends)
+        print('memory state:')
+        print(mnt.memory_string())
+        correct_shape = (last_list_values.shape==last_list_rotated_values.shape)
+        correct_rotation = correct_shape and (np.roll(last_list_values,1,axis=1)==last_list_rotated_values).all()
+        print('correct shape:',correct_shape)
+        print('correct rotation:',correct_rotation)
+        mnt_acc = mnt.accuracy()
+        print('mnt acc:',mnt_acc)
+        if mnt_acc[0]==1. and mnt_acc[1]==1. and not correct_rotation:
+            print([pattern_to_int(mmn.N,last_list_values[:,[p]]) for p in range(last_list_values.shape[1])])
+            print([pattern_to_int(mmn.N,last_list_rotated_values[:,[p]]) for p in range(last_list_rotated_values.shape[1])])
+            break
 
     # print('num prep',num_prepends)
-    # print('cdr_index',cdr_index)
+    # print('tail_index',tail_index)
     # print('num_passive_ticks',num_passive_ticks)
     # print('patterns:')
     # print(np.concatenate(patterns,axis=1))
