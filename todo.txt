@@ -1,7 +1,6 @@
 BackPropKVNet with mock sequencer
+Big kv trial runner for objective comparisons
 HebbKVNet with mock sequencer
-current mnt acc can be 1 even with garbage memory.  understand why
-    answer: clobbered keys have false memchecks but 100% accuracy, even with 0 noise
 also encapsulate random keys and values used during trials in memory trace??
 memorynets should save history of every op and # passive ticks after every op (and other things).  at very least, to check randomness is behaving expectedly
 
