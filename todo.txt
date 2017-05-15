@@ -1,11 +1,9 @@
-encapsulate num_passive_ticks in the MemoryNetTrace, so that some number get run after every operation.
-    Instead of handling large lists of consecutive num_passive_ticks, manage the random number generator seed to reproduce same "random" progressions in different MemoryNetworks being tested.
-    also encapsulate random keys and values used during trials??
-include simpler array rotate trials (not linked list, no pointer values)
-    whenever values can be pointers, any noise whatsoever completely destroys integrity of data structure
-current mnt acc can be 1 even with garbage memory.  need more fine grained trace: keep track of full op history, not just current kk/kv maps, but what they were at each time point
 BackPropKVNet with mock sequencer
 HebbKVNet with mock sequencer
+current mnt acc can be 1 even with garbage memory.  understand why
+    answer: clobbered keys have false memchecks but 100% accuracy, even with 0 noise
+also encapsulate random keys and values used during trials in memory trace??
+memorynets should save history of every op and # passive ticks after every op (and other things).  at very least, to check randomness is behaving expectedly
 
 EXPERIMENTAL METHODS FOR MEMORY STUDY
 
@@ -67,6 +65,7 @@ weighted weights ("competition" terms)
 EXPERIMENTAL ISSUES
 testing kv map in isolation: wanted to just feed in random k,v pairs to learn, and see if old ones still recalled correctly.
 issue: in production setting, errors in what was already learned will affect what gets fed in later.  does it still mean isolation setting isn't valuable?
+whenever values can be pointers, any noise whatsoever completely destroys integrity of data structure
 
 FULL NVM
 

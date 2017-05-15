@@ -13,9 +13,11 @@ Activity pattern manipulations
 """
 def int_to_pattern(N, i):
     return (-1)**(1 & (i >> np.arange(N)[:,np.newaxis]))
-def pattern_to_int(N, p):
-    if np.isnan(p).any(): return -1
-    else: return (2**np.arange(N)).dot(p < 1).flat[0]
+def patterns_to_ints(P):
+    N = P.shape[0]
+    ints = (2**np.arange(N)).dot(P < 1).flatten()
+    ints[np.isnan(ints)] = -1
+    return ints
 def hash_pattern(p):
     return tuple(p.flatten())
 def unhash_pattern(p):
