@@ -12,6 +12,8 @@ def tanh_df(x): return 1. - np.tanh(x)**2.
 """
 Activity pattern manipulations
 """
+def random_patterns(N, num_patterns):
+    return np.sign(np.random.randn(N,num_patterns))
 def int_to_pattern(N, i):
     return (-1)**(1 & (i >> np.arange(N)[:,np.newaxis]))
 def patterns_to_ints(P):
@@ -23,6 +25,15 @@ def hash_pattern(p):
     return tuple(p.flatten())
 def unhash_pattern(p):
     return np.array((p,)).T
+
+"""
+Passive tick generating functions
+"""
+def constant_tick_fun(num_ticks):
+    return lambda random_state: num_ticks
+def uniform_tick_fun(min_num_ticks, max_num_ticks):
+    # inclusive, exclusive
+    return lambda random_state: random_state.randint(min_num_ticks, max_num_ticks)
 
 """
 Backprop helpers
@@ -51,9 +62,9 @@ def backward_pass(x, e, W, df):
 def error_gradient(x, y):
     # x,y from forward/backward pass
     # returns G[k]: error gradient wrt W[k]
-    return {k: y[k] * x[k-1].T for k in range(1,len(x))}    
+    return {k: y[k].dot(x[k-1].T) for k in range(1,len(x))}    
 def init_randn_W(N):
-    return {k: np.random.randn(N[k],N[k-1])/(N[k]*N[k-1]) for k in range(1,len(N))}
+    return {k: 0.01*np.random.randn(N[k],N[k-1])/(N[k]*N[k-1]) for k in range(1,len(N))}
     
 if __name__ == "__main__":
     

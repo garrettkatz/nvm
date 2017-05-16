@@ -45,8 +45,9 @@ class GALISNN:
         self.V = (1-self.k_d)*self.V + (1./self.N)*a_new*a_old.T
     def get_pattern(self):
         return self.a[:,[self.t]]
-    def set_pattern(self, a):
+    def set_pattern(self, a, theta=None):
         self.a[:,[self.t]] = a
+        if theta is None: self.theta[:,[self.t]] = 0
     def advance_tick_mark(self):
         self.t = (self.t + 1) % self.history
 

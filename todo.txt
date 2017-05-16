@@ -1,10 +1,22 @@
-Big kv trial runner for objective comparisons
-Basic experiment: do # passive steps have any correlation with accuracy?  Also vary N in the same experiment?  (at least for data, not necessarily plot)
-BackPropSeqNet pretrained on random key sequence with no repeats
-BackPropKVNet with mock sequencer
+overall goal for jim meet:
+    Something decent of my own creation
+    Something decent with some GALIS influence
+    write-up:
+        plot of single write operation error history
+        incl causes
+        galis counterexamples:
+            no repeated elements without hidden/cue layer
+            cues aren't fixed
+            overwriting a previously stored memory needs cues and surrounding responses to stay the same.  Means previous -> current and current-> next both need to be retrained.  How to get previous?
+    propose galis mini-project for baram or someone else:
+        test galis sequence memory using sparse weight matrices
+        (see if can get similar performance with same node count but smaller memory footprint)
+GALISSeqNet pretrained on random key sequence with no repeats
 HebbKVNet with mock sequencer
-also encapsulate random keys and values used during trials in memory trace??
-memorynets should save history of every op and # passive ticks after every op (and other things).  at very least, to check randomness is behaving expectedly
+Refactor BackPropMemoryNet: just have a "backpropnetwork" class, instantiated twice for kv and for sq.  But it doesn't include any read/write/next/first methods, those are still in the memory "net".
+    or, this would mostly wrap memory utils.  Instead just kill separate kv and sq classes.
+    could make very light-weight "netdef" class in memutils
+Better progress updates in pool_trials
 
 EXPERIMENTAL METHODS FOR MEMORY STUDY
 
