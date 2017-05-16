@@ -1,5 +1,7 @@
-BackPropKVNet with mock sequencer
 Big kv trial runner for objective comparisons
+Basic experiment: do # passive steps have any correlation with accuracy?  Also vary N in the same experiment?  (at least for data, not necessarily plot)
+BackPropSeqNet pretrained on random key sequence with no repeats
+BackPropKVNet with mock sequencer
 HebbKVNet with mock sequencer
 also encapsulate random keys and values used during trials in memory trace??
 memorynets should save history of every op and # passive ticks after every op (and other things).  at very least, to check randomness is behaving expectedly
