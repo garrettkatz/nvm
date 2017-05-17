@@ -339,7 +339,7 @@ def show_array_write_results():
         print(epochs)
     plt.legend(h,leg,loc='lower left')
     plt.xlabel('array length')
-    plt.ylabel('# entries recalled')
+    plt.ylabel('%% entries recalled')
     plt.show()
     
 
@@ -347,5 +347,5 @@ if __name__ == '__main__':
     # seed = 1234
     # mnh = MemoryNetHarness(MockMemoryNet(3, noise=0.005),seed=seed)
     # print(mnh.random_patterns(num_patterns=8))
-    pooled_array_write_trials()
+    # pooled_array_write_trials()
     show_array_write_results()

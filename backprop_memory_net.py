@@ -499,14 +499,14 @@ def sqnet_test():
 
 def bmnet_test():
     num_patterns = 10
-    net = make_tanh_bmn(layer_size = 32, memory_size=num_patterns*4, kv_layers=3, sq_layers=3)
+    net = make_tanh_bmn(layer_size = 32, memory_size=num_patterns, kv_layers=3, sq_layers=3)
     values = mu.random_patterns(net.layer_size(),num_patterns)
     keys = np.empty((net.layer_size(),num_patterns))
     k = net.first()
     for m in range(values.shape[1]):
         print('writing pattern %d'%m)
         keys[:,[m]] = k
-        net.write(k,values[:,[m]],verbose=1,term=0.5,eta=0.01,num_epochs=10000)
+        net.write(k,values[:,[m]],verbose=1,term=0.5,eta=0.001,num_epochs=10000)
         # net.passive_ticks(10000)
         k = net.next(k)
     # memory accuracy
