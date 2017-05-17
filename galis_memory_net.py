@@ -42,7 +42,7 @@ class GALISMemoryNet:
     """
     Backprop for k->v but GALIS for k->k
     """
-    def __init__(self, N_kv, f_kv, df_kv, af_kv, N_g, memory_size, k_d=0, k_theta=0, k_w=1./3, beta_1=1, beta_2=1./2):
+    def __init__(self, N_kv, f_kv, df_kv, af_kv, N_g, memory_size, k_d=0, k_theta=0, k_w=1./3, beta_1=1./4, beta_2=1./2):
         # N[k]: size of k^th layer (len L+1)
         # f[k]: activation function of k^th layer (len L)
         # df[k]: derivative of f[k] (len L)
@@ -182,7 +182,7 @@ def make_tanh_gmn(layer_size, memory_size, kv_layers=3):
     af_kv = {k: np.arctanh for k in range(1,L_kv+1)}
     N_g = layer_size
     # retrain sequence until no clobbers
-    for tries in range(10):
+    for tries in range(20):
         gmn = GALISMemoryNet(N_kv, f_kv, df_kv, af_kv, N_g, memory_size)
         gmn.train_sequence(memory_size,verbose=1)
         # mem check
@@ -201,7 +201,7 @@ def make_tanh_gmn(layer_size, memory_size, kv_layers=3):
     return gmn
 
 def gmnet_test():
-    num_patterns = 10
+    num_patterns = 70
     net = make_tanh_gmn(layer_size = 32, memory_size=num_patterns*1, kv_layers=3)
     values = mu.random_patterns(net.layer_size(),num_patterns)
     keys = np.empty((net.layer_size(),num_patterns))

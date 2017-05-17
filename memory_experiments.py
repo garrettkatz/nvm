@@ -5,6 +5,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import memory_utils as mu
 import backprop_memory_net as bmn
+import galis_memory_net as gmn
 
 np.set_printoptions(linewidth=1000)
 
@@ -297,7 +298,8 @@ def pooled_array_write_trials():
             values = mu.random_patterns(layer_size, num_patterns=array_length)
             for write_epochs in write_epochs_grid:
                 params.append((array_length,layer_size, write_epochs))
-                net = bmn.make_tanh_bmn(layer_size, memory_size=array_length, kv_layers=3, sq_layers=3)
+                # net = bmn.make_tanh_bmn(layer_size, memory_size=array_length, kv_layers=3, sq_layers=3)
+                net = gmn.make_tanh_gmn(layer_size, memory_size=array_length, kv_layers=3)
                 # passive_tick_fun = mu.constant_tick_fun(num_passive_ticks)
                 # mnh = MemoryNetHarness(net, passive_tick_fun=passive_tick_fun, seed=seed)
                 mnh = MemoryNetHarness(net, num_passive_ticks=num_passive_ticks, seed=seed)
@@ -307,6 +309,7 @@ def pooled_array_write_trials():
                     'write_epochs':write_epochs,
                     'params': params[-1],
                     'verbose': 1,
+
                 })
 
     results = pool_trials(num_procs, trial_funs, trial_kwargs, results_file_name=None)
@@ -323,10 +326,12 @@ def pooled_array_write_trials():
         assert((r[0][-1]==1. and r[1][-1]==1.) == (r[2] and r[3]))
 
     # save results
-    save_pkl_file('bmn.pkl',{'params':params, 'results':results})
+    # save_pkl_file('bmn.pkl',{'params':params, 'results':results})
+    save_pkl_file('gmn.pkl',{'params':params, 'results':results})
 
 def show_array_write_results():
-    data = load_pkl_file('bmn.pkl')
+    # data = load_pkl_file('bmn.pkl')
+    data = load_pkl_file('gmn.pkl')
     params = np.array(data['params'])
     results = np.array(data['results'])
     plot_res = np.concatenate((params, np.array([[r[1][-1] for r in results]]).T),axis=1)
@@ -339,7 +344,7 @@ def show_array_write_results():
         print(epochs)
     plt.legend(h,leg,loc='lower left')
     plt.xlabel('array length')
-    plt.ylabel('%% entries recalled')
+    plt.ylabel('# entries recalled')
     plt.show()
     
 
