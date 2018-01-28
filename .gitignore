@@ -8,3 +8,5 @@
 *.log
 *.out
 *.aux
+*.eps
+*.png
