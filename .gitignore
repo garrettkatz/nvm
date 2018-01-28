@@ -4,3 +4,7 @@
 *.npz
 \#*#
 .#*
+*.pdf
+*.log
+*.out
+*.aux

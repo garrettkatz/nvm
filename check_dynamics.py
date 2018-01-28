@@ -12,10 +12,10 @@ S = 0.1*np.random.randn(N,N)/N # small random
 S = S - S.T # make skew-symmetric
 W = spla.expm(S) # make "rotation"
 
-plt.subplot(1,3,1)
-plt.imshow(S)
-plt.subplot(1,3,2)
-plt.imshow(W)
+# plt.subplot(1,3,1)
+# plt.imshow(S)
+# plt.subplot(1,3,2)
+# plt.imshow(W)
 
 [w,vr] = spla.eig(W) # get eigenvectors
 ix = ((vr-np.sign(vr))**2).sum(axis=0).argmax() # get one closest to vertex
@@ -23,11 +23,12 @@ ix = ((vr-np.sign(vr))**2).sum(axis=0).argmax() # get one closest to vertex
 w[ix] *= 1. + .000/N # expand on vertex aligned direction
 W = vr.dot(np.diag(w)).dot(vr.T) # condition W
 
-# print(np.imag(W).max())
-# print(np.real(W).max())
-# W = np.real(W) # should be roughly real (some imaginary round-off)?
+print(np.imag(W).max())
+print(np.real(W).max())
+W = np.real(W) # should be roughly real (some imaginary round-off)?
 
-plt.subplot(1,3,3)
+print(W)
+# plt.subplot(1,3,3)
 plt.imshow(W)
 
 plt.show()

@@ -1,0 +1,64 @@
+\documentclass[pdftex,12pt,letterpaper]{article}
+
+\usepackage[letterpaper,margin=1.0in]{geometry}
+\usepackage[pdftex]{graphicx}
+\usepackage{amsmath}
+\usepackage{amsfonts}
+\usepackage{amsthm}
+\usepackage{hyperref}
+\usepackage{longtable}
+\usepackage{algorithm}
+\usepackage{algpseudocode}
+
+\newcommand{\HRule}{\rule{\linewidth}{0.5mm}}
+\newcommand{\eqdef}{\overset{\text{def}}{=}}
+\newcommand{\sign}{\text{\upshape{sign}}}
+\newcommand{\suchthat}{\,|\,}
+
+\newtheorem{proposition}{Proposition}
+\newtheorem{lemma}{Lemma}
+\newtheorem{conjecture}{Conjecture}
+\newtheorem{definition}{Definition}
+
+\begin{document}
+\title{Humps notes}
+\date{}
+\maketitle
+
+Nullclines of $\sigma(Wv)-v$:
+\begin{align}
+\sigma(W_{i,:}v) - v_i &= 0 \\
+W_{i,j\ne i}v_{j\ne i} &= \sigma^{-1}(v_i) - W_{i,i}v_i
+\end{align}
+Suggests a function $\zeta_i(x) = \sigma^{-1}(x) - W_{i,i}x$.  Implies that nullclines are ``ruled hypersurfaces'': they are a disjoint union of linear spaces, one linear space for each $v_i$.  The $(N-2)$-dimensional linear space for a fixed $v_i = a$ is defined by
+\begin{align}
+\left[\begin{array}{c} \hat{w}^T \\ I_{i,:}\end{array}\right]v = \left[\begin{array}{c} \zeta_i(a) \\ a\end{array}\right]
+\end{align}
+where $\hat{w}^T = W_{i,:} - W_{i,i}I_{i,:}$. (proof of disjoint union TODO)
+
+Degenerate case when $\hat{w} = \mathbf{0}^T$:  then only solutions when $\zeta_i(a) = 0$.  Denote the solutions by $\{-a^*, 0, a^*\}$.  Then the nullcline is three disconnected, axis orthogonal hyperplanes satisfying $v_i \in \{-a^*, 0, +a^*\}$. (Humps go to infinity).
+
+``Central points'' on the $i^{th}$ nullcline, for a given $a$: the closest point to $aI_{i,:}^T$.  Of the form $\hat{v} = aI_{i,:}^T + s\hat{w}$ for some $s$.
+\begin{align}
+\hat{w}^T\hat{v} = \zeta_i(a) \\
+\hat{w}^T(aI_{i,:}^T + s\hat{w}) = \zeta_i(a) \\
+s\hat{w}^T\hat{w} = \zeta_i(a) \\
+s = \zeta_i(a) / (\hat{w}^T\hat{w})
+\end{align}
+
+Distance to central points from axis is then calculated to be $|| s\hat{w} || = |\zeta_i(a)| / ||\hat{w}||$, with extremes at
+\begin{align}
+\zeta_i'(\tilde{a}) = 1 / (1 - \tilde{a}^2) - W_{i,i} = 0 \\
+\tilde{a} = \pm \sqrt{1 - 1/W_{i,i}} \\
+\end{align}
+whenever $W_{i,i} > 1$.  These extremities are refered to as ``humps''.  Here, the distance $|\zeta_i(\tilde{a})| / ||\hat{w}||$ is large when
+\begin{align}
+|\zeta_i(\tilde{a})|/||\hat{w}||
+&= |\sigma^{-1}(\sqrt{1 - 1/W_{i,i}}) - W_{i,i}\sqrt{1 - 1/W_{i,i}}|/||\hat{w}||
+\end{align}
+is large.  In particular, for fixed diagonal, rescaling the off-diagonals can make the humps arbitrarily large or small.
+
+See figure of \texttt{humps.m}.
+
+\end{document}
+
