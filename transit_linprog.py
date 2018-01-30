@@ -2,14 +2,18 @@ import numpy as np
 import scipy.optimize as so
 import matplotlib.pyplot as mp
 
-N = 32
-K = 4
+np.set_printoptions(linewidth=200)
+
+N = 4
+K = 2
 T = 4*K
 
 V_seq = np.sign(np.random.rand(N,K) - .5)
 V_x = V_seq[:,:-1]
 V_y = V_seq[:,1:]
 P = V_x.shape[1]
+print(V_x.T)
+print(V_y.T)
 
 # linprog
 W = np.empty((N,N))
@@ -17,19 +21,36 @@ w_ii = 1.25
 a = np.sqrt(1. - 1./w_ii)
 z = np.arctanh(a) - w_ii*a
 stinq = 0.001 # strict inequality
-for i in range(N):
+for i in range(1):
     # minimize c^T x subject to
     # A_ub x <= b_ub
     # A_eq x == b_eq
     # returns object with field 'x'
-    c = np.random.randn(N) # only care about feasibility
+    c = np.random.randn(N)
     A_ub = np.empty((P,N))
-    for p in range(P-1):
+    b_ub = np.empty((P,1))
+    for p in range(P):
+        # openings
         if np.sign(V_x[i,p]) != np.sign(V_y[i,p]):
             A_ub[p,:] = np.sign(V_x[i,p])*V_x[:,p]
-            b_ub = -np.fabs(z) - stinq
-    result = so.linprog(c, A_ub=None, b_ub=None, A_eq=None, b_eq=None, bounds=None, method='simplex', callback=None, options=None)
+            b_ub[p,0] = -np.fabs(z) - stinq
+        else:
+            A_ub[p,:] = -np.sign(V_x[i,p])*V_x[:,p]
+            b_ub[p,0] = np.fabs(z) - stinq
+    # # zero diagonal
+    A_eq=np.zeros((1,N))
+    A_eq[0,i] = 1.
+    b_eq = 0.
+    bounds = (-1,1) # defaults are non-negative
+    result = so.linprog(c, A_ub=A_ub, b_ub=b_ub, A_eq=A_eq, b_eq=b_eq, bounds=bounds, method='simplex', callback=None, options=None)
+    print(A_eq, b_eq)
+    print(A_ub, b_ub)
+    print(c.T)
+    print(result.x, result.success, result.message)
+    W[i,:] = result.x
+    W[i,i] = w_ii
 
+# print(W)
 # # WX = sY
 # # X.T W.T = sY.T
 # W = np.linalg.lstsq(X.T, np.arctanh(Y).T, rcond=None)[0].T
