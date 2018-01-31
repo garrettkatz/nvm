@@ -90,7 +90,8 @@ for t in range(1,T):
     V[:,[t]] = np.tanh(W.dot(V[:,[t-1]]))
 
 def wsc(X):
-    return (X-X.min())/(X.max()-X.min())
+    # return (X-X.min())/(X.max()-X.min())
+    return (X + np.fabs(X).max())/(2*np.fabs(X).max())
 def vsc(V):
     return .5*(V+1.)
 def traj_signs(V):
@@ -108,15 +109,15 @@ print(V_seq.T)
 # # print((np.sign(V_seq) == np.sign(V_ts)).all())
 
 mp.subplot(1,4,1)
-mp.imshow(wsc(W),cmap="Greys")
+mp.imshow(wsc(W),cmap="gray")
 mp.title("W")
 mp.subplot(1,4,2)
-mp.imshow(vsc(V),cmap="Greys")
+mp.imshow(vsc(V),cmap="gray")
 mp.title("Actual")
 mp.subplot(1,4,3)
-mp.imshow(vsc(traj_signs(V)),cmap="Greys")
+mp.imshow(vsc(traj_signs(V)),cmap="gray")
 mp.title("sign(Actual)")
 mp.subplot(1,4,4)
-mp.imshow(vsc(V_seq),cmap="Greys")
+mp.imshow(vsc(V_seq),cmap="gray")
 mp.title("Training")
 mp.show()

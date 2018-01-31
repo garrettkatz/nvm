@@ -242,6 +242,9 @@ def show_tick(vm):
         # time.sleep(period)
     
 if __name__ == '__main__':
+
+    # Should run with -i flag to allow mvm.quit()
+
     mvm = mock_nvm()
     # mvm.set_standard_input('NIL',from_human_readable=True)
     # print(mvm.get_standard_output(to_human_readable=True))
