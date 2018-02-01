@@ -7,8 +7,8 @@ np.set_printoptions(linewidth=200, formatter = {'float': lambda x: '% .3f'%x})
 N = 32
 K = 8
 T = 4*K
-pad = .1
-seq_noise = .0
+pad = .2
+seq_noise = .2
 perturb_frac = 0.0
 num_trials = 1
 successes = 0
@@ -33,10 +33,15 @@ def learn4(X, Y):
 
 def learn5(X, Y):
     # Make W diagonal greater than 1 with linear program
-    # minimize c^T x subject to
-    # A_ub x <= b_ub
-    # A_eq x == b_eq
-    # returns object with field 'x'
+    # generic:
+        # minimize c^T x subject to
+        # A_ub x <= b_ub
+        # A_eq x == b_eq
+        # returns object with field 'x'
+    # instance:
+        # minimize -I[i,:] w[i,:]' to get large diagonal
+        # constrain X' w[i,:]'  == atanh(Y[i,:])' to get target dynamics
+        # bound problem by bounding all W elements
     N = X.shape[0]
     W = np.empty((N,N))
     I = np.eye(N)
@@ -59,15 +64,17 @@ for trial in range(num_trials):
     Y = np.roll(V_seq, -1, axis=1)
     
     for learn in learns:
-        W = learn(X, Y)        
+        W = learn(X, Y)
+        # Gating dynamical transitions by hump scaling
+        G = .75*(np.ones((N,N)) - np.eye(N)) + .9*np.eye(N)
+        W = W * G
         if do_print:
             print(W)
             print(np.linalg.matrix_rank(W))
             
-    W = W + np.eye(N)*2
     
     V = np.empty((N,T))
-    V[:,[0]] = V_seq[:,[0]]*((-1.)**(np.random.rand(N,1) < perturb_frac))
+    V[:,[0]] = V_seq[:,[0]]*((-1.)**(np.random.rand(N,1) < perturb_frac)) * 0.5
     for t in range(1,T):
         # V[:,[t]] = np.tanh(W.dot(V[:,[t-1]]))
         V[:,[t]] = np.sign(W.dot(V[:,[t-1]]))
