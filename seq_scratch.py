@@ -10,8 +10,12 @@ T = 4*K
 pad = .2
 seq_noise = .0
 perturb_frac = 0.0
+stinq = .01
 num_trials = 1
 successes = 0
+a = .8
+w_ii = 1./(1. - a**2)
+z = np.arctanh(a) - w_ii*a
 
 do_print = True
 do_show = True
@@ -54,8 +58,42 @@ def learn5(X, Y):
         W[i,:] = result.x
     return W
 
+def learn6(X, Y):
+    # Make W diagonal fixed greater than 1, preserve dynamics and direct hump openings with linear program
+    # generic:
+        # minimize c^T x subject to
+        # A_ub x <= b_ub
+        # A_eq x == b_eq
+        # returns object with field 'x'
+    # instance:
+        # random c
+        # constrain X' w[i,:]'  == atanh(Y[i,:])' to get target dynamics
+        # constrain I[i,:] w[i,:]'  == w_ii to get fixed dynamics
+        # constrain ub inequalities to get humps
+        # bound problem by bounding all W elements
+    N = X.shape[0]
+    W = np.empty((N,N))
+    I = np.eye(N)
+    for i in range(N):
+        c = np.random.randn(N)
+        A_eq, b_eq = np.concatenate((X.T, I[[i],:])), np.concatenate((np.arctanh(Y[i,:]).T, np.array([w_ii])))
+        A_ub, b_ub = np.empty(X.shape).T, np.empty((X.shape[1],1))
+        for p in range(X.shape[1]):
+            if np.sign(X[i,p]) != np.sign(Y[i,p]):
+                A_ub[p,:] = np.sign(X[i,p])*X[:,p]
+                A_ub[p,i] = 0.
+                b_ub[p,0] = -np.fabs(z) - stinq
+            else:
+                A_ub[p,:] = -np.sign(X[i,p])*X[:,p]
+                A_ub[p,i] = 0.
+                b_ub[p,0] = np.fabs(z) - stinq
+        bounds = max(w_ii,2)*np.array([-1,1]) # defaults are non-negative
+        result = so.linprog(c, A_ub=A_ub, b_ub=b_ub, A_eq=A_eq, b_eq=b_eq, bounds=bounds, method='interior-point', callback=None, options=None)
+        W[i,:] = result.x
+    return W
+
 # learns = [learn1, learn4]
-learns = [learn5]
+learns = [learn6]
 
 for trial in range(num_trials):
 
