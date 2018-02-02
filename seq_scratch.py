@@ -8,7 +8,7 @@ N = 32
 K = 8
 T = 4*K
 pad = .2
-seq_noise = .2
+seq_noise = .0
 perturb_frac = 0.0
 num_trials = 1
 successes = 0
@@ -49,7 +49,7 @@ def learn5(X, Y):
         c = -I[i,:]
         A_eq, b_eq = X.T, np.arctanh(Y[i,:]).T
         A_ub, b_ub = None, None
-        bounds = 1.5*np.array([-1,1]) # defaults are non-negative
+        bounds = 1.1*np.array([-1,1]) # defaults are non-negative
         result = so.linprog(c, A_ub=A_ub, b_ub=b_ub, A_eq=A_eq, b_eq=b_eq, bounds=bounds, method='interior-point', callback=None, options=None)
         W[i,:] = result.x
     return W
@@ -66,7 +66,7 @@ for trial in range(num_trials):
     for learn in learns:
         W = learn(X, Y)
         # Gating dynamical transitions by hump scaling
-        G = .75*(np.ones((N,N)) - np.eye(N)) + .9*np.eye(N)
+        G = 1*(np.ones((N,N)) - np.eye(N)) + 1*np.eye(N)
         W = W * G
         if do_print:
             print(W)
@@ -74,7 +74,7 @@ for trial in range(num_trials):
             
     
     V = np.empty((N,T))
-    V[:,[0]] = V_seq[:,[0]]*((-1.)**(np.random.rand(N,1) < perturb_frac)) * 0.5
+    V[:,[0]] = V_seq[:,[0]]*((-1.)**(np.random.rand(N,1) < perturb_frac)) * 1
     for t in range(1,T):
         # V[:,[t]] = np.tanh(W.dot(V[:,[t-1]]))
         V[:,[t]] = np.sign(W.dot(V[:,[t-1]]))

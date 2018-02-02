@@ -1,4 +1,6 @@
 inspect humps that result from learn5 in seq_scratch
+    seems like maybe they aren't pointing towards the waypoints and don't affect the timing
+    combine with transit: i.e., enforce openings with A_ub, and dynamical updates with A_eq?
 systematic comparison of learn rules, local and global
 local approximation to linprog in learn5
 use off-diagonal gating scheme (hump scaling) to "pause" activity in other regions
