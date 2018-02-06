@@ -1,12 +1,8 @@
-inspect humps that result from learn5 in seq_scratch
-    seems like maybe they aren't pointing towards the waypoints and don't affect the timing
-    combine with transit: i.e., enforce openings with A_ub, and dynamical updates with A_eq?
-systematic comparison of learn rules, local and global
-local approximation to linprog in learn5
-use off-diagonal gating scheme (hump scaling) to "pause" activity in other regions
-start CPU sequences
+for v^x and v^y, if just any one i^delta in v^y reverts to v^x, the resulting corner must be blocked by the asymptotes that become openings at v^y
+CPU sequences
 
 show weight matrices in viz
 handle activity gating outside the transition function?
 
 competition idea: delta w_ij proportional to sum_t x_i^t W_ij^t x_j^t over recent t.  If this number is large, x_j is in agreement with others about the affect on x_i.  If it is small, x_j is in disagreement, competing.  So "more important", i.e. it's absence could be missed in the borderline cases
+systematic comparison of learn rules, local and global

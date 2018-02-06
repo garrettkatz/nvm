@@ -5,15 +5,15 @@ import scipy.optimize as so
 np.set_printoptions(linewidth=200, formatter = {'float': lambda x: '% .3f'%x})
 
 N = 32
-K = 8
-T = 4*K
+K = 4
+T = 20
 pad = .2
 seq_noise = .0
 perturb_frac = 0.0
 stinq = .01
 num_trials = 1
 successes = 0
-a = .8
+a = .85
 w_ii = 1./(1. - a**2)
 z = np.arctanh(a) - w_ii*a
 
@@ -32,7 +32,7 @@ def learn4(X, Y):
     Z = (Vh.T / s).dot(U[:,:M].T)
     aY = np.arctanh(Y)
     A = np.linalg.lstsq(U[:,M:], (np.eye(N) - aY.dot(Z)).T, rcond=None)[0].T
-    W = np.concatenate((sY, A),axis=1).dot(np.concatenate((Z,U[:,M:].T), axis=0))
+    W = np.concatenate((aY, A),axis=1).dot(np.concatenate((Z,U[:,M:].T), axis=0))
     return W
 
 def learn5(X, Y):
@@ -92,8 +92,133 @@ def learn6(X, Y):
         W[i,:] = result.x
     return W
 
+def learn7(X, Y, a=.5):
+    # Make humpy W with linear program
+    # generic linprog:
+        # minimize c^T x subject to
+        # A_ub x <= b_ub
+        # A_eq x == b_eq
+        # returns object with fields 'x', 'message'
+    N = X.shape[0]
+    W = np.empty((N,N))
+    I = np.eye(N)
+    w_ii = 1./(1. - a**2)
+    bounds = w_ii*np.array([-1,1]) # default bounds are non-negative
+    successes = 0
+    for i in range(N):
+        A_eq, b_eq = I[[i],:], np.array([0.]) # zero diagonal for \hat{w}
+        delta = (X[i,:] != Y[i,:])
+        A_ub = np.concatenate((
+            np.sign(X[i:i+1,delta].T) * a*np.sign(X[:,delta].T), # openings
+            -np.sign(X[i:i+1,~delta].T) * np.sign(X[:,~delta].T), # asymptotes
+        ), axis=0)
+        b_ub = np.concatenate((
+            -np.ones(delta.sum())*np.fabs(z), # openings
+            np.ones((~delta).sum())*np.fabs(z), # asymptotes
+        ))
+        # method = 'simplex'
+        method = 'interior-point'
+        # c = np.random.randn(N)
+        # c = np.ones(N)
+        c = -A_ub.mean(axis=0)
+        result = so.linprog(c, A_ub=A_ub, b_ub=b_ub, A_eq=A_eq, b_eq=b_eq, bounds=bounds, method=method, callback=None, options=None)
+        # # repeat for equal |w_ij|?
+        # c = np.sign(result.x)
+        # result = so.linprog(c, A_ub=A_ub, b_ub=b_ub, A_eq=A_eq, b_eq=b_eq, bounds=bounds, method=method, callback=None, options=None)
+        W[i,:] = result.x
+        W[i,i] = w_ii
+        # print('%d: %s'%(i,result.message))
+        successes += (result.status == 0)
+    print("%d of %d successful lps"%(successes,N))
+    return W
+
+def learn8(X, Y, a=.9):
+    # Make humpy W with linear program
+    # Try to align hump directions with transits
+    # generic linprog:
+        # minimize c^T x subject to
+        # A_ub x <= b_ub
+        # A_eq x == b_eq
+        # returns object with fields 'x', 'message'
+    N = X.shape[0]
+    W = np.empty((N,N))
+    I = np.eye(N)
+    w_ii = 1./(1. - a**2)
+    bounds = w_ii*np.array([-1,1]) # default bounds are non-negative
+    successes = 0
+    c = -(Y-X).mean(axis=1)
+    for i in range(N):
+        A_eq, b_eq = I[[i],:], np.array([0.]) # zero diagonal for \hat{w}
+        delta = (X[i,:] != Y[i,:])
+        A_ub = np.concatenate((
+            np.sign(X[i:i+1,delta].T) * a*np.sign(X[:,delta].T), # openings
+            -np.sign(X[i:i+1,~delta].T) * np.sign(X[:,~delta].T), # asymptotes
+        ), axis=0)
+        b_ub = np.concatenate((
+            -np.ones(delta.sum())*np.fabs(z), # openings
+            np.ones((~delta).sum())*np.fabs(z), # asymptotes
+        ))
+        # method = 'simplex'
+        method = 'interior-point'
+        # c = np.random.randn(N)
+        # c = np.ones(N)
+        # c = -A_ub.mean(axis=0)
+        result = so.linprog(c, A_ub=A_ub, b_ub=b_ub, A_eq=A_eq, b_eq=b_eq, bounds=bounds, method=method, callback=None, options=None)
+        # # repeat for equal |w_ij|?
+        # c = np.sign(result.x)
+        # result = so.linprog(c, A_ub=A_ub, b_ub=b_ub, A_eq=A_eq, b_eq=b_eq, bounds=bounds, method=method, callback=None, options=None)
+        W[i,:] = result.x
+        W[i,i] = w_ii
+        # print('%d: %s'%(i,result.message))
+        successes += (result.status == 0)
+    print("%d of %d successful lps"%(successes,N))
+    return W
+
+def learn9(X, Y, a=.9):
+    # Make humpy W with linear program
+    # Try to align hump directions with transits, using eq
+    # generic linprog:
+        # minimize c^T x subject to
+        # A_ub x <= b_ub
+        # A_eq x == b_eq
+        # returns object with fields 'x', 'message'
+    N = X.shape[0]
+    W = np.empty((N,N))
+    I = np.eye(N)
+    w_ii = 1./(1. - a**2)
+    bounds = w_ii*np.array([-1,1]) # default bounds are non-negative
+    successes = 0
+    c = -(Y-X).mean(axis=1)
+    for i in range(N):
+        delta = (X[i,:] != Y[i,:])
+        A_eq = np.concatenate((
+            np.sign(X[i:i+1,delta].T) * a*np.sign(X[:,delta].T), # openings
+            I[[i],:], # zero-diagonal
+        ), axis=0)
+        b_eq = np.concatenate((
+            -np.ones(delta.sum())*np.fabs(z), # openings
+            np.zeros(1), # zero-diagonal
+        ))
+        A_ub = -np.sign(X[i:i+1,~delta].T) * np.sign(X[:,~delta].T) # asymptotes
+        b_ub = np.ones((~delta).sum())*np.fabs(z) # asymptotes
+        # method = 'simplex'
+        method = 'interior-point'
+        # c = np.random.randn(N)
+        # c = np.ones(N)
+        # c = -A_ub.mean(axis=0)
+        result = so.linprog(c, A_ub=A_ub, b_ub=b_ub, A_eq=A_eq, b_eq=b_eq, bounds=bounds, method=method, callback=None, options=None)
+        # # repeat for equal |w_ij|?
+        # c = np.sign(result.x)
+        # result = so.linprog(c, A_ub=A_ub, b_ub=b_ub, A_eq=A_eq, b_eq=b_eq, bounds=bounds, method=method, callback=None, options=None)
+        W[i,:] = result.x
+        W[i,i] = w_ii
+        # print('%d: %s'%(i,result.message))
+        successes += (result.status == 0)
+    print("%d of %d successful lps"%(successes,N))
+    return W
+
 # learns = [learn1, learn4]
-learns = [learn6]
+learns = [learn4]
 
 for trial in range(num_trials):
 
@@ -114,8 +239,8 @@ for trial in range(num_trials):
     V = np.empty((N,T))
     V[:,[0]] = V_seq[:,[0]]*((-1.)**(np.random.rand(N,1) < perturb_frac)) * 1
     for t in range(1,T):
-        # V[:,[t]] = np.tanh(W.dot(V[:,[t-1]]))
-        V[:,[t]] = np.sign(W.dot(V[:,[t-1]]))
+        V[:,[t]] = np.tanh(W.dot(V[:,[t-1]]))
+        # V[:,[t]] = np.sign(W.dot(V[:,[t-1]]))
     
     def wsc(X):
         # return (X-X.min())/(X.max()-X.min())
