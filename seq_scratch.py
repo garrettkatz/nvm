@@ -13,7 +13,8 @@ perturb_frac = 0.0
 stinq = .01
 num_trials = 1
 successes = 0
-a = .85
+# a = .85
+a = (N-.5)/N
 w_ii = 1./(1. - a**2)
 z = np.arctanh(a) - w_ii*a
 
@@ -217,17 +218,76 @@ def learn9(X, Y, a=.9):
     print("%d of %d successful lps"%(successes,N))
     return W
 
+def learn_seqs(V, a=.9):
+    # Make humpy W with linear program
+    # Try to align hump directions with transits, using additional ub
+    # needs to know delta index at both k and k-1, so train on whole sequences
+    # V[s] is the s^th sequence
+    # generic linprog:
+        # minimize c^T x subject to
+        # A_ub x <= b_ub
+        # A_eq x == b_eq
+        # returns object with fields 'x', 'message'
+    N = V[0].shape[0]
+    W = np.empty((N,N))
+    I = np.eye(N)
+    w_ii = 1./(1. - a**2)
+    bounds = w_ii*np.array([-1,1]) # default bounds are non-negative
+    successes = 0
+    for i in range(N):
+        A_ub, b_ub = [], []
+        for s in range(len(V)):
+            Vs = np.sign(V[s])
+            for k in range(V[s].shape[1]-1):
+                if Vs[i,k] != Vs[i,k+1]:
+                    # asymptote intersection must be in i opening
+                    A_ub.append(a * np.sign(Vs[i,k]) * Vs[:,[k]].T)
+                    b_ub.append(np.fabs(z))
+                    # but i hump must be close enough to ensure previous transit
+                    if k > 0:
+                        delta = np.flatnonzero(Vs[:,k-1] != Vs[:,k])
+                        for j in delta:
+                            v = Vs[:,[k]].copy()
+                            v[j,0] -= N*(1-a)*Vs[j,k]
+                            A_ub.append(-np.sign(Vs[i,k]) * v.T)
+                            b_ub.append(np.fabs(z))                            
+                else:
+                    # corner must be blocked by i asymptote
+                    A_ub.append(-np.sign(Vs[i,k]) * Vs[:,[k]].T)
+                    b_ub.append(np.fabs(z))
+        A_ub = np.concatenate(A_ub, axis=0)
+        b_ub = np.array(b_ub)
+        A_eq, b_eq = I[[i],:], np.zeros(1) # zero-diagonal
+        # method = 'simplex'
+        method = 'interior-point'
+        # c = np.random.randn(N)
+        # c = np.ones(N)
+        c = -A_ub.mean(axis=0)
+        result = so.linprog(c, A_ub=A_ub, b_ub=b_ub, A_eq=A_eq, b_eq=b_eq, bounds=bounds, method=method, callback=None, options=None)
+        # # repeat for equal |w_ij|?
+        # c = np.sign(result.x)
+        # result = so.linprog(c, A_ub=A_ub, b_ub=b_ub, A_eq=A_eq, b_eq=b_eq, bounds=bounds, method=method, callback=None, options=None)
+        W[i,:] = result.x
+        W[i,i] = w_ii
+        # print('%d: %s'%(i,result.message))
+        successes += (result.status == 0)
+    print("%d of %d successful lps"%(successes,N))
+    return W
+
 # learns = [learn1, learn4]
-learns = [learn4]
+learns = [learn_seqs]
 
 for trial in range(num_trials):
 
-    V_seq = np.sign(np.random.rand(N,K) - .5) * ((1-pad) + seq_noise*np.random.rand(N,K))
+    V_seq = np.sign(np.random.randn(N,K)) * ((1-pad) + seq_noise*np.random.rand(N,K))
     X = V_seq.copy()
     Y = np.roll(V_seq, -1, axis=1)
     
     for learn in learns:
-        W = learn(X, Y)
+        if learn == learn_seqs:
+            W = learn([V_seq])
+        else:
+            W = learn(X, Y)
         # Gating dynamical transitions by hump scaling
         G = 1*(np.ones((N,N)) - np.eye(N)) + 1*np.eye(N)
         W = W * G
