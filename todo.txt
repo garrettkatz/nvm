@@ -1,7 +1,10 @@
+dbg load:
+    no solve problems when from_layer varies, only when to_layer varies
+    push further on non-determinism check on line 152 of flash.py
+
 lp and learn_seqs one step further
     ensure all openings *and blockages* for every k-1 to k to k+1
     for v^x and v^y, if just any one i^delta in v^y reverts to v^x, the resulting corner must be blocked by the asymptotes that become openings at v^y
-CPU sequences
 
 show weight matrices in viz
 handle activity gating outside the transition function?

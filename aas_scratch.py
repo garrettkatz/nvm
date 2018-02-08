@@ -1,23 +1,26 @@
 import numpy as np
-from tokens import N_LAYER, LAYERS, DEVICES, PAD, TOKENS, PATTERNS, get_token
-from flash import flash, WEIGHTS, N_GATES, get_gates
+import matplotlib.pyplot as plt
+from tokens import N_LAYER, LAYERS, DEVICES, TOKENS, PATTERNS, get_token
+from flash import flash, WEIGHTS, N_GATES, PAD, get_gates, initial_pad_gates
+from aas_nvm import tick, print_state
 
-np.set_printoptions(linewidth=200, formatter = {'float': lambda x: '% .3f'%x})
+np.set_printoptions(linewidth=200, formatter = {'float': lambda x: '% .2f'%x})
 
 program = [
     "SET", "FEF", "CENTER",
-    "LOAD", "COMPARE1", "TC",
-    "LOAD", "COMPARE2", "LEFT",
-    "LOAD", "REGISTER1", "COMPARE3",
-    "IF", "REGISTER1", "LLEFT",
-    "LOAD", "COMPARE2", "RIGHT",
-    "LOAD", "REGISTER1", "COMPARE3",
-    "IF", "REGISTER1", "LRIGHT",
-    "GOTO", "LCENTER", "NULL",
-    "SET", "FEF", "LEFT",
-    "GOTO", "LCENTER", "NULL",
-    "SET", "FEF", "RIGHT",
-    "GOTO", "LCENTER", "NULL",
+    "LOAD", "TC", "FEF",
+    # "LOAD", "COMPARE1", "TC",
+    # "LOAD", "COMPARE2", "LEFT",
+    # "LOAD", "REGISTER1", "COMPARE3",
+    # "IF", "REGISTER1", "LLEFT",
+    # "LOAD", "COMPARE2", "RIGHT",
+    # "LOAD", "REGISTER1", "COMPARE3",
+    # "IF", "REGISTER1", "LRIGHT",
+    # "GOTO", "LCENTER", "NULL",
+    # "SET", "FEF", "LEFT",
+    # "GOTO", "LCENTER", "NULL",
+    # "SET", "FEF", "RIGHT",
+    # "GOTO", "LCENTER", "NULL",
     "RET",
 ]
 labels = {
@@ -26,42 +29,43 @@ labels = {
     "LRIGHT": 33,
 }
 
-V = PAD*np.concatenate(tuple(TOKENS[t] for t in program), axis=1) # program
+V = PAD*np.sign(np.concatenate(tuple(TOKENS[t] for t in program), axis=1)) # program
 V = np.concatenate((V, PAD*np.sign(np.random.randn(*V.shape))),axis=0) # add hidden
 
-WEIGHTS[("MEM","MEM")] = flash(V[:,:-1], V[:,1:])
+w = flash(V[:,:-1], V[:,1:])
+WEIGHTS[("MEM1","MEM1")] = w[:N_LAYER,:N_LAYER]
+WEIGHTS[("MEM1","MEM2")] = w[:N_LAYER,N_LAYER:]
+WEIGHTS[("MEM2","MEM1")] = w[N_LAYER:,:N_LAYER]
+WEIGHTS[("MEM2","MEM2")] = w[N_LAYER:,N_LAYER:]
 
-ACTIVITY = {k: np.zeros((2*N_LAYER,1)) for k in LAYERS}
+ACTIVITY = {k: -PAD*np.ones((N_LAYER,1)) for k in LAYERS}
 for k in DEVICES:
-    ACTIVITY[k] = np.zeros((N_LAYER,1))
-ACTIVITY["GATE"] = -PAD*np.ones((2*N_GATES,1))
-ACTIVITY["MEM"] = V[:,[0]]
+    ACTIVITY[k] = -PAD*np.ones((N_LAYER,1))
+ACTIVITY["GATES"] = initial_pad_gates()
+ACTIVITY["MEM1"] = V[:N_LAYER,[0]]
+ACTIVITY["MEM2"] = V[N_LAYER:,[0]]
 
-for t in range(10):
-    token = get_token(ACTIVITY["MEM"][:N_LAYER,:])
-    print("%d: "%t + " ".join(["%s:%s"%(k,get_token(ACTIVITY[k][:N_LAYER,:])) for k in ["MEM","FEF"]]))
-    if token == "RET": break
-    all_gates = get_gates(ACTIVITY["GATE"][:N_GATES,:])
-    open_gates = [k for k in all_gates if all_gates[k] > 0]
-    print("open gates: " + str(tuple(open_gates)))
+HISTORY = [ACTIVITY]
+for t in range(20):
+    print("tick %d:"%t)
+    print_state(ACTIVITY)
+    if get_token(ACTIVITY["OPCODE"]) == "RET": break
     
-    # NVM tick
-    ACTIVITY_NEW = {}
-    
-    g = get_gates(ACTIVITY["GATE"])[("MEM","MEM","A")]
-    w = WEIGHTS[("MEM","MEM")]
-    w = (g+1)/2*w + (1-(g+1)/2)*2*np.eye(*w.shape)
-    ACTIVITY_NEW["MEM"] = w.dot(ACTIVITY["MEM"])
+    ACTIVITY = tick(ACTIVITY, WEIGHTS)
+    HISTORY.append(ACTIVITY)
 
-    w = WEIGHTS[("GATE","GATE")]
-    ACTIVITY_NEW["GATE"] = w.dot(ACTIVITY["GATE"])
-    
-    for k in ["MEM","GATE"]:
-        ACTIVITY_NEW[k] = np.tanh(ACTIVITY_NEW[k])
+A = np.zeros((2*N_GATES + 5*N_LAYER,len(HISTORY)))
+for h in range(len(HISTORY)):
+    A[:,[h]] = np.concatenate((
+        HISTORY[h]["GATES"],
+        HISTORY[h]["OPCODE"],
+        HISTORY[h]["OPERAND1"],
+        HISTORY[h]["OPERAND2"],
+        HISTORY[h]["FEF"],
+        HISTORY[h]["TC"],
+    ),axis=0)
 
-    for k in DEVICES:
-        ACTIVITY_NEW[k] = ACTIVITY[k]
+print(np.fabs(A).max(axis=0))
 
-    ACTIVITY = ACTIVITY_NEW
-
-    # ACTIVITY["GATE"][0,0] = 1.
+plt.imshow(np.kron((A-A.min())/(A.max()-A.min()),np.ones((1,20))), cmap='gray')
+plt.show()
