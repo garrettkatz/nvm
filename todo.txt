@@ -1,10 +1,18 @@
-dbg load:
-    no solve problems when from_layer varies, only when to_layer varies
-    non-determinism check seems correct.
-    fails even when SET is omitted
-    succeeds when only first step is included.
-    fails even when OPC,OP1,OP2 are excluded from to/from layers
-    
+rank problems with to,from:
+    tried a little 2x2 on paper: to1, to2, fr1, fr2.
+    [h  h  h  h
+     t1 t1 t2 t2   * [-1 1 1 -1].T = [0 0 0].T
+     f1 f2 f1 f2]
+    so actually low rank.
+lork->lork (matrank_scratch.py) beats problem for load, but set+load simultaneous has problem.
+    works with: set to FEF, load from FEF to FEF
+    works with: set to FEF, load from FEF to devices
+    works with: set to FEF, load from devices to FEF
+    works with: set to DEVICES, load from FEF to FEF
+    works with: set to DEVICES, load from devices to FEF
+    fails with: set to DEVICES, load from FEF to devices
+
+still need to reconcile lork-lork solution with nearly fixed points near +/- pad
 
 lp and learn_seqs one step further
     ensure all openings *and blockages* for every k-1 to k to k+1
