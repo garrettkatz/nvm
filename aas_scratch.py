@@ -1,14 +1,15 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from tokens import N_LAYER, LAYERS, DEVICES, TOKENS, PATTERNS, get_token
-from flash import flash, WEIGHTS, N_GATES, PAD, get_gates, initial_pad_gates
+from flash import flash, WEIGHTS, N_GH, PAD, get_gates, initial_pad_gates
 from aas_nvm import tick, print_state
 
 np.set_printoptions(linewidth=200, formatter = {'float': lambda x: '% .2f'%x})
 
 program = [
     "SET", "FEF", "CENTER",
-    "LOAD", "TC", "FEF",
+    # "SET", "TC", "LEFT",
+    # "LOAD", "TC", "FEF",
     # "LOAD", "COMPARE1", "TC",
     # "LOAD", "COMPARE2", "LEFT",
     # "LOAD", "REGISTER1", "COMPARE3",
@@ -54,7 +55,7 @@ for t in range(20):
     ACTIVITY = tick(ACTIVITY, WEIGHTS)
     HISTORY.append(ACTIVITY)
 
-A = np.zeros((2*N_GATES + 5*N_LAYER,len(HISTORY)))
+A = np.zeros((N_GH + 5*N_LAYER,len(HISTORY)))
 for h in range(len(HISTORY)):
     A[:,[h]] = np.concatenate((
         HISTORY[h]["GATES"],
