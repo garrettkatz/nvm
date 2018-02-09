@@ -115,10 +115,10 @@ for to_layer in LAYERS + DEVICES:
 # 2. if op1 has <to_layer> and op2 has <from_layer>, copy <from_layer> to <to_layer>
 # 3. return to initial gates
 h_load = PAD*np.sign(np.random.randn(N_GATES, 1)) # common first hidden for all LOADs
-# for to_layer in LAYERS + DEVICES:
-#     for from_layer in LAYERS + DEVICES:
-for to_layer in ["TC","FEF"]:
+for to_layer in LAYERS + DEVICES:
     for from_layer in LAYERS + DEVICES:
+        if from_layer in ["OPCODE","OPERAND1","OPERAND2"]: continue
+        if to_layer in ["OPCODE","OPERAND1","OPERAND2"]: continue
         steps = 3
         V = np.zeros((V_gos.shape[0] + 3*N_LAYER, GOS + steps))
         V[:V_gos.shape[0],:GOS] = V_gos
@@ -152,13 +152,14 @@ for to_layer in ["TC","FEF"]:
 # check for non-determinism
 print('nondet...')
 for s1 in range(len(X)):
+    break
     for s2 in range(len(X)):
         for i1 in range(X[s1].shape[1]):
             for i2 in range(X[s2].shape[1]):
-                if (np.sign(X[s1][:,i1]) == np.sign(X[s2][:,i2])).all() and (np.sign(Y[s1][:,i1]) != np.sign(Y[s2][:,i2])).all() and not (s1 == s2 and i1 == i2):
+                if (np.sign(X[s1][:,i1]) == np.sign(X[s2][:,i2])).all() and (np.sign(Y[s1][:,i1]) != np.sign(Y[s2][:,i2])).any():
                     print("non-deterministic!")
                     print((s1,s2,i1,i2))
-                    raw_input("continue?")                    
+                    raw_input("continue?!?")
 
 X = np.concatenate(X, axis=1)
 Y = np.concatenate(Y, axis=1)
