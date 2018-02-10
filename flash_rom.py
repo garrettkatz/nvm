@@ -69,7 +69,7 @@ def flash_rom(X, Y, verbose=True):
     Z = np.concatenate((
         default_gates()[:N_GATES]*np.ones((N_GATES, A.shape[1])),
         np.tanh(np.random.randn(N_HGATES, A.shape[0]).dot(A)),
-        Y[N_GH:,:] # take from Y, not X, since X may have opened new gates
+        np.zeros((3*N_LAYER,A.shape[1])) # ops unavailable when gates are closed again
     ), axis=0)
 
     if verbose:
@@ -104,14 +104,14 @@ opregs = ["OPCODE","OPERAND1","OPERAND2"]
 ######## FLASH ROM #########
 
 X, Y = [], [] # growing lists of transitions
-v_start = with_ops(default_gates()) # beginning of clock cycle: default gates, no ops
 
-### Load instructions from mem into cpu, one operand at a time
-v = v_start
-for reg in opregs:
+
+###### Load instructions from mem into cpu, one operand at a time
+
+V_START = cpu_state(ungate = memu + cop("OPCODE","MEM1"), hidden=-PAD*np.ones((N_HGATES,1)))
+v = V_START
+for reg in ["OPERAND1","OPERAND2"]:
     v = add_transit(X, Y, v, cpu_state(ungate = memu + cop(reg,"MEM1")))
-
-# add_transit(X, Y, v, v_start)
 
 # Let opcode bias the gate layer
 v = add_transit(X, Y, v, cpu_state(ungate = [("GATES","OPCODE","U")]))
@@ -119,26 +119,38 @@ v = add_transit(X, Y, v, cpu_state(ungate = [("GATES","OPCODE","U")]))
 # Ready to execute instruction
 v_ready = v.copy()
 
-### NOP instruction
+###### NOP instruction
 
-# add_transit(X, Y, with_ops(v_ready, opc="NOP"), v_start) # begin next clock cycle
+add_transit(X, Y, with_ops(v_ready, opc="NOP"), V_START) # begin next clock cycle
 
-### SET instruction
+###### SET instruction
 
 # Let op1 bias the gate layer
-v_set = add_transit(X, Y, with_ops(v_ready,opc="SET"), cpu_state(ungate = [("GATES","OPERAND1","U")]))
+v_inst = add_transit(X, Y, with_ops(v_ready,opc="SET"), cpu_state(ungate = [("GATES","OPERAND1","U")]))
 
 # Add transits for each op1 possibility
 for to_layer in LAYERS+DEVICES:
-    # copy value in op2 to destination
-    v = add_transit(X, Y, with_ops(v_set, op1=to_layer),
-        cpu_state(ungate=[(to_layer,to_layer,"C"),(to_layer,"OPERAND2","U")]))
+    # copy value in op2 to layer in op1
+    v = add_transit(X, Y, with_ops(v_inst, op1=to_layer), cpu_state(ungate=cop(to_layer,"OPERAND2")))
     # begin next clock cycle
-    add_transit(X, Y, v, v_start)
+    add_transit(X, Y, v, V_START)
 
-### LOAD instruction
+###### LOAD instruction
 
-### Flash to ROM
+# Let op1 bias the gate layer
+v_inst = add_transit(X, Y, with_ops(v_ready,opc="LOAD"),
+    cpu_state(ungate = [("GATES","OPERAND1","U"),("GATES","OPERAND2","U")]))
+
+# Add transits for each op1,op2 possibility
+for to_layer in LAYERS+DEVICES:
+    for from_layer in LAYERS + DEVICES:
+        # copy from layer in op2 to layer in op1
+        v = add_transit(X, Y, with_ops(v_inst, op1=to_layer, op2=from_layer),
+            cpu_state(ungate=cop(to_layer, from_layer)))
+        # begin next clock cycle
+        add_transit(X, Y, v, V_START)
+
+###### Flash to ROM
 X = np.concatenate(X,axis=1)
 Y = np.concatenate(Y,axis=1)
 W_ROM, Z = flash_rom(X, Y, verbose=True)
@@ -147,12 +159,13 @@ do_pause = True
 
 if not do_pause: plt.ion()
 
+kr = 1
 plt.subplot(1,4,1)
-plt.imshow(np.kron((X-X.min())/(X.max()-X.min()),np.ones((1,20))), cmap='gray')
+plt.imshow(np.kron((X-X.min())/(X.max()-X.min()),np.ones((1,kr))), cmap='gray')
 plt.subplot(1,4,2)
-plt.imshow(np.kron((Z-Z.min())/(Z.max()-Z.min()),np.ones((1,20))), cmap='gray')
+plt.imshow(np.kron((Z-Z.min())/(Z.max()-Z.min()),np.ones((1,kr))), cmap='gray')
 plt.subplot(1,4,3)
-plt.imshow(np.kron((Y-Y.min())/(Y.max()-Y.min()),np.ones((1,20))), cmap='gray')
+plt.imshow(np.kron((Y-Y.min())/(Y.max()-Y.min()),np.ones((1,kr))), cmap='gray')
 plt.subplot(1,4,4)
 plt.imshow((W_ROM-W_ROM.min())/(W_ROM.max()-W_ROM.min()), cmap='gray')
 plt.show()

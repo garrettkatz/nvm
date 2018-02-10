@@ -5,12 +5,9 @@ rank problems with to,from:
      f1 f2 f1 f2]
     so actually low rank.
 lork->lork (matrank_scratch.py) beats problem for load, but set+load simultaneous has problem.
-    works with: set to FEF, load from FEF to FEF
-    works with: set to FEF, load from FEF to devices
-    works with: set to FEF, load from devices to FEF
-    works with: set to DEVICES, load from FEF to FEF
-    works with: set to DEVICES, load from devices to FEF
-    fails with: set to DEVICES, load from FEF to devices
+flash_rom resolves issue with lork->lork fix applied to *all* transits at once, not one instruction at a time.
+
+flash_rom had issue with simultaneous set+load, but for first time, bigger hidden layer actually did fix.  work out mathematical requirements on layer sizes.
 
 still need to reconcile lork-lork solution with nearly fixed points near +/- pad
 

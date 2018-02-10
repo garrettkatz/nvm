@@ -2,7 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from tokens import N_LAYER, LAYERS, DEVICES, TOKENS, PATTERNS, get_token
 from gates import default_gates, N_GH, PAD
-from flash_rom import W_ROM, cpu_state
+from flash_rom import W_ROM, cpu_state, V_START
 from aas_nvm import tick, print_state
 
 np.set_printoptions(linewidth=200, formatter = {'float': lambda x: '% .2f'%x})
@@ -11,7 +11,7 @@ program = [
     # "NOP", "NULL", "NULL",
     "SET", "FEF", "CENTER",
     # "SET", "TC", "LEFT",
-    # "LOAD", "TC", "FEF",
+    "LOAD", "TC", "FEF",
     # "LOAD", "COMPARE1", "TC",
     # "LOAD", "COMPARE2", "LEFT",
     # "LOAD", "REGISTER1", "COMPARE3",
@@ -60,20 +60,28 @@ WEIGHTS[("GATES","OPERAND2")] = W_ROM[:,N_GH+2*N_LAYER:N_GH+3*N_LAYER]
 
 # initialize activity
 ACTIVITY = {k: -PAD*np.ones((N_LAYER,1)) for k in LAYERS+DEVICES}
-ACTIVITY["GATES"] = default_gates()
+ACTIVITY["GATES"] = V_START[:N_GH,:] 
 ACTIVITY["MEM1"] = V_PROG[:N_LAYER,[0]]
 ACTIVITY["MEM2"] = V_PROG[N_LAYER:,[0]]
 
 # run nvm
 HISTORY = [ACTIVITY]
-for t in range(30):
-    if t % 2 == 0:
+for t in range(50):
+    # if t % 2 == 0:
+    #     print("tick %d:"%t)
+    #     print_state(ACTIVITY)
+    #     if get_token(ACTIVITY["OPCODE"]) == "RET": break
+    if t % 2 == 0 and get_token(ACTIVITY["OPCODE"]) == "RET":
         print("tick %d:"%t)
         print_state(ACTIVITY)
-        if get_token(ACTIVITY["OPCODE"]) == "RET": break
+        break
     
     ACTIVITY = tick(ACTIVITY, WEIGHTS)
     HISTORY.append(ACTIVITY)
+
+if not get_token(ACTIVITY["OPCODE"]) == "RET":
+    print("tick %d:"%t)
+    print_state(ACTIVITY)
 
 A = np.zeros((N_GH + 5*N_LAYER,len(HISTORY)))
 for h in range(len(HISTORY)):
@@ -91,5 +99,6 @@ print(mx)
 print((mx.min(), mx.mean(), mx.max()))
 
 plt.figure()
-plt.imshow(np.kron((A-A.min())/(A.max()-A.min()),np.ones((1,20))), cmap='gray')
+kr = 10
+plt.imshow(np.kron((A-A.min())/(A.max()-A.min()),np.ones((1,kr))), cmap='gray')
 plt.show()
