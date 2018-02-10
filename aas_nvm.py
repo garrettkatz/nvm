@@ -17,11 +17,12 @@ def tick(activity, WEIGHTS):
     activity_new = {k: np.zeros(v.shape) for (k,v) in activity.items()}
     for (to_layer, from_layer) in WEIGHTS:
         u = get_gates(activity["GATES"])[(to_layer, from_layer, "U")]
-        c = get_gates(activity["GATES"])[(to_layer, from_layer, "C")]
-        u, c = float(u > 0), float(c > 0)
+        u = float(u > 0)
         w = WEIGHTS[(to_layer, from_layer)]
         w = u*w
         if to_layer == from_layer:
+            c = get_gates(activity["GATES"])[(to_layer, from_layer, "C")]
+            c = float(c > 0)
             w += (1-u)*(1-c)*np.eye(*w.shape) * np.arctanh(PAD)/PAD
         activity_new[to_layer] += w.dot(activity[from_layer])
     

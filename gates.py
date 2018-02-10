@@ -15,15 +15,24 @@ np.set_printoptions(linewidth=200, formatter = {'float': lambda x: '% .0f'%x})
     # between regions, signals are propogated (needs clear destination for copy)
 GATE_KEYS = []
 GATE_INDEX = {}
+# for to_layer in LAYERS + DEVICES + ["GATES"]:
+#     for from_layer in LAYERS + DEVICES + ["GATES"]:
+#         # for mode in ["C","U","L"]: # clear/update/learn
+#         for mode in ["C","U"]:
+#             GATE_INDEX[(to_layer, from_layer, mode)] = len(GATE_KEYS)
+#             GATE_KEYS.append((to_layer, from_layer, mode))
 for to_layer in LAYERS + DEVICES + ["GATES"]:
     for from_layer in LAYERS + DEVICES + ["GATES"]:
-        # for mode in ["C","U","L"]: # clear/update/learn
-        for mode in ["C","U"]:
+        # for mode in ["U","L"]: # clear/update/learn
+        for mode in ["U"]:
             GATE_INDEX[(to_layer, from_layer, mode)] = len(GATE_KEYS)
             GATE_KEYS.append((to_layer, from_layer, mode))
+    GATE_INDEX[(to_layer, to_layer, "C")] = len(GATE_KEYS)
+    GATE_KEYS.append((to_layer, to_layer, "C"))
+    
 
 N_GATES = len(GATE_KEYS)
-N_HGATES = 256
+N_HGATES = 128
 N_GH = N_GATES + N_HGATES
 
 def get_gates(p):
