@@ -69,7 +69,7 @@ def flash_rom(X, Y, verbose=True):
     Z = np.concatenate((
         default_gates()[:N_GATES]*np.ones((N_GATES, A.shape[1])),
         np.tanh(np.random.randn(N_HGATES, A.shape[0]).dot(A)),
-        X[N_GH:,:]
+        Y[N_GH:,:] # take from Y, not X, since X may have opened new gates
     ), axis=0)
 
     if verbose:
@@ -129,7 +129,7 @@ v_ready = v.copy()
 v_set = add_transit(X, Y, with_ops(v_ready,opc="SET"), cpu_state(ungate = [("GATES","OPERAND1","U")]))
 
 # Add transits for each op1 possibility
-for to_layer in ["FEF"]:#LAYERS+DEVICES:
+for to_layer in LAYERS+DEVICES:
     # copy value in op2 to destination
     v = add_transit(X, Y, with_ops(v_set, op1=to_layer),
         cpu_state(ungate=[(to_layer,to_layer,"C"),(to_layer,"OPERAND2","U")]))
@@ -148,11 +148,11 @@ do_pause = True
 if not do_pause: plt.ion()
 
 plt.subplot(1,4,1)
-plt.imshow(np.kron((X-X.min())/(X.max()-X.min()),np.ones((1,3))), cmap='gray')
+plt.imshow(np.kron((X-X.min())/(X.max()-X.min()),np.ones((1,20))), cmap='gray')
 plt.subplot(1,4,2)
-plt.imshow(np.kron((Z-Z.min())/(Z.max()-Z.min()),np.ones((1,3))), cmap='gray')
+plt.imshow(np.kron((Z-Z.min())/(Z.max()-Z.min()),np.ones((1,20))), cmap='gray')
 plt.subplot(1,4,3)
-plt.imshow(np.kron((Y-Y.min())/(Y.max()-Y.min()),np.ones((1,3))), cmap='gray')
+plt.imshow(np.kron((Y-Y.min())/(Y.max()-Y.min()),np.ones((1,20))), cmap='gray')
 plt.subplot(1,4,4)
 plt.imshow((W_ROM-W_ROM.min())/(W_ROM.max()-W_ROM.min()), cmap='gray')
 plt.show()
