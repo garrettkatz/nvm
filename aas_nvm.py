@@ -18,26 +18,26 @@ WEIGHTS[("GATES","OP1")] = W_ROM[:,N_GH+1*N_LAYER:N_GH+2*N_LAYER]
 WEIGHTS[("GATES","OP2")] = W_ROM[:,N_GH+2*N_LAYER:N_GH+3*N_LAYER]
 WEIGHTS[("GATES","OP3")] = W_ROM[:,N_GH+3*N_LAYER:N_GH+4*N_LAYER]
 
-
 def print_state(activity):
     hr = ["%s:%s"%(k,get_token(activity[k])) for k in [
         "OPC","OP1","OP2","OP3","MEM","REG1","REG2","REG3","FEF","TC"
     ]]
-    open_gates = get_open_gates(activity["GATES"])
     print(" ".join(hr))
+    open_gates = get_open_gates(activity["GATES"])
     print("open gates: " + str(tuple(open_gates)))
 
 def tick(activity, weights):
 
     # NVM tick
+    current_gates = get_gates(activity["GATES"])
     activity_new = {k: np.zeros(v.shape) for (k,v) in activity.items()}
     for (to_layer, from_layer) in weights:
-        u = get_gates(activity["GATES"])[(to_layer, from_layer, "U")]
+        u = current_gates[(to_layer, from_layer, "U")]
         u = float(u > 0)
         w = weights[(to_layer, from_layer)]
         w = u*w
         if to_layer == from_layer:
-            c = get_gates(activity["GATES"])[(to_layer, from_layer, "C")]
+            c = current_gates[(to_layer, from_layer, "C")]
             c = float(c > 0)
             w += (1-u)*(1-c)*np.eye(*w.shape) * np.arctanh(PAD)/PAD
         activity_new[to_layer] += w.dot(activity[from_layer])

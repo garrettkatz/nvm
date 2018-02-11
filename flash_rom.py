@@ -124,12 +124,15 @@ memu = [("MEM"+a,"MEM"+b,"U") for a in ["","H"] for b in ["","H"]]
 
 X, Y = [], [] # growing lists of transitions
 
-
 ###### Load instruction from mem into cpu, one operand at a time
 
-V_START = cpu_state(ungate = memu + cop("OPC","MEM"))
+# V_START = cpu_state(ungate = memu + cop("OPC","MEM"))
+# v = V_START
+# for reg in ["OP1","OP2","OP3"]:
+#     v = add_transit(X, Y, v, cpu_state(ungate = memu + cop(reg,"MEM")))
+V_START = cpu_state(ungate = memu)
 v = V_START
-for reg in ["OP1","OP2","OP3"]:
+for reg in ["OPC","OP1","OP2","OP3"]:
     v = add_transit(X, Y, v, cpu_state(ungate = memu + cop(reg,"MEM")))
 
 # Let opcode bias the gate layer
@@ -169,7 +172,7 @@ for to_layer in USER_LAYERS + DEVICES:
         # begin next clock cycle
         add_transit(X, Y, v, V_START)
 
-###### COMP instruction
+###### CMP instruction
 
 # Let compare ops bias the gate layer
 v_inst = add_transit(X, Y, with_ops(v_ready,opc="CMP"),
@@ -195,6 +198,19 @@ for result_layer in USER_LAYERS + DEVICES:
     # when in state v, cmpo is up to date
     # begin next clock cycle
     add_transit(X, Y, v, V_START)
+
+###### JMP instruction
+
+# Let op1 bias the gate layer
+v_inst = add_transit(X, Y, with_ops(v_ready,opc="JMP"), cpu_state(ungate = [("GATES","OP1","U")]))
+
+# Jump if true
+v = add_transit(X, Y, with_ops(v_inst, op1="TRUE"), 
+    cpu_state(ungate=cop("MEM","OP2")+cop("MEMH","OP3")))
+add_transit(X, Y, v, V_START)
+
+# Don't jump if false
+add_transit(X, Y, with_ops(v_inst, op1="FALSE"), V_START)
 
 ###### Flash to ROM
 X = np.concatenate(X,axis=1)

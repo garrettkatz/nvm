@@ -1,3 +1,5 @@
+jmp instruction
+
 get rid of direct gate<-gate?
 
 rank problems with to,from:

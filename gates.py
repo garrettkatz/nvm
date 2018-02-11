@@ -32,7 +32,7 @@ for to_layer in LAYERS + DEVICES + ["GATES"]:
     
 
 N_GATES = len(GATE_KEYS)
-N_HGATES = 256
+N_HGATES = 512
 N_GH = N_GATES + N_HGATES
 
 def get_gates(p):

@@ -8,31 +8,33 @@ from aas_nvm import WEIGHTS, tick, print_state
 np.set_printoptions(linewidth=200, formatter = {'float': lambda x: '% .2f'%x})
 
 REG_INIT = {}
-# REG_INIT = {"REG1": "LEFT", "TC": "LEFT",}
-program = [
-    "NOP", "NULL", "NULL","NULL",
-    "SET", "FEF", "CENTER","NULL",
-    "SET", "TC", "LEFT","NULL",
-    "SET", "REG1", "LEFT","NULL",
-    # "MOV", "REG2", "TC","NULL",
-    "CMP", "REG1", "REG1", "TC",
-    # "IF", "REG1", "LLEFT","NULL",
-    # "IF", "REG1", "LRIGHT","NULL",
-    # "GOTO", "LCENTER", "NULL","NULL",
-    # "SET", "FEF", "LEFT","NULL",
-    # "GOTO", "LCENTER", "NULL","NULL",
-    # "SET", "FEF", "RIGHT","NULL",
-    # "GOTO", "LCENTER", "NULL","NULL",
-    "RET",
+# REG_INIT = {"REG1": "TRUE"}
+program = [ # label opc op1 op2 op3
+    "LOOP","NOP","NULL","NULL","NULL",
+    # "NULL","SET","FEF","CENTER","NULL",
+    # "NULL","SET","TC","LEFT","NULL",
+    # "NULL","SET","REG1","LEFT","NULL",
+    # "NULL","MOV","REG2","TC","NULL",
+    # "NULL","CMP","REG1","REG1","TC",
+    "NULL","JMP","TRUE","LOOP","NULL",
+    # "NULL","IF","REG1","LRIGHT","NULL",
+    # "NULL","GOTO","LCENTER","NULL","NULL",
+    # "NULL","SET","FEF","LEFT","NULL",
+    # "NULL","GOTO","LCENTER","NULL","NULL",
+    # "NULL","SET","FEF","RIGHT","NULL",
+    # "NULL","GOTO","LCENTER","NULL","NULL",
+    "NULL","RET","NULL","NULL","NULL",
 ]
-labels = {
-    "LCENTER": 0,
-    "LLEFT": 27,
-    "LRIGHT": 33,
-}
 
+# encode program transits
 V_PROG = PAD*np.sign(np.concatenate(tuple(TOKENS[t] for t in program), axis=1)) # program
 V_PROG = np.concatenate((V_PROG, PAD*np.sign(np.random.randn(*V_PROG.shape))),axis=0) # add hidden
+
+# link labels
+labels = {program[p]:p for p in range(0,len(program),5) if program[p] != "NULL"}
+for p in range(3,len(program),5):
+    if program[p] in labels:
+        V_PROG[:N_LAYER,p+1] = V_PROG[N_LAYER:, labels[program[p]]]
 
 # flash ram with program memory
 X, Y = V_PROG[:,:-1], V_PROG[:,1:]
