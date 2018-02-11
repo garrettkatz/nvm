@@ -36,16 +36,20 @@ N_HGATES = 256
 N_GH = N_GATES + N_HGATES
 
 def get_gates(p):
-    """
-    Returns a dict of gate values from a pattern
-    """
+    """Returns a dict of gate values from a pattern"""
     g = {}
     for i in range(len(GATE_KEYS)):
         g[GATE_KEYS[i]] = p[i,0]
     return g
+    
+def get_open_gates(p):
+    """Get human-readable list of open gates in pattern"""
+    all_gates = get_gates(p)
+    return [k for k in all_gates if all_gates[k] > 0]
 
 def default_gates():
     """All closed except the (gate,gate) update"""
     gates = -PAD*np.ones((N_GH,1))
     gates[GATE_INDEX[("GATES","GATES","U")],0] = PAD
     return gates
+
