@@ -1,3 +1,5 @@
+compare circuit
+
 rank problems with to,from:
     tried a little 2x2 on paper: to1, to2, fr1, fr2.
     [h  h  h  h

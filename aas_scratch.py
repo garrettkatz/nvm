@@ -8,16 +8,14 @@ from aas_nvm import tick, print_state
 np.set_printoptions(linewidth=200, formatter = {'float': lambda x: '% .2f'%x})
 
 program = [
-    # "NOP", "NULL", "NULL",
+    "NOP", "NULL", "NULL",
     "SET", "FEF", "CENTER",
-    # "SET", "TC", "LEFT",
-    "LOAD", "TC", "FEF",
-    # "LOAD", "COMPARE1", "TC",
-    # "LOAD", "COMPARE2", "LEFT",
-    # "LOAD", "REGISTER1", "COMPARE3",
+    "SET", "COMPARE1", "LEFT",
+    "LOAD", "COMPARE2", "TC",
+    # "LOAD", "REGISTER1", "COMPARE",
     # "IF", "REGISTER1", "LLEFT",
     # "LOAD", "COMPARE2", "RIGHT",
-    # "LOAD", "REGISTER1", "COMPARE3",
+    # "LOAD", "REGISTER1", "COMPARE",
     # "IF", "REGISTER1", "LRIGHT",
     # "GOTO", "LCENTER", "NULL",
     # "SET", "FEF", "LEFT",
@@ -63,6 +61,7 @@ ACTIVITY = {k: -PAD*np.ones((N_LAYER,1)) for k in LAYERS+DEVICES}
 ACTIVITY["GATES"] = V_START[:N_GH,:] 
 ACTIVITY["MEM1"] = V_PROG[:N_LAYER,[0]]
 ACTIVITY["MEM2"] = V_PROG[N_LAYER:,[0]]
+ACTIVITY["TC"] = TOKENS["RIGHT"]
 
 # run nvm
 HISTORY = [ACTIVITY]
@@ -99,6 +98,6 @@ print(mx)
 print((mx.min(), mx.mean(), mx.max()))
 
 plt.figure()
-kr = 10
+kr = 3
 plt.imshow(np.kron((A-A.min())/(A.max()-A.min()),np.ones((1,kr))), cmap='gray')
 plt.show()

@@ -4,7 +4,7 @@ from gates import get_gates, PAD
 
 def print_state(activity):
     hr = ["%s:%s"%(k,get_token(activity[k])) for k in [
-        "OPCODE","OPERAND1","OPERAND2","MEM1","FEF","TC"
+        "OPCODE","OPERAND1","OPERAND2","MEM1","COMPARE1","COMPARE2","COMPARE4","FEF","TC"
     ]]
     all_gates = get_gates(activity["GATES"])
     open_gates = [k for k in all_gates if all_gates[k] > 0]

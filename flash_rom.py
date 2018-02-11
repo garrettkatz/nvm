@@ -1,6 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
-from tokens import LAYERS, DEVICES, N_LAYER, TOKENS, get_token
+from tokens import LAYERS, CPU_LAYERS, USER_LAYERS, DEVICES, N_LAYER, TOKENS, get_token
 from gates import N_GATES, N_HGATES, N_GH, PAD, GATE_INDEX, default_gates
 
 np.set_printoptions(linewidth=200, formatter = {'float': lambda x: '% .0f'%x})
@@ -108,7 +108,7 @@ X, Y = [], [] # growing lists of transitions
 
 ###### Load instructions from mem into cpu, one operand at a time
 
-V_START = cpu_state(ungate = memu + cop("OPCODE","MEM1"), hidden=-PAD*np.ones((N_HGATES,1)))
+V_START = cpu_state(ungate = memu + cop("OPCODE","MEM1"))
 v = V_START
 for reg in ["OPERAND1","OPERAND2"]:
     v = add_transit(X, Y, v, cpu_state(ungate = memu + cop(reg,"MEM1")))
@@ -129,7 +129,7 @@ add_transit(X, Y, with_ops(v_ready, opc="NOP"), V_START) # begin next clock cycl
 v_inst = add_transit(X, Y, with_ops(v_ready,opc="SET"), cpu_state(ungate = [("GATES","OPERAND1","U")]))
 
 # Add transits for each op1 possibility
-for to_layer in LAYERS+DEVICES:
+for to_layer in USER_LAYERS + DEVICES:
     # copy value in op2 to layer in op1
     v = add_transit(X, Y, with_ops(v_inst, op1=to_layer), cpu_state(ungate=cop(to_layer,"OPERAND2")))
     # begin next clock cycle
@@ -142,8 +142,8 @@ v_inst = add_transit(X, Y, with_ops(v_ready,opc="LOAD"),
     cpu_state(ungate = [("GATES","OPERAND1","U"),("GATES","OPERAND2","U")]))
 
 # Add transits for each op1,op2 possibility
-for to_layer in LAYERS+DEVICES:
-    for from_layer in LAYERS + DEVICES:
+for to_layer in USER_LAYERS + DEVICES:
+    for from_layer in USER_LAYERS + DEVICES:
         # copy from layer in op2 to layer in op1
         v = add_transit(X, Y, with_ops(v_inst, op1=to_layer, op2=from_layer),
             cpu_state(ungate=cop(to_layer, from_layer)))
