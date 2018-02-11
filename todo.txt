@@ -1,5 +1,8 @@
-jmp instruction
+empirical experiments:
+    how size of N_HGATES (and N_LAYER?) affects stability in long loops
+    noise injection
 
+noise injection
 get rid of direct gate<-gate?
 
 rank problems with to,from:

@@ -8,7 +8,7 @@ from aas_nvm import WEIGHTS, tick, print_state
 np.set_printoptions(linewidth=200, formatter = {'float': lambda x: '% .2f'%x})
 
 REG_INIT = {}
-# REG_INIT = {"REG1": "TRUE"}
+REG_INIT = {"REG1": "TRUE"}
 program = [ # label opc op1 op2 op3
     "LOOP","NOP","NULL","NULL","NULL",
     # "NULL","SET","FEF","CENTER","NULL",
@@ -16,7 +16,7 @@ program = [ # label opc op1 op2 op3
     # "NULL","SET","REG1","LEFT","NULL",
     # "NULL","MOV","REG2","TC","NULL",
     # "NULL","CMP","REG1","REG1","TC",
-    "NULL","JMP","TRUE","LOOP","NULL",
+    "NULL","JMP","REG1","LOOP","NULL",
     # "NULL","IF","REG1","LRIGHT","NULL",
     # "NULL","GOTO","LCENTER","NULL","NULL",
     # "NULL","SET","FEF","LEFT","NULL",

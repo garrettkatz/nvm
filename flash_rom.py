@@ -204,13 +204,18 @@ for result_layer in USER_LAYERS + DEVICES:
 # Let op1 bias the gate layer
 v_inst = add_transit(X, Y, with_ops(v_ready,opc="JMP"), cpu_state(ungate = [("GATES","OP1","U")]))
 
-# Jump if true
-v = add_transit(X, Y, with_ops(v_inst, op1="TRUE"), 
-    cpu_state(ungate=cop("MEM","OP2")+cop("MEMH","OP3")))
-add_transit(X, Y, v, V_START)
-
-# Don't jump if false
-add_transit(X, Y, with_ops(v_inst, op1="FALSE"), V_START)
+for jmp_layer in USER_LAYERS:
+    # Overwrite op1 with the layer it names
+    v = add_transit(X, Y, with_ops(v_inst, op1=jmp_layer),
+        cpu_state(ungate=cop("OP1",jmp_layer)))
+    # Let copied value bias gate again
+    v_jmp = add_transit(X, Y, v, cpu_state(ungate = [("GATES","OP1","U")]))
+    # If false, don't jump
+    add_transit(X, Y, with_ops(v_jmp, op1="FALSE"), V_START)
+    # If true, do jump
+    v = add_transit(X, Y, with_ops(v_jmp, op1="TRUE"), 
+        cpu_state(ungate=cop("MEM","OP2")+cop("MEMH","OP3")))
+    add_transit(X, Y, v, V_START)
 
 ###### Flash to ROM
 X = np.concatenate(X,axis=1)
