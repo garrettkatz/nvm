@@ -126,11 +126,7 @@ X, Y = [], [] # growing lists of transitions
 
 ###### Load instruction from mem into cpu, one operand at a time
 
-# V_START = cpu_state(ungate = memu + cop("OPC","MEM"))
-# v = V_START
-# for reg in ["OP1","OP2","OP3"]:
-#     v = add_transit(X, Y, v, cpu_state(ungate = memu + cop(reg,"MEM")))
-V_START = cpu_state(ungate = memu)
+V_START = cpu_state(hidden = -PAD*np.sign(np.random.randn(N_HGATES,1)),ungate = memu)
 v = V_START
 for reg in ["OPC","OP1","OP2","OP3"]:
     v = add_transit(X, Y, v, cpu_state(ungate = memu + cop(reg,"MEM")))
@@ -204,7 +200,7 @@ for result_layer in USER_LAYERS + DEVICES:
 # Let op1 bias the gate layer
 v_inst = add_transit(X, Y, with_ops(v_ready,opc="JMP"), cpu_state(ungate = [("GATES","OP1","U")]))
 
-for jmp_layer in USER_LAYERS:
+for jmp_layer in USER_LAYERS+DEVICES:
     # Overwrite op1 with the layer it names
     v = add_transit(X, Y, with_ops(v_inst, op1=jmp_layer),
         cpu_state(ungate=cop("OP1",jmp_layer)))
@@ -222,19 +218,19 @@ X = np.concatenate(X,axis=1)
 Y = np.concatenate(Y,axis=1)
 W_ROM, Z = flash_rom(X, Y, verbose=True)
 
-do_pause = True
+# do_pause = True
 
-if not do_pause: plt.ion()
+# if not do_pause: plt.ion()
 
-kr = 1
-plt.subplot(1,4,1)
-plt.imshow(np.kron((X-X.min())/(X.max()-X.min()),np.ones((1,kr))), cmap='gray')
-plt.subplot(1,4,2)
-plt.imshow(np.kron((Z-Z.min())/(Z.max()-Z.min()),np.ones((1,kr))), cmap='gray')
-plt.subplot(1,4,3)
-plt.imshow(np.kron((Y-Y.min())/(Y.max()-Y.min()),np.ones((1,kr))), cmap='gray')
-plt.subplot(1,4,4)
-plt.imshow((W_ROM-W_ROM.min())/(W_ROM.max()-W_ROM.min()), cmap='gray')
-plt.show()
+# kr = 1
+# plt.subplot(1,4,1)
+# plt.imshow(np.kron((X-X.min())/(X.max()-X.min()),np.ones((1,kr))), cmap='gray')
+# plt.subplot(1,4,2)
+# plt.imshow(np.kron((Z-Z.min())/(Z.max()-Z.min()),np.ones((1,kr))), cmap='gray')
+# plt.subplot(1,4,3)
+# plt.imshow(np.kron((Y-Y.min())/(Y.max()-Y.min()),np.ones((1,kr))), cmap='gray')
+# plt.subplot(1,4,4)
+# plt.imshow((W_ROM-W_ROM.min())/(W_ROM.max()-W_ROM.min()), cmap='gray')
+# plt.show()
 
-if not do_pause: plt.ioff()
+# if not do_pause: plt.ioff()

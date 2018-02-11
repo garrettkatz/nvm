@@ -3,27 +3,24 @@ import matplotlib.pyplot as plt
 from tokens import N_LAYER, LAYERS, DEVICES, TOKENS, PATTERNS, get_token
 from gates import default_gates, N_GH, PAD
 from flash_rom import cpu_state, V_START
-from aas_nvm import WEIGHTS, tick, print_state
+from aas_nvm import WEIGHTS, tick, print_state, state_string
 
 np.set_printoptions(linewidth=200, formatter = {'float': lambda x: '% .2f'%x})
 
 REG_INIT = {}
-REG_INIT = {"REG1": "TRUE"}
+REG_INIT = {"TC": "NULL"}
 program = [ # label opc op1 op2 op3
-    "LOOP","NOP","NULL","NULL","NULL",
-    # "NULL","SET","FEF","CENTER","NULL",
-    # "NULL","SET","TC","LEFT","NULL",
-    # "NULL","SET","REG1","LEFT","NULL",
-    # "NULL","MOV","REG2","TC","NULL",
-    # "NULL","CMP","REG1","REG1","TC",
-    "NULL","JMP","REG1","LOOP","NULL",
-    # "NULL","IF","REG1","LRIGHT","NULL",
-    # "NULL","GOTO","LCENTER","NULL","NULL",
-    # "NULL","SET","FEF","LEFT","NULL",
-    # "NULL","GOTO","LCENTER","NULL","NULL",
-    # "NULL","SET","FEF","RIGHT","NULL",
-    # "NULL","GOTO","LCENTER","NULL","NULL",
-    "NULL","RET","NULL","NULL","NULL",
+    "NULL","SET","REG2","RIGHT","NULL", # Store right gaze for comparison with TC
+    "NULL","SET","REG3","LEFT","NULL", # Store left gaze for comparison with TC
+    "LOOP","SET","FEF","CENTER","NULL", # Fixate on center
+    "GAZE","CMP","REG1","TC","REG2", # Check if TC detects rightward gaze
+    "NULL","JMP","REG1","LOOK","NULL", # If so, skip to saccade step
+    "NULL","CMP","REG1","TC","REG3", # Check if TC detects leftward gaze
+    "NULL","JMP","REG1","LOOK","NULL", # If so, skip to saccade step
+    "NULL","SET","REG1","TRUE","NULL", # If here, gaze not known yet, prepare unconditional jump
+    "NULL","JMP","REG1","GAZE","NULL", # Check for gaze again
+    "LOOK","MOV","FEF","TC","NULL", # TC detected gaze, overwrite FEF with gaze direction
+    "NULL","RET","NULL","NULL","NULL", # Successful saccade, terminate program
 ]
 
 # encode program transits
@@ -40,6 +37,7 @@ for p in range(3,len(program),5):
 X, Y = V_PROG[:,:-1], V_PROG[:,1:]
 W_RAM = np.linalg.lstsq(X.T, np.arctanh(Y).T, rcond=None)[0].T
 print("Flash ram residual: %f"%np.fabs(Y - np.tanh(W_RAM.dot(X))).max())
+raw_input('continue?')
 
 # ram
 WEIGHTS[("MEM","MEM")] = W_RAM[:N_LAYER,:N_LAYER]
@@ -56,17 +54,21 @@ ACTIVITY["CMPA"] = PAD*np.sign(np.random.randn(N_LAYER,1))
 ACTIVITY["CMPB"] = -ACTIVITY["CMPA"]
 for k,v in REG_INIT.items(): ACTIVITY[k] = TOKENS[v] 
 
-# run nvm
+# run nvm loop
 HISTORY = [ACTIVITY]
-for t in range(100):
-    if t % 2 == 0:
-        print("tick %d:"%t)
-        print_state(ACTIVITY)
-        if get_token(ACTIVITY["OPC"]) == "RET": break
+for t in range(1000):
+    # if t % 2 == 0:
+    #     print("tick %d:"%t)
+    #     print_state(ACTIVITY)
+    #     if get_token(ACTIVITY["OPC"]) == "RET": break
     # if t % 2 == 0 and get_token(ACTIVITY["OPC"]) == "RET":
     #     print("tick %d:"%t)
     #     print_state(ACTIVITY)
     #     break
+    if (np.sign(ACTIVITY["GATES"]) == np.sign(V_START[:N_GH,:])).all():
+        print("tick %3d: %s"%(t,state_string(ACTIVITY)))
+    if t % 2 == 0 and get_token(ACTIVITY["OPC"]) == "RET":
+        break
     
     ACTIVITY = tick(ACTIVITY, WEIGHTS)
     HISTORY.append(ACTIVITY)
@@ -83,10 +85,10 @@ for h in range(len(HISTORY)):
     A[:,[h]] = np.concatenate([HISTORY[h][k] for k in A_LAYERS],axis=0)
     mx[h] = np.concatenate([HISTORY[h][k] for k in A_LAYERS if k[:3] != "CMP"],axis=0).max()
 # mx = np.fabs(A).max(axis=0)
-print(mx)
+# print(mx)
 print((mx.min(), mx.mean(), mx.max()))
 
-kr = 25
+kr = 3
 xt = (np.arange(0, A.shape[1])*kr + kr/2)[::int(A.shape[1]/10)]
 xl = np.array(["%d"%t for t in range(A.shape[1])])[::int(A.shape[1]/10)]
 yt = np.array([HISTORY[0][k].shape[0] for k in A_LAYERS])

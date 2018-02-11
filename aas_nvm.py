@@ -18,13 +18,17 @@ WEIGHTS[("GATES","OP1")] = W_ROM[:,N_GH+1*N_LAYER:N_GH+2*N_LAYER]
 WEIGHTS[("GATES","OP2")] = W_ROM[:,N_GH+2*N_LAYER:N_GH+3*N_LAYER]
 WEIGHTS[("GATES","OP3")] = W_ROM[:,N_GH+3*N_LAYER:N_GH+4*N_LAYER]
 
-def print_state(activity):
+def state_string(activity):
     hr = ["%s:%s"%(k,get_token(activity[k])) for k in [
-        "OPC","OP1","OP2","OP3","MEM","REG1","REG2","REG3","FEF","TC"
+        "OPC","OP1","OP2","OP3","REG1","REG2","REG3","FEF","TC"
     ]]
-    print(" ".join(hr))
-    open_gates = get_open_gates(activity["GATES"])
-    print("open gates: " + str(tuple(open_gates)))
+    s = " ".join(hr)
+    # open_gates = get_open_gates(activity["GATES"])
+    # s = s + "%nopen gates: " + str(tuple(open_gates)))
+    return s
+
+def print_state(activity):
+    print(state_string(activity))
 
 def tick(activity, weights):
 

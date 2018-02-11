@@ -3,7 +3,7 @@ empirical experiments:
     noise injection
 
 noise injection
-get rid of direct gate<-gate?
+post-flash tokens
 
 rank problems with to,from:
     tried a little 2x2 on paper: to1, to2, fr1, fr2.
