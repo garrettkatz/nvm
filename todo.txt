@@ -2,8 +2,10 @@ empirical experiments:
     how size of N_HGATES (and N_LAYER?) affects stability in long loops
     noise injection
 
-noise injection
 post-flash tokens
+call/return instructions
+local ram learning
+more robustness to noise?
 
 rank problems with to,from:
     tried a little 2x2 on paper: to1, to2, fr1, fr2.

@@ -1,6 +1,6 @@
 import numpy as np
 
-N_LAYER = 48
+N_LAYER = 64
 
 INSTRUCTIONS = ["NOP","SET","MOV","CMP","JMP","RET"]
 CPU_LAYERS = ["OPC","OP1","OP2","OP3","CMPA","CMPB","CMPH","CMPO","MEM","MEMH","NOTI","NOTO"]

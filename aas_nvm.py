@@ -18,6 +18,9 @@ WEIGHTS[("GATES","OP1")] = W_ROM[:,N_GH+1*N_LAYER:N_GH+2*N_LAYER]
 WEIGHTS[("GATES","OP2")] = W_ROM[:,N_GH+2*N_LAYER:N_GH+3*N_LAYER]
 WEIGHTS[("GATES","OP3")] = W_ROM[:,N_GH+3*N_LAYER:N_GH+4*N_LAYER]
 
+CTS_NOISE = 0.000*(1.-PAD)
+FLIP_NOISE = 0.000
+
 def state_string(activity):
     hr = ["%s:%s"%(k,get_token(activity[k])) for k in [
         "OPC","OP1","OP2","OP3","REG1","REG2","REG3","FEF","TC"
@@ -56,5 +59,9 @@ def tick(activity, weights):
     
     for layer in activity_new:
         activity_new[layer] = np.tanh(activity_new[layer])
+        # inject noise
+        flip = (np.random.rand(activity_new[layer].shape[0]) < FLIP_NOISE)
+        activity_new[layer][flip,:] = -activity_new[layer][flip,:]
+        activity_new[layer] += np.random.randn(*activity_new[layer].shape)*CTS_NOISE
 
     return activity_new

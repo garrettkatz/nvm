@@ -8,7 +8,7 @@ from aas_nvm import WEIGHTS, tick, print_state, state_string
 np.set_printoptions(linewidth=200, formatter = {'float': lambda x: '% .2f'%x})
 
 REG_INIT = {}
-REG_INIT = {"TC": "NULL"}
+REG_INIT = {"TC": "RIGHT"}
 program = [ # label opc op1 op2 op3
     "NULL","SET","REG2","RIGHT","NULL", # Store right gaze for comparison with TC
     "NULL","SET","REG3","LEFT","NULL", # Store left gaze for comparison with TC
@@ -36,7 +36,11 @@ for p in range(3,len(program),5):
 # flash ram with program memory
 X, Y = V_PROG[:,:-1], V_PROG[:,1:]
 W_RAM = np.linalg.lstsq(X.T, np.arctanh(Y).T, rcond=None)[0].T
+# print("PROG X shape:")
+# print(X.shape)
+# W_RAM = np.arctanh(Y).dot(X.T) # local
 print("Flash ram residual: %f"%np.fabs(Y - np.tanh(W_RAM.dot(X))).max())
+print("Flash ram sign diffs: %d"%(np.sign(Y) != np.sign(np.tanh(W_RAM.dot(X)))).sum())
 raw_input('continue?')
 
 # ram
@@ -77,7 +81,7 @@ for t in range(1000):
 #     print("tick %d:"%t)
 #     print_state(ACTIVITY)
 
-A_LAYERS = ["GATES","OPC","OP1","OP2","OP3","CMPA","CMPB","CMPH","CMPO","REG1","REG2","REG3","FEF","TC"]
+A_LAYERS = ["MEM","MEMH","GATES","OPC","OP1","OP2","OP3","CMPA","CMPB","CMPH","CMPO","REG1","REG2","REG3","FEF","TC"]
 
 A = np.zeros((N_GH + (len(A_LAYERS)-1)*N_LAYER,len(HISTORY)))
 mx = np.zeros(len(HISTORY))
