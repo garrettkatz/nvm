@@ -10,7 +10,7 @@ WEIGHTS = {}
 # relays
 for to_layer in LAYERS + DEVICES:
     for from_layer in LAYERS + DEVICES:
-        WEIGHTS[(to_layer,from_layer)] = np.eye(N_LAYER,N_LAYER) * np.arctanh(PAD)/PAD
+        WEIGHTS[(to_layer,from_layer)] = "relay" #np.eye(N_LAYER,N_LAYER) * np.arctanh(PAD)/PAD
 # RAM (will be learned)
 WEIGHTS[("MEM","MEM")] = np.zeros((N_LAYER, N_LAYER))
 WEIGHTS[("MEM","MEMH")] = np.zeros((N_LAYER, N_LAYER))
@@ -47,14 +47,16 @@ def tick(activity, weights):
         u = current_gates[(to_layer, from_layer, "U")]
         u = float(u > 0)
         w = weights[(to_layer, from_layer)]
-        w = u*w
-        wv = w.dot(activity[from_layer])
+        if w == "relay":
+            wv = u * np.arctanh(PAD)/PAD * activity[from_layer]
+        else:
+            wv = u * w.dot(activity[from_layer])
         if to_layer == from_layer:
             c = current_gates[(to_layer, from_layer, "C")]
             c = float(c > 0)
             wv += (1-u)*(1-c)*np.arctanh(PAD)/PAD * activity[from_layer]
         activity_new[to_layer] += wv
-    
+
     # handle compare specially, never gated
     cmp_e = 1./(2.*N_LAYER)
     w_cmph = np.arctanh(1. - cmp_e) / (PAD / 2.)**2
