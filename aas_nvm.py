@@ -48,11 +48,12 @@ def tick(activity, weights):
         u = float(u > 0)
         w = weights[(to_layer, from_layer)]
         w = u*w
+        wv = w.dot(activity[from_layer])
         if to_layer == from_layer:
             c = current_gates[(to_layer, from_layer, "C")]
             c = float(c > 0)
-            w += (1-u)*(1-c)*np.eye(*w.shape) * np.arctanh(PAD)/PAD
-        activity_new[to_layer] += w.dot(activity[from_layer])
+            wv += (1-u)*(1-c)*np.arctanh(PAD)/PAD * activity[from_layer]
+        activity_new[to_layer] += wv
     
     # handle compare specially, never gated
     cmp_e = 1./(2.*N_LAYER)
