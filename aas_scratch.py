@@ -35,7 +35,9 @@ for p in range(3,len(program),5):
 
 # flash ram with program memory
 X, Y = V_PROG[:,:-1], V_PROG[:,1:]
-W_RAM = np.linalg.lstsq(X.T, np.arctanh(Y).T, rcond=None)[0].T
+W_RAM = np.linalg.lstsq(X[N_LAYER:,:].T, np.arctanh(Y).T, rcond=None)[0].T
+W_RAM = np.concatenate((np.zeros((2*N_LAYER,N_LAYER)), W_RAM), axis=1)
+
 # print("PROG X shape:")
 # print(X.shape)
 # W_RAM = np.arctanh(Y).dot(X.T) # local

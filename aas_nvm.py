@@ -11,6 +11,11 @@ WEIGHTS = {}
 for to_layer in LAYERS + DEVICES:
     for from_layer in LAYERS + DEVICES:
         WEIGHTS[(to_layer,from_layer)] = np.eye(N_LAYER,N_LAYER) * np.arctanh(PAD)/PAD
+# RAM (will be learned)
+WEIGHTS[("MEM","MEM")] = np.zeros((N_LAYER, N_LAYER))
+WEIGHTS[("MEM","MEMH")] = np.zeros((N_LAYER, N_LAYER))
+WEIGHTS[("MEMH","MEM")] = np.zeros((N_LAYER, N_LAYER))
+WEIGHTS[("MEMH","MEMH")] = np.zeros((N_LAYER, N_LAYER))
 # ROM
 WEIGHTS[("GATES","GATES")] = W_ROM[:,:N_GH]
 WEIGHTS[("GATES","OPC")] = W_ROM[:,N_GH+0*N_LAYER:N_GH+1*N_LAYER]
