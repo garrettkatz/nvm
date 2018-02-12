@@ -1,6 +1,6 @@
 import numpy as np
 
-N_LAYER = 64
+N_LAYER = 1024
 
 INSTRUCTIONS = ["NOP","SET","MOV","CMP","JMP","RET"]
 CPU_LAYERS = ["OPC","OP1","OP2","OP3","CMPA","CMPB","CMPH","CMPO","MEM","MEMH","NOTI","NOTO"]
@@ -17,6 +17,11 @@ TOKENS["TRUE"] = np.ones((N_LAYER,1))
 TOKENS["FALSE"] = -np.ones((N_LAYER,1))
 
 PATTERNS = {tuple(np.sign(TOKENS[t]).flatten()): t for t in TOKENS}
+
+def add_token(t, v):
+    TOKENS[t] = np.sign(v)
+    PATTERNS[tuple(np.sign(v).flatten())] = t
+
 def get_token(v):
     k = tuple(np.sign(v).flatten())
     if k in PATTERNS: return PATTERNS[k]

@@ -4,7 +4,6 @@ empirical experiments:
 
 post-flash tokens
 call/return instructions
-local ram learning
 more robustness to noise?
 
 rank problems with to,from:

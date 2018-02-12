@@ -1,5 +1,6 @@
 import numpy as np
-from tokens import get_token, N_LAYER, LAYERS, DEVICES
+import scipy.sparse as sp
+from tokens import get_token, N_LAYER, LAYERS, USER_LAYERS, DEVICES
 from gates import get_gates, get_open_gates, PAD, N_GH
 from flash_rom import W_ROM
 
@@ -7,10 +8,22 @@ from flash_rom import W_ROM
 
 # dict of inter/intra layer weight matrices
 WEIGHTS = {}
+
+# copy connections
+USR = USER_LAYERS + DEVICES
+relays = []
+relays += [(opx, "MEM") for opx in ["OPC","OP1","OP2","OP3"]] # MEM to ops (clock)
+relays += [(usr, "OP2") for usr in USR] # op2 to user (set)
+relays += [(usr1, usr2) for usr1 in USR for usr2 in USR] # user to each other (mov)
+relays += [("CMP"+ab, usr) for ab in "AB" for usr in USR] # user to cmpa/b (cmp)
+relays += [(usr, "CMPO") for usr in USR] # cmpo to user (cmp)
+relays += [("OP1", usr) for usr in USR] # user to op1 (jmp)
+relays += [("MEM"+h, "OP"+o) for h in ["","H"] for o in "23"] # op2 to MEM, op3 to MEMH (jmp)
+
 # relays
-for to_layer in LAYERS + DEVICES:
-    for from_layer in LAYERS + DEVICES:
-        WEIGHTS[(to_layer,from_layer)] = np.eye(N_LAYER,N_LAYER) * np.arctanh(PAD)/PAD
+for (to_layer, from_layer) in relays:
+    WEIGHTS[(to_layer,from_layer)] = sp.eye(N_LAYER) * np.arctanh(PAD)/PAD
+
 # ROM
 WEIGHTS[("GATES","GATES")] = W_ROM[:,:N_GH]
 WEIGHTS[("GATES","OPC")] = W_ROM[:,N_GH+0*N_LAYER:N_GH+1*N_LAYER]
@@ -46,7 +59,7 @@ def tick(activity, weights):
         if to_layer == from_layer:
             c = current_gates[(to_layer, from_layer, "C")]
             c = float(c > 0)
-            w += (1-u)*(1-c)*np.eye(*w.shape) * np.arctanh(PAD)/PAD
+            w += (1-u)*(1-c)*sp.eye(*w.shape) * np.arctanh(PAD)/PAD
         activity_new[to_layer] += w.dot(activity[from_layer])
     
     # handle compare specially, never gated
@@ -65,3 +78,8 @@ def tick(activity, weights):
         activity_new[layer] += np.random.randn(*activity_new[layer].shape)*CTS_NOISE
 
     return activity_new
+
+def hebb_update(x, y, w):
+    N = x.shape[0]
+    w += np.arctanh(y[:,[0]]) * x[:,[0]].T #/(N*PAD**2)
+    return w

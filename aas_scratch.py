@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 from tokens import N_LAYER, LAYERS, DEVICES, TOKENS, PATTERNS, get_token
 from gates import default_gates, N_GH, PAD
 from flash_rom import cpu_state, V_START
-from aas_nvm import WEIGHTS, tick, print_state, state_string
+from aas_nvm import WEIGHTS, tick, print_state, state_string, hebb_update
 
 np.set_printoptions(linewidth=200, formatter = {'float': lambda x: '% .2f'%x})
 
@@ -35,19 +35,19 @@ for p in range(3,len(program),5):
 
 # flash ram with program memory
 X, Y = V_PROG[:,:-1], V_PROG[:,1:]
-W_RAM = np.linalg.lstsq(X.T, np.arctanh(Y).T, rcond=None)[0].T
-# print("PROG X shape:")
-# print(X.shape)
-# W_RAM = np.arctanh(Y).dot(X.T) # local
-print("Flash ram residual: %f"%np.fabs(Y - np.tanh(W_RAM.dot(X))).max())
-print("Flash ram sign diffs: %d"%(np.sign(Y) != np.sign(np.tanh(W_RAM.dot(X)))).sum())
+W_RAM = np.zeros((N_LAYER*2, N_LAYER))
+for p in range(X.shape[1]):
+    W_RAM = hebb_update(X[N_LAYER:,[p]], Y[:,[p]], W_RAM)
+    
+# W_RAM = np.linalg.lstsq(X.T, np.arctanh(Y).T, rcond=None)[0].T
+Y_ = np.tanh(W_RAM.dot(X[N_LAYER:,:]))
+print("Flash ram residual: %f"%np.fabs(Y - Y_).max())
+print("Flash ram sign diffs: %d"%(np.sign(Y) != np.sign(Y_)).sum())
 raw_input('continue?')
 
 # ram
-WEIGHTS[("MEM","MEM")] = W_RAM[:N_LAYER,:N_LAYER]
-WEIGHTS[("MEM","MEMH")] = W_RAM[:N_LAYER,N_LAYER:]
-WEIGHTS[("MEMH","MEM")] = W_RAM[N_LAYER:,:N_LAYER]
-WEIGHTS[("MEMH","MEMH")] = W_RAM[N_LAYER:,N_LAYER:]
+WEIGHTS[("MEM","MEMH")] = W_RAM[:N_LAYER,:]
+WEIGHTS[("MEMH","MEMH")] = W_RAM[N_LAYER:,:]
 
 # initialize cpu activity
 ACTIVITY = {k: -PAD*np.ones((N_LAYER,1)) for k in LAYERS+DEVICES}
@@ -60,11 +60,11 @@ for k,v in REG_INIT.items(): ACTIVITY[k] = TOKENS[v]
 
 # run nvm loop
 HISTORY = [ACTIVITY]
-for t in range(1000):
-    # if t % 2 == 0:
-    #     print("tick %d:"%t)
-    #     print_state(ACTIVITY)
-    #     if get_token(ACTIVITY["OPC"]) == "RET": break
+for t in range(10):
+    if t % 2 == 0:
+        print("tick %d:"%t)
+        print_state(ACTIVITY)
+        if get_token(ACTIVITY["OPC"]) == "RET": break
     # if t % 2 == 0 and get_token(ACTIVITY["OPC"]) == "RET":
     #     print("tick %d:"%t)
     #     print_state(ACTIVITY)
@@ -92,7 +92,7 @@ for h in range(len(HISTORY)):
 # print(mx)
 print((mx.min(), mx.mean(), mx.max()))
 
-kr = 3
+kr = N_LAYER
 xt = (np.arange(0, A.shape[1])*kr + kr/2)[::int(A.shape[1]/10)]
 xl = np.array(["%d"%t for t in range(A.shape[1])])[::int(A.shape[1]/10)]
 yt = np.array([HISTORY[0][k].shape[0] for k in A_LAYERS])
