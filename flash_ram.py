@@ -2,6 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from tokens import N_LAYER, LAYERS, DEVICES, TOKENS, PATTERNS, add_token, get_token
 from gates import PAD
+from aas_nvm import hebb_update
 
 np.set_printoptions(linewidth=200, formatter = {'float': lambda x: '% .2f'%x})
 
@@ -10,7 +11,7 @@ program = [ # label opc op1 op2 op3
     "NULL","SET","REG3","LEFT","NULL", # Store left gaze for comparison with TC
     "LOOP","SET","FEF","CENTER","NULL", # Fixate on center
     "GAZE","CMP","REG1","TC","REG2", # Check if TC detects rightward gaze
-    "NULL","JMP","REG1","LOOP","NULL", #!!!!!!!!!!CHANGES If so, skip to saccade step
+    "NULL","JMP","REG1","LOOK","NULL", # If so, skip to saccade step
     "NULL","CMP","REG1","TC","REG3", # Check if TC detects leftward gaze
     "NULL","JMP","REG1","LOOK","NULL", # If so, skip to saccade step
     "NULL","SET","REG1","TRUE","NULL", # If here, gaze not known yet, prepare unconditional jump
@@ -18,7 +19,7 @@ program = [ # label opc op1 op2 op3
     "LOOK","MOV","FEF","TC","NULL", # TC detected gaze, overwrite FEF with gaze direction
     "NULL","RET","NULL","NULL","NULL", # Successful saccade, terminate program
 ]
-program = program[:25]
+# program = program[:25]
 P = len(program)
 
 # encode program transits
@@ -80,11 +81,11 @@ learn = learn_ahebb_h
 X, Y = V_PROG[:,:-1], V_PROG[:,1:]
 W_RAM = learn(X, Y)
 resid, vdiff, hdiff, diff = perf(W_RAM, X, Y)
-print("token transit counts:")
-ttc = np.array([len(token_transits[p]) for p in program[:-1]])
-print(ttc)
-# print('cc=%f'%np.corrcoef(ttc, vdiff))
-print(np.corrcoef(ttc, vdiff))
+# print("token transit counts:")
+# ttc = np.array([len(token_transits[p]) for p in program[:-1]])
+# print(ttc)
+# # print('cc=%f'%np.corrcoef(ttc, vdiff))
+# print(np.corrcoef(ttc, vdiff))
 # print("PROG X shape:")
 # print(X.shape)
 # W_RAM = np.arctanh(Y).dot(X.T) # local
@@ -96,7 +97,7 @@ for t in range(1,P):
     v = np.tanh(W_RAM.dot(v))
     V[:,[t]] = v
 
-kr = 3*N_LAYER/P
+kr = 3 #*N_LAYER/P
 xt = np.arange(P)*kr + kr/2
 xl1 = np.array(["%d\n%s"%(p,get_token(V_PROG[:N_LAYER,[p]])) for p in range(P)])
 xl2 = np.array(["%d\n%s"%(p,get_token(V[:N_LAYER,[p]])) for p in range(P)])

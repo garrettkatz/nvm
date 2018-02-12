@@ -118,7 +118,8 @@ def flash_rom(X, Y, verbose=True):
 cop = lambda t, f: [(t,f,"U"),(t,t,"C")]
 
 # gates for full memory (value and hidden) layer updates
-memu = [("MEM"+a,"MEM"+b,"U") for a in ["","H"] for b in ["","H"]]
+# memu = [("MEM"+a,"MEM"+b,"U") for a in ["","H"] for b in ["","H"]]
+memu = [("MEM","MEM","C"),("MEM","MEMH","U"),("MEMH","MEMH","U")]
 
 ######## FLASH ROM #########
 

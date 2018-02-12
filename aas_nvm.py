@@ -11,7 +11,7 @@ WEIGHTS = {}
 
 # copy connections
 USR = USER_LAYERS + DEVICES
-relays = []
+relays = [(layer,layer) for layer in LAYERS+DEVICES] # self connections
 relays += [(opx, "MEM") for opx in ["OPC","OP1","OP2","OP3"]] # MEM to ops (clock)
 relays += [(usr, "OP2") for usr in USR] # op2 to user (set)
 relays += [(usr1, usr2) for usr1 in USR for usr2 in USR] # user to each other (mov)
@@ -36,17 +36,21 @@ FLIP_NOISE = 0.000
 
 def state_string(activity):
     hr = ["%s:%s"%(k,get_token(activity[k])) for k in [
-        "OPC","OP1","OP2","OP3","REG1","REG2","REG3","FEF","TC"
+        "OPC","OP1","OP2","OP3","MEM","REG1","REG2","REG3","FEF","TC"
     ]]
     s = " ".join(hr)
-    # open_gates = get_open_gates(activity["GATES"])
-    # s = s + "%nopen gates: " + str(tuple(open_gates)))
+    open_gates = get_open_gates(activity["GATES"])
+    s = s + "\nopen gates: " + str(tuple(open_gates))
     return s
 
 def print_state(activity):
     print(state_string(activity))
 
 def tick(activity, weights):
+
+    # # stabilize memory
+    # activity["MEM"] = PAD*np.sign(activity["MEM"])
+    # activity["MEMH"] = PAD*np.sign(activity["MEMH"])
 
     # NVM tick
     current_gates = get_gates(activity["GATES"])
@@ -56,11 +60,12 @@ def tick(activity, weights):
         u = float(u > 0)
         w = weights[(to_layer, from_layer)]
         w = u*w
+        wv = w.dot(activity[from_layer])
         if to_layer == from_layer:
             c = current_gates[(to_layer, from_layer, "C")]
             c = float(c > 0)
-            w += (1-u)*(1-c)*sp.eye(*w.shape) * np.arctanh(PAD)/PAD
-        activity_new[to_layer] += w.dot(activity[from_layer])
+            wv += (1-u)*(1-c)*np.arctanh(PAD)/PAD * activity[from_layer]
+        activity_new[to_layer] += wv
     
     # handle compare specially, never gated
     cmp_e = 1./(2.*N_LAYER)
@@ -81,5 +86,5 @@ def tick(activity, weights):
 
 def hebb_update(x, y, w):
     N = x.shape[0]
-    w += np.arctanh(y[:,[0]]) * x[:,[0]].T #/(N*PAD**2)
+    w += np.arctanh(y[:,[0]]) * x[:,[0]].T /(N*PAD**2)
     return w
