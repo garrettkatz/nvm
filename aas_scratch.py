@@ -34,22 +34,20 @@ for p in range(3,len(program),5):
         V_PROG[:N_LAYER,p+1] = V_PROG[N_LAYER:, labels[program[p]]]
 
 # flash ram with program memory
-X, Y = V_PROG[:,:-1], V_PROG[:,1:]
-W_RAM = np.linalg.lstsq(X[N_LAYER:,:].T, np.arctanh(Y).T, rcond=None)[0].T
-W_RAM = np.concatenate((np.zeros((2*N_LAYER,N_LAYER)), W_RAM), axis=1)
+X, Y = V_PROG[N_LAYER:,:-1], V_PROG[:,1:]
+W_RAM = np.linalg.lstsq(X.T, np.arctanh(Y).T, rcond=None)[0].T
 
 # print("PROG X shape:")
 # print(X.shape)
 # W_RAM = np.arctanh(Y).dot(X.T) # local
+
 print("Flash ram residual: %f"%np.fabs(Y - np.tanh(W_RAM.dot(X))).max())
 print("Flash ram sign diffs: %d"%(np.sign(Y) != np.sign(np.tanh(W_RAM.dot(X)))).sum())
 raw_input('continue?')
 
 # ram
-WEIGHTS[("MEM","MEM")] = W_RAM[:N_LAYER,:N_LAYER]
-WEIGHTS[("MEM","MEMH")] = W_RAM[:N_LAYER,N_LAYER:]
-WEIGHTS[("MEMH","MEM")] = W_RAM[N_LAYER:,:N_LAYER]
-WEIGHTS[("MEMH","MEMH")] = W_RAM[N_LAYER:,N_LAYER:]
+WEIGHTS[("MEM","MEMH")] = W_RAM[:N_LAYER,:]
+WEIGHTS[("MEMH","MEMH")] = W_RAM[N_LAYER:,:]
 
 # initialize cpu activity
 ACTIVITY = {k: -PAD*np.ones((N_LAYER,1)) for k in LAYERS+DEVICES}
