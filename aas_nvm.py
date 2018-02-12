@@ -28,11 +28,12 @@ FLIP_NOISE = 0.000
 
 def state_string(activity):
     hr = ["%s:%s"%(k,get_token(activity[k])) for k in [
-        "OPC","OP1","OP2","OP3","REG1","REG2","REG3","FEF","TC"
+        "MEM","OPC","OP1","OP2","OP3","REG1","REG2","REG3","FEF","TC"
     ]]
     s = " ".join(hr)
-    # open_gates = get_open_gates(activity["GATES"])
-    # s = s + "%nopen gates: " + str(tuple(open_gates)))
+    open_gates = get_open_gates(activity["GATES"])
+    s += "\nopen gates: "
+    s += ", ".join(["%s-%s-%s"%og for og in open_gates])
     return s
 
 def print_state(activity):
@@ -48,11 +49,14 @@ def tick(activity, weights):
         u = float(u > 0)
         w = weights[(to_layer, from_layer)]
         if type(w) == str and w == "none":
-            wv = 0 #np.zeros(activity[from_layer].shape)
+            wv = 0
         elif type(w) == str and w == "relay":
             wv = u * np.arctanh(PAD)/PAD * activity[from_layer]
         else:
             wv = u * w.dot(activity[from_layer])
+            # # temp memory test
+            # if to_layer[:3] == "MEM" and from_layer == "MEMH":
+            #     wv = np.arctanh(PAD)*np.sign(wv)
         if to_layer == from_layer:
             c = current_gates[(to_layer, from_layer, "C")]
             c = float(c > 0)

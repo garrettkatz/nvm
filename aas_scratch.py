@@ -22,6 +22,7 @@ program = [ # label opc op1 op2 op3
     "LOOK","MOV","FEF","TC","NULL", # TC detected gaze, overwrite FEF with gaze direction
     "NULL","RET","NULL","NULL","NULL", # Successful saccade, terminate program
 ]
+program = program[:5*3] + program[-5:]
 
 # encode program transits
 V_PROG = PAD*np.sign(np.concatenate(tuple(TOKENS[t] for t in program), axis=1)) # program
@@ -35,13 +36,15 @@ for p in range(3,len(program),5):
 
 # flash ram with program memory
 X, Y = V_PROG[N_LAYER:,:-1], V_PROG[:,1:]
+
+# global
 W_RAM = np.linalg.lstsq(X.T, np.arctanh(Y).T, rcond=None)[0].T
 
-# print("PROG X shape:")
-# print(X.shape)
-# W_RAM = np.arctanh(Y).dot(X.T) # local
+# local
+W_RAM = np.arctanh(Y).dot(X.T) / N_LAYER #/ (N_LAYER*PAD**2)
 
-print("Flash ram residual: %f"%np.fabs(Y - np.tanh(W_RAM.dot(X))).max())
+print("Flash ram residual max: %f"%np.fabs(Y - np.tanh(W_RAM.dot(X))).max())
+print("Flash ram residual mad: %f"%np.fabs(Y - np.tanh(W_RAM.dot(X))).mean())
 print("Flash ram sign diffs: %d"%(np.sign(Y) != np.sign(np.tanh(W_RAM.dot(X)))).sum())
 raw_input('continue?')
 
@@ -60,19 +63,20 @@ for k,v in REG_INIT.items(): ACTIVITY[k] = TOKENS[v]
 
 # run nvm loop
 HISTORY = [ACTIVITY]
-for t in range(1000):
-    # if t % 2 == 0:
-    #     print("tick %d:"%t)
-    #     print_state(ACTIVITY)
-    #     if get_token(ACTIVITY["OPC"]) == "RET": break
-    # if t % 2 == 0 and get_token(ACTIVITY["OPC"]) == "RET":
-    #     print("tick %d:"%t)
-    #     print_state(ACTIVITY)
-    #     break
-    if (np.sign(ACTIVITY["GATES"]) == np.sign(V_START[:N_GH,:])).all():
-        print("tick %3d: %s"%(t,state_string(ACTIVITY)))
-    if t % 2 == 0 and get_token(ACTIVITY["OPC"]) == "RET":
-        break
+show_each = True
+for t in range(100):
+    if show_each:
+        if t % 2 == 0:
+            print("tick %d:"%t)
+            if (ACTIVITY["GATES"] * V_START[:N_GH,:] >= 0).all():
+                print("Starting next instruction")
+            print_state(ACTIVITY)
+            if get_token(ACTIVITY["OPC"]) == "RET": break
+    else:
+        if (np.sign(ACTIVITY["GATES"]) == np.sign(V_START[:N_GH,:])).all():
+            print("tick %3d: %s"%(t,state_string(ACTIVITY)))
+        if t % 2 == 0 and get_token(ACTIVITY["OPC"]) == "RET":
+            break
     
     ACTIVITY = tick(ACTIVITY, WEIGHTS)
     HISTORY.append(ACTIVITY)
@@ -92,7 +96,7 @@ for h in range(len(HISTORY)):
 # print(mx)
 print((mx.min(), mx.mean(), mx.max()))
 
-kr = 3
+kr = 10
 xt = (np.arange(0, A.shape[1])*kr + kr/2)[::int(A.shape[1]/10)]
 xl = np.array(["%d"%t for t in range(A.shape[1])])[::int(A.shape[1]/10)]
 yt = np.array([HISTORY[0][k].shape[0] for k in A_LAYERS])
