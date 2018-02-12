@@ -22,7 +22,6 @@ program = [ # label opc op1 op2 op3
     "LOOK","MOV","FEF","TC","NULL", # TC detected gaze, overwrite FEF with gaze direction
     "NULL","RET","NULL","NULL","NULL", # Successful saccade, terminate program
 ]
-program = program[:5*3] + program[-5:]
 
 # encode program transits
 V_PROG = PAD*np.sign(np.concatenate(tuple(TOKENS[t] for t in program), axis=1)) # program
@@ -37,8 +36,8 @@ for p in range(3,len(program),5):
 # flash ram with program memory
 X, Y = V_PROG[N_LAYER:,:-1], V_PROG[:,1:]
 
-# global
-W_RAM = np.linalg.lstsq(X.T, np.arctanh(Y).T, rcond=None)[0].T
+# # global
+# W_RAM = np.linalg.lstsq(X.T, np.arctanh(Y).T, rcond=None)[0].T
 
 # local
 W_RAM = np.arctanh(Y).dot(X.T) / N_LAYER #/ (N_LAYER*PAD**2)
@@ -63,8 +62,8 @@ for k,v in REG_INIT.items(): ACTIVITY[k] = TOKENS[v]
 
 # run nvm loop
 HISTORY = [ACTIVITY]
-show_each = True
-for t in range(100):
+show_each = False
+for t in range(200):
     if show_each:
         if t % 2 == 0:
             print("tick %d:"%t)
@@ -76,14 +75,12 @@ for t in range(100):
         if (np.sign(ACTIVITY["GATES"]) == np.sign(V_START[:N_GH,:])).all():
             print("tick %3d: %s"%(t,state_string(ACTIVITY)))
         if t % 2 == 0 and get_token(ACTIVITY["OPC"]) == "RET":
+            print("tick %3d: %s"%(t,state_string(ACTIVITY)))
             break
     
     ACTIVITY = tick(ACTIVITY, WEIGHTS)
     HISTORY.append(ACTIVITY)
 
-# if not get_token(ACTIVITY["OPC"]) == "RET":
-#     print("tick %d:"%t)
-#     print_state(ACTIVITY)
 
 A_LAYERS = ["MEM","MEMH","GATES","OPC","OP1","OP2","OP3","CMPA","CMPB","CMPH","CMPO","REG1","REG2","REG3","FEF","TC"]
 
@@ -96,14 +93,34 @@ for h in range(len(HISTORY)):
 # print(mx)
 print((mx.min(), mx.mean(), mx.max()))
 
-kr = 10
-xt = (np.arange(0, A.shape[1])*kr + kr/2)[::int(A.shape[1]/10)]
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+xt = (np.arange(A.shape[1]) + .5)[::int(A.shape[1]/10)]
 xl = np.array(["%d"%t for t in range(A.shape[1])])[::int(A.shape[1]/10)]
 yt = np.array([HISTORY[0][k].shape[0] for k in A_LAYERS])
 yt = yt.cumsum() - yt/2
 
 plt.figure()
-plt.imshow(np.kron((A-A.min())/(A.max()-A.min()),np.ones((1,kr))), cmap='gray')
+plt.imshow(A, cmap='gray', vmin=-1, vmax=1, aspect='auto')
 plt.xticks(xt, xl)
 plt.yticks(yt, A_LAYERS)
 plt.show()

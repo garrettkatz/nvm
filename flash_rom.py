@@ -129,7 +129,11 @@ X, Y = [], [] # growing lists of transitions
 V_START = cpu_state(hidden = -PAD*np.sign(np.random.randn(N_HGATES,1)),ungate = memu)
 v = V_START
 for reg in ["OPC","OP1","OP2","OP3"]:
+    # load op from memory and step memory
     v = add_transit(X, Y, v, cpu_state(ungate = memu + cop(reg,"MEM")))
+    # stabilize memory for a few iterations
+    for stabilize in range(1):
+        v = add_transit(X, Y, v, cpu_state())
 
 # Let opcode bias the gate layer
 v = add_transit(X, Y, v, cpu_state(ungate = [("GATES","OPC","U")]))

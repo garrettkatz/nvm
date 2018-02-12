@@ -54,9 +54,6 @@ def tick(activity, weights):
             wv = u * np.arctanh(PAD)/PAD * activity[from_layer]
         else:
             wv = u * w.dot(activity[from_layer])
-            # # temp memory test
-            # if to_layer[:3] == "MEM" and from_layer == "MEMH":
-            #     wv = np.arctanh(PAD)*np.sign(wv)
         if to_layer == from_layer:
             c = current_gates[(to_layer, from_layer, "C")]
             c = float(c > 0)
