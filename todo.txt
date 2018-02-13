@@ -2,13 +2,13 @@ empirical experiments:
     how size of N_HGATES (and N_LAYER?) affects stability in long loops
     noise injection
 
+memory read/write and n-back program
 post-flash tokens
 call/return instructions
-local ram learning
 more robustness to noise?
 
 problems with local learning:
-    even with 0 sign changes in one-step test, residual errors build up.  was able to recover desired behavior with "temp memory test" branch inside tick().
+    even with 0 sign changes in one-step test, residual errors build up.  was able to recover desired behavior with "temp memory test" branch inside tick(). (one of the last commits on monday feb 12)
 
 rank problems with to,from:
     tried a little 2x2 on paper: to1, to2, fr1, fr2.

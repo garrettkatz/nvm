@@ -8,7 +8,7 @@ from aas_nvm import WEIGHTS, tick, print_state, state_string, weight_update
 np.set_printoptions(linewidth=200, formatter = {'float': lambda x: '% .2f'%x})
 
 REG_INIT = {}
-REG_INIT = {"TC": "LEFT"}
+REG_INIT = {"TC": "NULL"}
 program = [ # label opc op1 op2 op3
     "NULL","SET","REG2","RIGHT","NULL", # Store right gaze for comparison with TC
     "NULL","SET","REG3","LEFT","NULL", # Store left gaze for comparison with TC
@@ -68,7 +68,7 @@ for k,v in REG_INIT.items(): ACTIVITY[k] = TOKENS[v]
 # run nvm loop
 HISTORY = [ACTIVITY]
 show_each = False
-for t in range(600):
+for t in range(1000):
     if show_each:
         if t % 2 == 0:
             print("tick %d:"%t)
