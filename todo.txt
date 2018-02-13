@@ -2,9 +2,13 @@ empirical experiments:
     how size of N_HGATES (and N_LAYER?) affects stability in long loops
     noise injection
 
+why does loop but not look label show up in xl?
+
+synapto aas
 memory read/write and n-back program
 call/return instructions
 look into memh larger than n_layer (need non-square W's mapping up and down)
+consider no g->g, only hg -> g
 post-flash tokens
 more robustness to noise?
 
@@ -33,5 +37,5 @@ lp and learn_seqs one step further
 show weight matrices in viz
 handle activity gating outside the transition function?
 
-competition idea: delta w_ij proportional to sum_t x_i^t W_ij^t x_j^t over recent t.  If this number is large, x_j is in agreement with others about the affect on x_i.  If it is small, x_j is in disagreement, competing.  So "more important", i.e. it's absence could be missed in the borderline cases
+competition idea: delta w_ij proportional to sum_t x_i^t W_ij^t x_j^t over recent t.  If this number is large, x_j is in agreement with others about the affect on x_i.  If it is small, x_j is in disagreement, competing.  So "more important", i.e. it's absence could be missed in the borderline cases.  however, don't make *too* large, or else x_j could overrule others when it shouldn't.
 systematic comparison of learn rules, local and global

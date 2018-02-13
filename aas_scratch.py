@@ -1,3 +1,4 @@
+import sys
 import numpy as np
 import matplotlib.pyplot as plt
 from tokens import N_LAYER, LAYERS, DEVICES, TOKENS, PATTERNS, get_token
@@ -12,13 +13,13 @@ REG_INIT = {"TC": "NULL"}
 program = [ # label opc op1 op2 op3
     "NULL","SET","REG2","RIGHT","NULL", # Store right gaze for comparison with TC
     "NULL","SET","REG3","LEFT","NULL", # Store left gaze for comparison with TC
-    "LOOP","SET","FEF","CENTER","NULL", # Fixate on center
-    "GAZE","CMP","REG1","TC","REG2", # Check if TC detects rightward gaze
+    "NULL","SET","FEF","CENTER","NULL", # Fixate on center
+    "LOOP","CMP","REG1","TC","REG2", # Check if TC detects rightward gaze
     "NULL","JMP","REG1","LOOK","NULL", # If so, skip to saccade step
     "NULL","CMP","REG1","TC","REG3", # Check if TC detects leftward gaze
     "NULL","JMP","REG1","LOOK","NULL", # If so, skip to saccade step
     "NULL","SET","REG1","TRUE","NULL", # If here, gaze not known yet, prepare unconditional jump
-    "NULL","JMP","REG1","GAZE","NULL", # Check for gaze again
+    "NULL","JMP","REG1","LOOP","NULL", # Check for gaze again
     "LOOK","MOV","FEF","TC","NULL", # TC detected gaze, overwrite FEF with gaze direction
     "NULL","RET","NULL","NULL","NULL", # Successful saccade, terminate program
 ]
@@ -50,7 +51,9 @@ else:
 print("Flash ram residual max: %f"%np.fabs(Y - np.tanh(W_RAM.dot(X))).max())
 print("Flash ram residual mad: %f"%np.fabs(Y - np.tanh(W_RAM.dot(X))).mean())
 print("Flash ram sign diffs: %d"%(np.sign(Y) != np.sign(np.tanh(W_RAM.dot(X)))).sum())
-raw_input('continue?')
+if (np.sign(Y) != np.sign(np.tanh(W_RAM.dot(X)))).sum() > 0:
+    sys.exit(0)
+# raw_input('continue?')
 
 # ram
 WEIGHTS[("MEM","MEMH")] = W_RAM[:N_LAYER,:]
@@ -67,18 +70,21 @@ for k,v in REG_INIT.items(): ACTIVITY[k] = TOKENS[v]
 
 # run nvm loop
 HISTORY = [ACTIVITY]
+ready_t = []
 show_each = False
-for t in range(1000):
+for t in range(750):
     if show_each:
         if t % 2 == 0:
             print("tick %d:"%t)
             if (ACTIVITY["GATES"] * V_READY[:N_GH,:] >= 0).all():
                 print("Ready to execute instruction")
+                ready_t.append(t)
             print_state(ACTIVITY)
             if get_token(ACTIVITY["OPC"]) == "RET": break
     else:
         if (ACTIVITY["GATES"] * V_READY[:N_GH,:] >= 0).all():
             print("tick %3d: %s"%(t,state_string(ACTIVITY)))
+            ready_t.append(t)
         if t % 2 == 0 and get_token(ACTIVITY["OPC"]) == "RET":
             print("tick %3d: %s"%(t,state_string(ACTIVITY)))
             break
@@ -97,29 +103,17 @@ for h in range(len(HISTORY)):
 # print(mx)
 print((mx.min(), mx.mean(), mx.max()))
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-xt = (np.arange(A.shape[1]) + .5)[::int(A.shape[1]/10)]
-xl = np.array(["%d"%t for t in range(A.shape[1])])[::int(A.shape[1]/10)]
+# xt = (np.arange(A.shape[1]) + .5)[::int(A.shape[1]/10)]
+# xl = np.array(["%d"%t for t in range(A.shape[1])])[::int(A.shape[1]/10)]
+xt = ready_t
+xl = []
+for t in ready_t:
+    ops = []
+    # for op in ["MEM","OPC","OP1","OP2","OP3"]:
+    for op in ["OPC","OP1","OP2","OP3"]:
+        tok = get_token(HISTORY[t][op])
+        ops.append("" if tok in ["NULL","?"] else tok)
+    xl.append("\n".join([str(t)]+ops))
 yt = np.array([HISTORY[0][k].shape[0] for k in A_LAYERS])
 yt = yt.cumsum() - yt/2
 
