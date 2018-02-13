@@ -3,9 +3,12 @@ empirical experiments:
     noise injection
 
 memory read/write and n-back program
-post-flash tokens
 call/return instructions
+look into memh larger than n_layer (need non-square W's mapping up and down)
+post-flash tokens
 more robustness to noise?
+
+first lram infinity run!!! needed 2048 n_layer (will barely fit on outpost) and worked with fewer stability iterations.  and rare; same code with different randomness usually fails.  doesn't always fail at same place.  at least one run had a successful iteration before failing.
 
 problems with local learning:
     even with 0 sign changes in one-step test, residual errors build up.  was able to recover desired behavior with "temp memory test" branch inside tick(). (one of the last commits on monday feb 12)

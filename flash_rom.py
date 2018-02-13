@@ -119,6 +119,11 @@ cop = lambda t, f: [(t,f,"U"),(t,t,"C")]
 
 # gates for full memory (value and hidden) layer updates
 memu = [("MEM"+a,"MEM"+b,"U") for a in ["","H"] for b in ["","H"]]
+def stabilize(X, Y, v):
+    """stabilize memory for a few iterations"""
+    for s in range(1):
+        v = add_transit(X, Y, v, cpu_state())
+    return v
 
 ######## FLASH ROM #########
 
@@ -127,13 +132,12 @@ X, Y = [], [] # growing lists of transitions
 ###### Load instruction from mem into cpu, one operand at a time
 
 V_START = cpu_state(hidden = -PAD*np.sign(np.random.randn(N_HGATES,1)),ungate = memu)
-v = V_START
+# v = V_START
+v = stabilize(X, Y, V_START)
 for reg in ["OPC","OP1","OP2","OP3"]:
     # load op from memory and step memory
     v = add_transit(X, Y, v, cpu_state(ungate = memu + cop(reg,"MEM")))
-    # stabilize memory for a few iterations
-    for stabilize in range(4):
-        v = add_transit(X, Y, v, cpu_state())
+    v = stabilize(X, Y, v)
 
 # Let opcode bias the gate layer
 v = add_transit(X, Y, v, cpu_state(ungate = [("GATES","OPC","U")]))

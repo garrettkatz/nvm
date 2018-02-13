@@ -86,7 +86,6 @@ for t in range(1000):
     ACTIVITY = tick(ACTIVITY, WEIGHTS)
     HISTORY.append(ACTIVITY)
 
-
 A_LAYERS = ["MEM","MEMH","GATES","OPC","OP1","OP2","OP3","CMPA","CMPB","CMPH","CMPO","REG1","REG2","REG3","FEF","TC"]
 
 A = np.zeros((N_GH + (len(A_LAYERS)-1)*N_LAYER,len(HISTORY)))
