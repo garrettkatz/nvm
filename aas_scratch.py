@@ -2,13 +2,13 @@ import numpy as np
 import matplotlib.pyplot as plt
 from tokens import N_LAYER, LAYERS, DEVICES, TOKENS, PATTERNS, get_token
 from gates import default_gates, N_GH, PAD
-from flash_rom import cpu_state, V_START
-from aas_nvm import WEIGHTS, tick, print_state, state_string
+from flash_rom import cpu_state, V_START, V_READY
+from aas_nvm import WEIGHTS, tick, print_state, state_string, weight_update
 
 np.set_printoptions(linewidth=200, formatter = {'float': lambda x: '% .2f'%x})
 
 REG_INIT = {}
-REG_INIT = {"TC": "RIGHT"}
+REG_INIT = {"TC": "LEFT"}
 program = [ # label opc op1 op2 op3
     "NULL","SET","REG2","RIGHT","NULL", # Store right gaze for comparison with TC
     "NULL","SET","REG3","LEFT","NULL", # Store left gaze for comparison with TC
@@ -36,11 +36,16 @@ for p in range(3,len(program),5):
 # flash ram with program memory
 X, Y = V_PROG[N_LAYER:,:-1], V_PROG[:,1:]
 
-# # global
-# W_RAM = np.linalg.lstsq(X.T, np.arctanh(Y).T, rcond=None)[0].T
-
-# local
-W_RAM = np.arctanh(Y).dot(X.T) / N_LAYER #/ (N_LAYER*PAD**2)
+do_global = False
+if do_global:
+    # global
+    W_RAM = np.linalg.lstsq(X.T, np.arctanh(Y).T, rcond=None)[0].T
+else:
+    # local
+    # W_RAM = np.arctanh(Y).dot(X.T) / N_LAYER #/ (N_LAYER*PAD**2)
+    W_RAM = np.zeros((2*N_LAYER, N_LAYER))
+    for p in range(V_PROG.shape[1]-1):
+        W_RAM = weight_update(W_RAM, V_PROG[N_LAYER:,[p]], V_PROG[:,[p+1]])
 
 print("Flash ram residual max: %f"%np.fabs(Y - np.tanh(W_RAM.dot(X))).max())
 print("Flash ram residual mad: %f"%np.fabs(Y - np.tanh(W_RAM.dot(X))).mean())
@@ -63,16 +68,16 @@ for k,v in REG_INIT.items(): ACTIVITY[k] = TOKENS[v]
 # run nvm loop
 HISTORY = [ACTIVITY]
 show_each = False
-for t in range(200):
+for t in range(600):
     if show_each:
         if t % 2 == 0:
             print("tick %d:"%t)
-            if (ACTIVITY["GATES"] * V_START[:N_GH,:] >= 0).all():
-                print("Starting next instruction")
+            if (ACTIVITY["GATES"] * V_READY[:N_GH,:] >= 0).all():
+                print("Ready to execute instruction")
             print_state(ACTIVITY)
             if get_token(ACTIVITY["OPC"]) == "RET": break
     else:
-        if (np.sign(ACTIVITY["GATES"]) == np.sign(V_START[:N_GH,:])).all():
+        if (ACTIVITY["GATES"] * V_READY[:N_GH,:] >= 0).all():
             print("tick %3d: %s"%(t,state_string(ACTIVITY)))
         if t % 2 == 0 and get_token(ACTIVITY["OPC"]) == "RET":
             print("tick %3d: %s"%(t,state_string(ACTIVITY)))

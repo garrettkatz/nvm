@@ -76,3 +76,6 @@ def tick(activity, weights):
         activity_new[layer] += np.random.randn(*activity_new[layer].shape)*CTS_NOISE
 
     return activity_new
+
+def weight_update(W, x, y):
+    return W + np.arctanh(y) * x.T / N_LAYER #/ (N_LAYER*PAD**2)

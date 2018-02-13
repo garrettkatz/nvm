@@ -132,23 +132,23 @@ for reg in ["OPC","OP1","OP2","OP3"]:
     # load op from memory and step memory
     v = add_transit(X, Y, v, cpu_state(ungate = memu + cop(reg,"MEM")))
     # stabilize memory for a few iterations
-    for stabilize in range(1):
+    for stabilize in range(4):
         v = add_transit(X, Y, v, cpu_state())
 
 # Let opcode bias the gate layer
 v = add_transit(X, Y, v, cpu_state(ungate = [("GATES","OPC","U")]))
 
 # Ready to execute instruction
-v_ready = v.copy()
+V_READY = v.copy()
 
 ###### NOP instruction
 
-add_transit(X, Y, with_ops(v_ready, opc="NOP"), V_START) # begin next clock cycle
+add_transit(X, Y, with_ops(V_READY, opc="NOP"), V_START) # begin next clock cycle
 
 ###### SET instruction
 
 # Let op1 bias the gate layer
-v_inst = add_transit(X, Y, with_ops(v_ready,opc="SET"), cpu_state(ungate = [("GATES","OP1","U")]))
+v_inst = add_transit(X, Y, with_ops(V_READY,opc="SET"), cpu_state(ungate = [("GATES","OP1","U")]))
 
 # Add transits for each op1 possibility
 for to_layer in USER_LAYERS + DEVICES:
@@ -160,7 +160,7 @@ for to_layer in USER_LAYERS + DEVICES:
 ###### MOV instruction
 
 # Let op1,op2 bias the gate layer
-v_inst = add_transit(X, Y, with_ops(v_ready,opc="MOV"),
+v_inst = add_transit(X, Y, with_ops(V_READY,opc="MOV"),
     cpu_state(ungate = [("GATES","OP1","U"),("GATES","OP2","U")]))
 
 # Add transits for each op1,op2 possibility
@@ -175,7 +175,7 @@ for to_layer in USER_LAYERS + DEVICES:
 ###### CMP instruction
 
 # Let compare ops bias the gate layer
-v_inst = add_transit(X, Y, with_ops(v_ready,opc="CMP"),
+v_inst = add_transit(X, Y, with_ops(V_READY,opc="CMP"),
     cpu_state(ungate = [("GATES","OP2","U"),("GATES","OP3","U")]))
 
 # # Prepare for result op to bias the gate layer after compare ops copied
@@ -202,7 +202,7 @@ for result_layer in USER_LAYERS + DEVICES:
 ###### JMP instruction
 
 # Let op1 bias the gate layer
-v_inst = add_transit(X, Y, with_ops(v_ready,opc="JMP"), cpu_state(ungate = [("GATES","OP1","U")]))
+v_inst = add_transit(X, Y, with_ops(V_READY,opc="JMP"), cpu_state(ungate = [("GATES","OP1","U")]))
 
 for jmp_layer in USER_LAYERS+DEVICES:
     # Overwrite op1 with the layer it names
