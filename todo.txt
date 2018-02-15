@@ -5,6 +5,7 @@ empirical experiments:
 why does loop but not look label show up in xl?
 
 synapto aas
+if W_RAM doesn't have token->hidden, jmp only needs to copy to hidden, not token.  so, label doesn't even have to be paired with hidden, it can *be* the hidden pattern.
 memory read/write and n-back program
 call/return instructions
 look into memh larger than n_layer (need non-square W's mapping up and down)
