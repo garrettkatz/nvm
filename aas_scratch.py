@@ -4,9 +4,11 @@ import matplotlib.pyplot as plt
 from tokens import N_LAYER, LAYERS, DEVICES, TOKENS, PATTERNS, get_token
 from gates import default_gates, N_GH, PAD
 from flash_rom import cpu_state, V_START, V_READY
-from aas_nvm import WEIGHTS, tick, print_state, state_string, weight_update
+from aas_nvm import make_weights, store_program, tick, print_state, state_string, weight_update
 
 np.set_printoptions(linewidth=200, formatter = {'float': lambda x: '% .2f'%x})
+
+WEIGHTS = make_weights()
 
 REG_INIT = {}
 REG_INIT = {"TC": "NULL"}
@@ -24,46 +26,32 @@ program = [ # label opc op1 op2 op3
     "NULL","RET","NULL","NULL","NULL", # Successful saccade, terminate program
 ]
 
-# encode program transits
-V_PROG = PAD*np.sign(np.concatenate(tuple(TOKENS[t] for t in program), axis=1)) # program
-V_PROG = np.concatenate((V_PROG, PAD*np.sign(np.random.randn(*V_PROG.shape))),axis=0) # add hidden
+program = [ # label opc op1 op2 op3
+    "NULL","SET","REG2","FACE","NULL", # Store "face" flag for comparison with TC
+    "NULL","SET","REG3","TRUE","NULL", # Store "true" for unconditional jumps
+    # plan center saccade
+    "REPEAT","SET","FEF","CENTER","NULL",
+    # initiate saccade
+    "NULL","SET","SC","SACCADE","NULL",
+    "NULL","SET","SC","OFF","NULL",
+    # wait face
+    "LOOP","CMP","REG1","TC","REG2", # Check if TC detects face
+    "NULL","JMP","REG1","LOOK","NULL", # If so, skip to saccade step
+    "NULL","JMP","REG3","LOOP","NULL", # Check for face again
+    # initiate saccade
+    "LOOK","SET","SC","SACCADE","NULL", # TC detected gaze, allow saccade
+    "NULL","SET","SC","OFF","NULL", # TC detected gaze, allow saccade
+    # repeat
+    "NULL","JMP","REG3","REPEAT","NULL", # Successful saccade, repeat
+]
 
-# link labels
-labels = {program[p]:p for p in range(0,len(program),5) if program[p] != "NULL"}
-for p in range(3,len(program),5):
-    if program[p] in labels:
-        V_PROG[:N_LAYER,p+1] = V_PROG[N_LAYER:, labels[program[p]]]
-
-# flash ram with program memory
-X, Y = V_PROG[N_LAYER:,:-1], V_PROG[:,1:]
-
-do_global = False
-if do_global:
-    # global
-    W_RAM = np.linalg.lstsq(X.T, np.arctanh(Y).T, rcond=None)[0].T
-else:
-    # local
-    # W_RAM = np.arctanh(Y).dot(X.T) / N_LAYER #/ (N_LAYER*PAD**2)
-    W_RAM = np.zeros((2*N_LAYER, N_LAYER))
-    for p in range(V_PROG.shape[1]-1):
-        W_RAM = weight_update(W_RAM, V_PROG[N_LAYER:,[p]], V_PROG[:,[p+1]])
-
-print("Flash ram residual max: %f"%np.fabs(Y - np.tanh(W_RAM.dot(X))).max())
-print("Flash ram residual mad: %f"%np.fabs(Y - np.tanh(W_RAM.dot(X))).mean())
-print("Flash ram sign diffs: %d"%(np.sign(Y) != np.sign(np.tanh(W_RAM.dot(X)))).sum())
-if (np.sign(Y) != np.sign(np.tanh(W_RAM.dot(X)))).sum() > 0:
-    sys.exit(0)
-# raw_input('continue?')
-
-# ram
-WEIGHTS[("MEM","MEMH")] = W_RAM[:N_LAYER,:]
-WEIGHTS[("MEMH","MEMH")] = W_RAM[N_LAYER:,:]
+WEIGHTS, v_prog = store_program(WEIGHTS, program, do_global=True)
 
 # initialize cpu activity
 ACTIVITY = {k: -PAD*np.ones((N_LAYER,1)) for k in LAYERS+DEVICES}
 ACTIVITY["GATES"] = V_START[:N_GH,:] 
-ACTIVITY["MEM"] = V_PROG[:N_LAYER,[0]]
-ACTIVITY["MEMH"] = V_PROG[N_LAYER:,[0]]
+ACTIVITY["MEM"] = v_prog[:N_LAYER,[0]]
+ACTIVITY["MEMH"] = v_prog[N_LAYER:,[0]]
 ACTIVITY["CMPA"] = PAD*np.sign(np.random.randn(N_LAYER,1))
 ACTIVITY["CMPB"] = -ACTIVITY["CMPA"]
 for k,v in REG_INIT.items(): ACTIVITY[k] = TOKENS[v] 

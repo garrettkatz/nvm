@@ -3,6 +3,7 @@ import matplotlib.pyplot as plt
 from tokens import LAYERS, DEVICES, N_LAYER, TOKENS, get_token
 
 PAD = 0.9
+LAMBDA = np.arctanh(PAD)/PAD
 
 np.set_printoptions(linewidth=200, formatter = {'float': lambda x: '% .0f'%x})
 
@@ -32,7 +33,7 @@ for to_layer in LAYERS + DEVICES + ["GATES"]:
     
 
 N_GATES = len(GATE_KEYS)
-N_HGATES = 512
+N_HGATES = 1024
 N_GH = N_GATES + N_HGATES
 
 def get_gates(p):
@@ -53,3 +54,6 @@ def default_gates():
     gates[GATE_INDEX[("GATES","GATES","U")],0] = PAD
     return gates
 
+def get_gate_index(from_layer, to_layer, gate_type):
+    """Returns the gate index for a given layer pair and type"""
+    return GATE_INDEX[(from_layer,to_layer,gate_type)]
