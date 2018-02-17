@@ -33,7 +33,7 @@ Below is a target program that we would like a neural virtual machine (NVM) to e
 
 \begin{figure}[H]
 \centering
-\includegraphics[width=\textwidth]{aas_task.png}
+\includegraphics[width=\textwidth]{../resources/aas_task.png}
 \caption{The affective saccade task condition.}
 \label{fig:aas_task}
 \end{figure}
@@ -97,7 +97,7 @@ Once a program is learned, it is executed as follows.  Every ``clock cycle'', th
 
 \begin{figure}[H]
 \centering
-\includegraphics[width=\textwidth]{nvm_arch.pdf}
+\includegraphics[width=\textwidth]{../resources/nvm_arch.pdf}
 \caption{The NVM architecture.  Fully connected layers indicated by block arrows, including full recurrent connections.  One-to-one connections indicated by dashed line arrows.  Gating connections indicated by solid black line curves.}
 \label{fig:arch}
 \end{figure}
@@ -146,32 +146,32 @@ See figures below
 
 \begin{sidewaysfigure}
 \centering
-\includegraphics[width=\textwidth]{lram_left_run1024.eps}
+\includegraphics[width=\textwidth]{../resources/lram_left_run1024.eps}
 \caption{A raster plot showing execution of the program in Table \ref{tbl:aas} when \texttt{TC} contains \texttt{left}.  The x-axis shows time-steps annotated with the currently executing instruction.  The y-axis shows different NVM layers.  Each row of the image shows one neural unit in one layer over time, where brightness indicates firing rate.}
 \end{sidewaysfigure}
 
 \begin{sidewaysfigure}
 \centering
-\includegraphics[width=\textwidth]{lram_right_run1024.eps}
+\includegraphics[width=\textwidth]{../resources/lram_right_run1024.eps}
 \caption{A raster plot showing execution of the program in Table \ref{tbl:aas} when \texttt{TC} contains \texttt{right}.}
 \end{sidewaysfigure}
 
 \begin{sidewaysfigure}
 \centering
-\includegraphics[width=\textwidth]{lram_infinity_run1024.eps}
+\includegraphics[width=\textwidth]{../resources/lram_infinity_run1024.eps}
 \caption{A raster plot showing execution of the program in Table \ref{tbl:aas} when \texttt{TC} contains \texttt{null}.}
 \end{sidewaysfigure}
 
 \begin{sidewaysfigure}
 \centering
-\includegraphics[width=\textwidth]{lram_infinity_fail1024.eps}
+\includegraphics[width=\textwidth]{../resources/lram_infinity_fail1024.eps}
 \caption{A raster plot showing failed execution of the program in Table \ref{tbl:aas} when \texttt{TC} contains \texttt{null}.  After a couple loop iterations the activity destabilizes.}
 \label{fig:fail}
 \end{sidewaysfigure}
 
 \begin{sidewaysfigure}
 \centering
-\includegraphics[width=\textwidth]{lram_infinity_fail1024gates.eps}
+\includegraphics[width=\textwidth]{../resources/lram_infinity_fail1024gates.eps}
 \caption{A close-up of the destabilized memory and gate activity from Fig.\@ \ref{fig:fail}.}
 \end{sidewaysfigure}
 
