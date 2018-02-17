@@ -11,3 +11,5 @@
 *.eps
 *.png
 pstats
+resources/
+
