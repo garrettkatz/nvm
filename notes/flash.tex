@@ -1,0 +1,56 @@
+\documentclass[pdftex,12pt,letterpaper]{article}
+
+\usepackage[letterpaper,margin=1.0in]{geometry}
+\usepackage[pdftex]{graphicx}
+\usepackage{rotating}
+\usepackage{amsmath}
+\usepackage{amsfonts}
+\usepackage{amsthm}
+\usepackage{hyperref}
+\usepackage{longtable}
+\usepackage{algorithm}
+\usepackage{algpseudocode}
+\usepackage{tabularx}
+
+\newcommand{\HRule}{\rule{\linewidth}{0.5mm}}
+\newcommand{\eqdef}{\overset{\text{def}}{=}}
+\newcommand{\sign}{\text{\upshape{sign}}}
+\newcommand{\suchthat}{\,|\,}
+
+\newtheorem{proposition}{Proposition}
+\newtheorem{lemma}{Lemma}
+\newtheorem{conjecture}{Conjecture}
+\newtheorem{definition}{Definition}
+
+\begin{document}
+\title{Flashing Dynamics}
+\date{}
+\maketitle
+
+These notes explain a (non-local) method for constructing weight matrices that produce desired activation dynamics (thought of as analagous to one-time flashing of read-only memory).  These might justifiably be used to model the result of evolutionary/developmental processes, but probably not learning processes, in the brain.
+
+\section{Basic model, basic trick}
+
+The basic dynamical model is $v \mapsto \sigma(Wv)$, where $v\in\mathbb{R}^N$ is an $N$-dimensional vector describing the state of the neural system, $W\in\mathbb{R}^{N\times N}$ is an $N\times N$ matrix of connection weights, and $\sigma$ is an activation function applied element-wise.
+
+Suppose we have a set of $P$ paired patterns $x^{(p)}\mapsto y^{(p)}\in\mathbb{R}^N$.  If the network is in state $x^{(p)}$ at one time step, we want it to be in state $y^{(p)}$ at the next time step.  For example, suppose we want the network to have a limit cycle $v^{(0)}, v^{(1)}, ..., v^{(P-1)}, v^{(P)} = v^{(0)}$.  Then we would write $x^{(p)} = v^{(p)}$ and $y^{(p)} = v^{(p+1 \mod n)}$, for $p\in\{0,1,...,n-1\}$.
+
+The pairs $x^{(p)}$ and $y^{(p)}$ can be arranged as columns of two $N\times P$ matrices $X$ and $Y$, respectively.  With that notation, we seek a $W$ that solves $Y = \sigma(WX)$, or equivalently:
+\begin{align}
+\sigma^{-1}(Y) = WX\label{eq:cons}
+\end{align}
+
+When $X$ and $Y$ are given, this is a linear equation in $W$, so it can be solved with one-liners in Matlab or Python (using numpy).  However, existence of a solution generally requires that $P\leq N$, and that $X$ have full rank $P$.  It also requires that $\sigma$ is invertible, so any of tanh, logistic, or softplus should work.  Technically relu$(v) = \max(v,0)$ won't work, but if we set the ``inverse'' relu$^{-1}(0)$ to something like $-1$ it's possible that might give reasonable results in practice.
+
+If $P=N$, the solution for $W$ is unique.  If $P<N$, there is more ``wiggle room.''  For example, a linear programming solver can be used to impose additional inequality constraints on $W$ while solving (\ref{eq:cons}).  Actually, this could be one way to make all outgoing and/or ingoing connections for any particular unit have the same sign, if the resulting linear program turns out to be feasible.
+
+\subsection{Relation to local learning rules}
+
+For random $x^{(p)} \in [-1,1]^N$, with $P << N$, there is the nice property that $\mathbb{E}[X^TX/N] = I$, where $\mathbb{E}[\cdot]$ is expected value and $I$ is the $P\times P$ identity matrix.  This means that the weight matrix $\sigma^{(-1)}(Y)X^T$ will roughly solve (\ref{eq:cons}).  This is more or less temporally asymmetric Hebbian learning.
+
+If instead we choose random $x^{(p)}\in [0,1]^N$ (non-negative neural activity), we need a change of variables to leverage the nice property: $\mathbb{E}[(2X+1)^T(2X+1)/N] = I$, or equivalently, $\mathbb{E}[(2X^T - 4\mathbb{1}^T]X
+
+\section{More involved model for NVM}
+
+\end{document}
+
