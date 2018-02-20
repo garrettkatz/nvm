@@ -40,17 +40,29 @@ The pairs $x^{(p)}$ and $y^{(p)}$ can be arranged as columns of two $N\times P$ 
 \sigma^{-1}(Y) = WX\label{eq:cons}
 \end{align}
 
-When $X$ and $Y$ are given, this is a linear equation in $W$, so it can be solved with one-liners in Matlab or Python (using numpy).  However, existence of a solution generally requires that $P\leq N$, and that $X$ have full rank $P$.  It also requires that $\sigma$ is invertible, so any of tanh, logistic, or softplus should work.  Technically relu$(v) = \max(v,0)$ won't work, but if we set the ``inverse'' relu$^{-1}(0)$ to something like $-1$ it's possible that might give reasonable results in practice.
+When $X$ and $Y$ are given, this is a linear equation in $W$, so it can be solved with one-liners in Matlab or Python (using numpy).  However, existence of a solution generally requires that $P\leq N$, and that $X$ have full rank $P$.  It also requires that $\sigma$ is invertible, so any of tanh, logistic, or softplus should work.  Technically relu$(v) = \max(v,0)$ won't work, but if we set the ``inverse'' of relu$^{-1}(0)$ to something like $-1$ it's possible that might give reasonable results in practice.
 
-If $P=N$, the solution for $W$ is unique.  If $P<N$, there is more ``wiggle room.''  For example, a linear programming solver can be used to impose additional inequality constraints on $W$ while solving (\ref{eq:cons}).  Actually, this could be one way to make all outgoing and/or ingoing connections for any particular unit have the same sign, if the resulting linear program turns out to be feasible.
+\section{Wiggle room}
 
-\subsection{Relation to local learning rules}
+If $P=N$, the solution for $W$ is unique.  If $P<N$, there is more ``wiggle room:'' any matrix $M$ in the null space of $X$ (i.e., $MX = \mathbf{0}$) can be added to $W$ without breaking (\ref{eq:cons}).  The right choice of $M$ can be used to improve $W$.\footnote{Use $\mathbf{0}$ and $\mathbf{1}$ to denote matrices containing all $0$'s or all $1$'s, sized appropriately for any given equation.}
 
-For random $x^{(p)} \in [-1,1]^N$, with $P << N$, there is the nice property that $\mathbb{E}[X^TX/N] = I$, where $\mathbb{E}[\cdot]$ is expected value and $I$ is the $P\times P$ identity matrix.  This means that the weight matrix $\sigma^{(-1)}(Y)X^T$ will roughly solve (\ref{eq:cons}).  This is more or less temporally asymmetric Hebbian learning.
+For example, once we have solved for an initial $W$, suppose we want a perturbation $M+W$ that is as close as possible to the identity matrix $I$.  To compute $M$, we can first compute a basis $B$ for the null space of $X$ with an SVD invocation.  Then we can use a least-squares linear solver on $AB = I-W$ to get the coefficient matrix $A$, and set $M = AB$.
 
-If instead we choose random $x^{(p)}\in [0,1]^N$ (non-negative neural activity), we need a change of variables to leverage the nice property: $\mathbb{E}[(2X+1)^T(2X+1)/N] = I$, or equivalently, $\mathbb{E}[(2X^T - 4\mathbb{1}^T]X
+As another example, a linear programming solver can be used to impose additional inequality constraints on $W$ while solving (\ref{eq:cons}).  Since linear programming is generally formulated in terms of vector rather than matrix solutions, $W$ can be solved one row at a time.  Actually, this could be one way to make all outgoing and/or ingoing connections for any particular unit have the same sign, if the resulting linear program turns out to be feasible.
 
-\section{More involved model for NVM}
+Creative use of the wiggle room could be a potential strategy to improve stability of the target dynamics.
+
+\section{Relation to local learning rules}
+
+For random $x^{(p)} \in [-1,1]^N$, with $P \leq N$, there is the nice property that $\mathbb{E}[X^TX/N] = I$, where $\mathbb{E}[\cdot]$ is expected value and $I$ is the $P\times P$ identity matrix.  This means that the weight matrix $\sigma^{(-1)}(Y)X^T/N$ will roughly solve (\ref{eq:cons}).  This is more or less temporally asymmetric Hebbian learning.
+
+If instead we choose random $x^{(p)}\in [0,1]^N$ (non-negative neural activity), we need a change of variables to leverage the nice property: $\mathbb{E}[(2X+1)^T(2X+1)/N] = I$.  With some algebra and the introduction of a bias term there should be an analagous rule for learning $W$ and $\theta$ satisfying $Y = \sigma(WX + \theta)$.
+
+\section{Intermediate time steps}
+
+If $X$ has rank lower than $P$, there may be no $W$ solving (\ref{eq:cons})
+
+\section{Application to NVM}
 
 \end{document}
 
