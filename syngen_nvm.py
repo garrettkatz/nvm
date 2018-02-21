@@ -1,4 +1,5 @@
 import numpy as np
+import sys
 from tokens import N_LAYER, get_token, LAYERS, DEVICES
 from flash_rom import V_START, V_READY
 from gates import N_GH, get_open_gates, PAD
@@ -68,6 +69,8 @@ def read_callback(ID, size, ptr):
             print(callback_layers[ID], get_token(FloatArray(size,ptr).to_list()))
             if ID == len(callback_layers)-1:
                 print("")
+    
+    if tick == 10: sys.exit()
 
 init_cb,init_addr = create_callback(init_callback)
 read_cb,read_addr = create_callback(read_callback)
