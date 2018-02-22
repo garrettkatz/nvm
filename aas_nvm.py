@@ -154,7 +154,6 @@ def nvm_synapto(weights):
             "columns" : N_GH if layer == "GATES" else 32})
     structures = [{"name" : "nvm", "type" : "parallel", "layers": layers}]
     
-    conn_tuple_list = []
     connections = []
     for (to_layer, from_layer),w in weights.iteritems():
         if to_layer in ["CMPH", "CMPO"] or from_layer in ["CMPH", "CMPA", "CMPB"]: continue

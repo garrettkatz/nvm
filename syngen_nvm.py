@@ -1,15 +1,19 @@
 import numpy as np
 import sys
-from tokens import N_LAYER, get_token, LAYERS, DEVICES
+from tokens import N_LAYER, get_token, LAYERS, DEVICES, TOKENS
 from flash_rom import V_START, V_READY
-from gates import N_GH, get_open_gates, PAD
+from gates import N_GH, get_open_gates, PAD, N_GATES
 from aas_nvm import make_weights, store_program, nvm_synapto
+from aas_nvm import tick as pytick
 from syngen import Network, Environment, create_callback, FloatArray, get_cpu, set_debug
 
 #set_debug(True)
 
 # program
+REG_INIT = {"TC": "NULL"}
 program = [ # label opc op1 op2 op3
+    "NULL","NOP","NULL","NULL","NULL",
+    "NULL","NOP","NULL","NULL","NULL",
     "NULL","SET","REG2","FACE","NULL", # Store "face" flag for comparison with TC
     "NULL","SET","REG3","TRUE","NULL", # Store "true" for unconditional jumps
     # plan center saccade
@@ -28,11 +32,20 @@ program = [ # label opc op1 op2 op3
     "NULL","JMP","REG3","REPEAT","NULL", # Successful saccade, repeat
 ]
 
+
 # create weights
 weights = make_weights()
 weights, v_prog = store_program(weights, program, do_global=True)
 structures, connections = nvm_synapto(weights)
 
+# initialize py activity
+ACTIVITY = {k: -PAD*np.ones((N_LAYER,1)) for k in LAYERS+DEVICES}
+ACTIVITY["GATES"] = V_START[:N_GH,:] 
+ACTIVITY["MEM"] = v_prog[:N_LAYER,[0]]
+ACTIVITY["MEMH"] = v_prog[N_LAYER:,[0]]
+ACTIVITY["CMPA"] = PAD*np.sign(np.random.randn(N_LAYER,1))
+ACTIVITY["CMPB"] = -ACTIVITY["CMPA"]
+for k,v in REG_INIT.items(): ACTIVITY[k] = TOKENS[v] 
 
 init_layers = ["MEM", "MEMH", "GATES"]
 pad_init_layers = [l for l in LAYERS + DEVICES if l not in init_layers]
@@ -46,6 +59,17 @@ def init_callback(ID, size, ptr):
         print("Initializing " + init_layers[ID])
         for i,x in enumerate(init_data[ID]):
             arr.data[i] = x
+        if ID == 2:
+            print("gate init:")
+            gate_output = np.array(FloatArray(size,ptr).to_list())[:,np.newaxis]
+            #do_print = (gate_output * V_READY[:N_GH,:] >= 0).all()
+            do_print = True
+            if do_print:
+                print("Gates: ", get_open_gates(gate_output))
+                print("min, max, avg abs init")
+                print(gate_output[:N_GATES,:].min())
+                print(gate_output[:N_GATES,:].max())
+                print(np.fabs(gate_output[:N_GATES,:]).mean())
     else:
         print("Initializing " + pad_init_layers[ID-len(init_layers)])
         for i in xrange(size):
@@ -54,24 +78,41 @@ def init_callback(ID, size, ptr):
 tick = 0
 do_print = False
 def read_callback(ID, size, ptr):
-    global tick, do_print
+    global tick, do_print, ACTIVITY, weights
+
+    if tick == 7: sys.exit()
 
     if ID == 0:
         tick += 1
+
         gate_output = np.array(FloatArray(size,ptr).to_list())[:,np.newaxis]
         #do_print = (gate_output * V_READY[:N_GH,:] >= 0).all()
         do_print = True
         if do_print:
             print("Tick: " + str(tick))
             print("Gates: ", get_open_gates(gate_output))
+            print("min, max, avg abs syn")
+            print(gate_output[:N_GATES,:].min())
+            print(gate_output[:N_GATES,:].max())
+            print(np.fabs(gate_output[:N_GATES,:]).mean())
+            
+        # side by side py        
+        gate_output = ACTIVITY["GATES"]
+        if do_print:
+            print("Tick: " + str(tick))
+            print("Gates: ", get_open_gates(gate_output))
+            print("min, max, avg abs py")
+            print(gate_output[:N_GATES,:].min())
+            print(gate_output[:N_GATES,:].max())
+            print(np.fabs(gate_output[:N_GATES,:]).mean())
+        ACTIVITY = pytick(ACTIVITY, weights)
+        
     else:
         if do_print:
             print(callback_layers[ID], get_token(FloatArray(size,ptr).to_list()))
             if ID == len(callback_layers)-1:
                 print("")
     
-    if tick == 10: sys.exit()
-
 init_cb,init_addr = create_callback(init_callback)
 read_cb,read_addr = create_callback(read_callback)
 
@@ -150,7 +191,7 @@ device = get_cpu()
 print(network.run(env, {"multithreaded" : "true",
                         "worker threads" : 1,
                         "iterations" : 0,
-                        "refresh rate" : 5,
+                        "refresh rate" : .25,
                         "devices" : device,
                         "verbose" : "true",
                         "learning flag" : "false"}))
