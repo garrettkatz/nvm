@@ -40,12 +40,12 @@ structures, connections = nvm_synapto(weights)
 
 # initialize py activity
 ACTIVITY = {k: -PAD*np.ones((N_LAYER,1)) for k in LAYERS+DEVICES}
-ACTIVITY["GATES"] = V_START[:N_GH,:] 
+ACTIVITY["GATES"] = V_START[:N_GH,:]
 ACTIVITY["MEM"] = v_prog[:N_LAYER,[0]]
 ACTIVITY["MEMH"] = v_prog[N_LAYER:,[0]]
 ACTIVITY["CMPA"] = PAD*np.sign(np.random.randn(N_LAYER,1))
 ACTIVITY["CMPB"] = -ACTIVITY["CMPA"]
-for k,v in REG_INIT.items(): ACTIVITY[k] = TOKENS[v] 
+for k,v in REG_INIT.items(): ACTIVITY[k] = TOKENS[v]
 
 init_layers = ["MEM", "MEMH", "GATES"]
 pad_init_layers = [l for l in LAYERS + DEVICES if l not in init_layers]
@@ -95,8 +95,8 @@ def read_callback(ID, size, ptr):
             print(gate_output[:N_GATES,:].min())
             print(gate_output[:N_GATES,:].max())
             print(np.fabs(gate_output[:N_GATES,:]).mean())
-            
-        # side by side py        
+
+        # side by side py
         gate_output = ACTIVITY["GATES"]
         if do_print:
             print("Tick: " + str(tick))
@@ -106,7 +106,7 @@ def read_callback(ID, size, ptr):
             print(gate_output[:N_GATES,:].max())
             print(np.fabs(gate_output[:N_GATES,:]).mean())
         ACTIVITY = pytick(ACTIVITY, weights)
-        
+
     else:
         if do_print:
             print(callback_layers[ID], get_token(FloatArray(size,ptr).to_list()))
