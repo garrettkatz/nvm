@@ -5,15 +5,15 @@ from flash_rom import V_START, V_READY
 from gates import N_GH, get_open_gates, PAD, N_GATES
 from aas_nvm import make_weights, store_program, nvm_synapto
 from aas_nvm import tick as pytick
-from syngen import Network, Environment, create_callback, FloatArray, get_cpu, set_debug
+from syngen import Network, Environment, create_io_callback, FloatArray, get_cpu, set_debug
 
 #set_debug(True)
 
 # program
 REG_INIT = {"TC": "NULL"}
 program = [ # label opc op1 op2 op3
-    "NULL","NOP","NULL","NULL","NULL",
-    "NULL","NOP","NULL","NULL","NULL",
+    # "NULL","NOP","NULL","NULL","NULL",
+    # "NULL","NOP","NULL","NULL","NULL",
     "NULL","SET","REG2","FACE","NULL", # Store "face" flag for comparison with TC
     "NULL","SET","REG3","TRUE","NULL", # Store "true" for unconditional jumps
     # plan center saccade
@@ -58,7 +58,7 @@ def init_callback(ID, size, ptr):
     if ID < len(init_layers):
         print("Initializing " + init_layers[ID])
         for i,x in enumerate(init_data[ID]):
-            arr.data[i] = x
+            arr.data[i] = np.arctanh(x)
         if ID == 2:
             print("gate init:")
             gate_output = np.array(FloatArray(size,ptr).to_list())[:,np.newaxis]
@@ -73,14 +73,14 @@ def init_callback(ID, size, ptr):
     else:
         print("Initializing " + pad_init_layers[ID-len(init_layers)])
         for i in xrange(size):
-            arr.data[i] = -PAD
+            arr.data[i] = -np.arctanh(PAD)
 
 tick = 0
 do_print = False
 def read_callback(ID, size, ptr):
     global tick, do_print, ACTIVITY, weights
 
-    if tick == 7: sys.exit()
+    if tick == 40: sys.exit()
 
     if ID == 0:
         tick += 1
@@ -89,7 +89,7 @@ def read_callback(ID, size, ptr):
         #do_print = (gate_output * V_READY[:N_GH,:] >= 0).all()
         do_print = True
         if do_print:
-            print("Tick: " + str(tick))
+            print("Tick (syngen): " + str(tick))
             print("Gates: ", get_open_gates(gate_output))
             print("min, max, avg abs syn")
             print(gate_output[:N_GATES,:].min())
@@ -99,12 +99,12 @@ def read_callback(ID, size, ptr):
         # side by side py
         gate_output = ACTIVITY["GATES"]
         if do_print:
-            print("Tick: " + str(tick))
+            print("Tick (py): " + str(tick))
             print("Gates: ", get_open_gates(gate_output))
-            print("min, max, avg abs py")
-            print(gate_output[:N_GATES,:].min())
-            print(gate_output[:N_GATES,:].max())
-            print(np.fabs(gate_output[:N_GATES,:]).mean())
+            # print("min, max, avg abs py")
+            # print(gate_output[:N_GATES,:].min())
+            # print(gate_output[:N_GATES,:].max())
+            # print(np.fabs(gate_output[:N_GATES,:]).mean())
         ACTIVITY = pytick(ACTIVITY, weights)
 
     else:
@@ -113,8 +113,8 @@ def read_callback(ID, size, ptr):
             if ID == len(callback_layers)-1:
                 print("")
     
-init_cb,init_addr = create_callback(init_callback)
-read_cb,read_addr = create_callback(read_callback)
+init_cb,init_addr = create_io_callback(init_callback)
+read_cb,read_addr = create_io_callback(read_callback)
 
 
 # Create network
@@ -191,7 +191,7 @@ device = get_cpu()
 print(network.run(env, {"multithreaded" : "true",
                         "worker threads" : 1,
                         "iterations" : 0,
-                        "refresh rate" : .25,
+                        "refresh rate" : 5,
                         "devices" : device,
                         "verbose" : "true",
                         "learning flag" : "false"}))

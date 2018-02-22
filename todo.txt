@@ -1,13 +1,12 @@
 next steps:
     finish debugging nvm 0.0 syngen
     positive neural activity with sigmoid, relu, or hard relu fake inverse
+    no copying
     distinct excitatory/inhibitory populations
     outgoing connections are all to excitatory or all to inhibitory
     axons can excite either excitatory or inhibitory neurons in other regions
     axons can only inhibit within region
-    no copying
     expose gating, user-oriented library for building instructions
-    share repo with greg
 
 dl new neural computation pubs
 
