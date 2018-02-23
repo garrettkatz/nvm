@@ -2,7 +2,7 @@ next steps:
     finish debugging nvm 0.0 syngen
     positive neural activity with sigmoid, relu, or hard relu fake inverse
     no copying
-    new linear solve min norm W (check if different from lstsq result)
+    check Z that randomly interpolates X,Y
     distinct excitatory/inhibitory populations
     outgoing connections are all to excitatory or all to inhibitory
     axons can excite either excitatory or inhibitory neurons in other regions
@@ -15,7 +15,7 @@ empirical experiments:
     how size of N_HGATES (and N_LAYER?) affects stability in long loops
     noise injection
 
-why does loop but not look label show up in xl?
+why does loop but not look label show up in xlabels?
 
 synapto aas
 if W_RAM doesn't have token->hidden, jmp only needs to copy to hidden, not token.  so, label doesn't even have to be paired with hidden, it can *be* the hidden pattern.
