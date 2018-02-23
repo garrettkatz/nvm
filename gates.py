@@ -54,6 +54,6 @@ def default_gates():
     gates[GATE_INDEX[("GATES","GATES","U")],0] = PAD
     return gates
 
-def get_gate_index(from_layer, to_layer, gate_type):
+def get_gate_index(to_layer, from_layer, gate_type):
     """Returns the gate index for a given layer pair and type"""
-    return GATE_INDEX[(from_layer,to_layer,gate_type)]
+    return GATE_INDEX[(to_layer, from_layer, gate_type)]

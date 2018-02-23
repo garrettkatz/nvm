@@ -170,7 +170,7 @@ def nvm_synapto(weights):
                 "plastic" : "false",
                 "weight config" : {
                     "type" : "flat",
-                    "weight" : LAMBDA
+                    "weight" : LAMBDA,
                 },
             })
         else:
@@ -188,7 +188,7 @@ def nvm_synapto(weights):
                     "weight" : "0.0",
                 },
             })
-        gate_index = get_gate_index(from_layer, to_layer, "U")
+        gate_index = get_gate_index(to_layer, from_layer, "U")
         connections.append({
             "name": to_layer + "<"+  from_layer + "-input-update",
             "dendrite": to_layer + "<"+  from_layer,
@@ -309,6 +309,8 @@ def nvm_synapto(weights):
     w_cmph = np.arctanh(1. - cmp_e) / (PAD / 2.)**2
     w_cmpo = 2. * np.arctanh(PAD) / (N_LAYER*(1-cmp_e) - (N_LAYER-1))
     b_cmpo = w_cmpo * (N_LAYER*(1 - cmp_e) + (N_LAYER-1)) / 2.
+    # activity_new["CMPH"] = w_cmph * activity["CMPA"] * activity["CMPB"]
+    # activity_new["CMPO"] = np.ones((N_LAYER,1)) * (w_cmpo * activity["CMPH"].sum() - b_cmpo)
 
     connections.append({
         "name": "CMPH<bias",

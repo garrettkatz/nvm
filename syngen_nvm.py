@@ -2,7 +2,7 @@ import numpy as np
 import sys
 from tokens import N_LAYER, get_token, LAYERS, DEVICES, TOKENS
 from flash_rom import V_START, V_READY
-from gates import N_GH, get_open_gates, PAD, N_GATES
+from gates import N_GH, get_open_gates, PAD, N_GATES, LAMBDA
 from aas_nvm import make_weights, store_program, nvm_synapto
 from aas_nvm import tick as pytick
 from syngen import Network, Environment, create_io_callback, FloatArray, get_cpu, set_debug
@@ -10,10 +10,8 @@ from syngen import Network, Environment, create_io_callback, FloatArray, get_cpu
 #set_debug(True)
 
 # program
-REG_INIT = {"TC": "NULL"}
+REG_INIT = {"TC": "FACE"}
 program = [ # label opc op1 op2 op3
-    # "NULL","NOP","NULL","NULL","NULL",
-    # "NULL","NOP","NULL","NULL","NULL",
     "NULL","SET","REG2","FACE","NULL", # Store "face" flag for comparison with TC
     "NULL","SET","REG3","TRUE","NULL", # Store "true" for unconditional jumps
     # plan center saccade
@@ -43,15 +41,20 @@ ACTIVITY = {k: -PAD*np.ones((N_LAYER,1)) for k in LAYERS+DEVICES}
 ACTIVITY["GATES"] = V_START[:N_GH,:]
 ACTIVITY["MEM"] = v_prog[:N_LAYER,[0]]
 ACTIVITY["MEMH"] = v_prog[N_LAYER:,[0]]
-ACTIVITY["CMPA"] = PAD*np.sign(np.random.randn(N_LAYER,1))
-ACTIVITY["CMPB"] = -ACTIVITY["CMPA"]
-for k,v in REG_INIT.items(): ACTIVITY[k] = TOKENS[v]
+# ACTIVITY["CMPA"] = PAD*np.sign(np.random.randn(N_LAYER,1))
+# ACTIVITY["CMPB"] = -ACTIVITY["CMPA"]
+REG_INIT_KEYS = REG_INIT.keys()
+for k in REG_INIT_KEYS: ACTIVITY[k] = TOKENS[REG_INIT[k]]
 
-init_layers = ["MEM", "MEMH", "GATES"]
+init_layers = ["MEM", "MEMH", "GATES"] + REG_INIT.keys()
 pad_init_layers = [l for l in LAYERS + DEVICES if l not in init_layers]
-callback_layers = ["GATES", "MEM", "OPC", "OP1", "OP2", "OP3"]
+callback_layers = [
+    "GATES", "MEM", "OPC", "OP1", "OP2", "OP3",
+    "CMPA","CMPB","CMPH","CMPO","TC","FEF","SC"]
+stat_layers = ["CMPH","CMPO"]
 
-init_data = [v_prog.flat[:N_LAYER], v_prog.flat[N_LAYER:], V_START.flat[:N_GH]]
+init_data = [v_prog.flat[:N_LAYER], v_prog.flat[N_LAYER:], V_START.flat[:N_GH]
+    ] + [TOKENS[REG_INIT[k]] for k in REG_INIT_KEYS]
 
 def init_callback(ID, size, ptr):
     arr = FloatArray(size,ptr)
@@ -59,17 +62,6 @@ def init_callback(ID, size, ptr):
         print("Initializing " + init_layers[ID])
         for i,x in enumerate(init_data[ID]):
             arr.data[i] = np.arctanh(x)
-        if ID == 2:
-            print("gate init:")
-            gate_output = np.array(FloatArray(size,ptr).to_list())[:,np.newaxis]
-            #do_print = (gate_output * V_READY[:N_GH,:] >= 0).all()
-            do_print = True
-            if do_print:
-                print("Gates: ", get_open_gates(gate_output))
-                print("min, max, avg abs init")
-                print(gate_output[:N_GATES,:].min())
-                print(gate_output[:N_GATES,:].max())
-                print(np.fabs(gate_output[:N_GATES,:]).mean())
     else:
         print("Initializing " + pad_init_layers[ID-len(init_layers)])
         for i in xrange(size):
@@ -80,38 +72,39 @@ do_print = False
 def read_callback(ID, size, ptr):
     global tick, do_print, ACTIVITY, weights
 
-    if tick == 40: sys.exit()
+    if tick == 1000: sys.exit()
 
     if ID == 0:
         tick += 1
 
         gate_output = np.array(FloatArray(size,ptr).to_list())[:,np.newaxis]
-        #do_print = (gate_output * V_READY[:N_GH,:] >= 0).all()
-        do_print = True
+        do_print = (gate_output * V_READY[:N_GH,:] >= 0).all()
+        # do_print = True
         if do_print:
-            print("Tick (syngen): " + str(tick))
-            print("Gates: ", get_open_gates(gate_output))
-            print("min, max, avg abs syn")
-            print(gate_output[:N_GATES,:].min())
-            print(gate_output[:N_GATES,:].max())
-            print(np.fabs(gate_output[:N_GATES,:]).mean())
+            print("Tick %d"%tick)
+            # print("Gates (syngen): ", get_open_gates(gate_output))
+            # print("Gates (py): ", get_open_gates(ACTIVITY["GATES"]))
+            print("Layer tokens (syngen|py)")
 
-        # side by side py
-        gate_output = ACTIVITY["GATES"]
+    if ID > 0:
         if do_print:
-            print("Tick (py): " + str(tick))
-            print("Gates: ", get_open_gates(gate_output))
-            # print("min, max, avg abs py")
-            # print(gate_output[:N_GATES,:].min())
-            # print(gate_output[:N_GATES,:].max())
-            # print(np.fabs(gate_output[:N_GATES,:]).mean())
+            print("%4s: %7s | %s"%(
+                callback_layers[ID],
+                get_token(FloatArray(size,ptr).to_list()),
+                get_token(ACTIVITY[callback_layers[ID]])))
+                
+    if ID in [callback_layers.index(layer) for layer in stat_layers]:
+        if do_print:
+            v = np.array(FloatArray(size,ptr).to_list())
+            print("%s (syngen): %f, %f, %f"%(
+                callback_layers[ID], v.min(), v.max(), np.fabs(v).mean()))
+            v = ACTIVITY[callback_layers[ID]]
+            print("%s (py): %f, %f, %f"%(
+                callback_layers[ID], v.min(), v.max(), np.fabs(v).mean()))
+                
+    if ID == len(callback_layers)-1:
+        if do_print: print("")
         ACTIVITY = pytick(ACTIVITY, weights)
-
-    else:
-        if do_print:
-            print(callback_layers[ID], get_token(FloatArray(size,ptr).to_list()))
-            if ID == len(callback_layers)-1:
-                print("")
     
 init_cb,init_addr = create_io_callback(init_callback)
 read_cb,read_addr = create_io_callback(read_callback)
@@ -142,7 +135,7 @@ modules = [
         "type" : "visualizer",
         "layers" : [
             {"structure": "nvm", "layer": layer}
-                for layer in ["MEM","MEMH","GATES"]]
+                for layer in callback_layers[1:] + ["GATES"]]
     },
     {
         "type" : "periodic_input",
