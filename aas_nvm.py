@@ -367,7 +367,7 @@ def nvm_synapto(weights):
     connections.append({
         "name": "CMPO<bias",
         "from layer": "bias",
-        "to layer": "CMPH",
+        "to layer": "CMPO",
         "type": "fully connected",
         "opcode": "sub",
         "plastic" : "false",

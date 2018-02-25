@@ -51,7 +51,7 @@ pad_init_layers = [l for l in LAYERS + DEVICES if l not in init_layers]
 callback_layers = [
     "GATES", "MEM", "OPC", "OP1", "OP2", "OP3",
     "CMPA","CMPB","CMPH","CMPO","TC","FEF","SC"]
-stat_layers = ["CMPH","CMPO"]
+stat_layers = [] #["CMPA","CMPB","CMPH","CMPO"]
 
 init_data = [v_prog.flat[:N_LAYER], v_prog.flat[N_LAYER:], V_START.flat[:N_GH]
     ] + [TOKENS[REG_INIT[k]] for k in REG_INIT_KEYS]
