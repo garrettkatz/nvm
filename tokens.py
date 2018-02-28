@@ -1,6 +1,7 @@
 import numpy as np
 
-N_LAYER = 1024
+N_LAYER_DIM = 32
+N_LAYER = N_LAYER_DIM ** 2
 
 INSTRUCTIONS = ["NOP","SET","MOV","CMP","JMP","RET"]
 # CPU_LAYERS = ["OPC","OP1","OP2","OP3","CMPA","CMPB","CMPH","CMPO","MEM","MEMH","NOTI","NOTO"]

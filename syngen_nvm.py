@@ -5,7 +5,7 @@ from flash_rom import V_START, V_READY
 from gates import N_GH, get_open_gates, PAD, N_GATES, LAMBDA
 from aas_nvm import make_weights, store_program, nvm_synapto
 from aas_nvm import tick as pytick
-from syngen import Network, Environment, create_io_callback, FloatArray, get_cpu, set_debug
+from syngen import Network, Environment, create_io_callback, FloatArray, set_debug
 
 #set_debug(True)
 
@@ -69,10 +69,9 @@ def init_callback(ID, size, ptr):
 
 tick = 0
 do_print = False
+run_py_version = True
 def read_callback(ID, size, ptr):
     global tick, do_print, ACTIVITY, weights
-
-    if tick == 1000: sys.exit()
 
     if ID == 0:
         tick += 1
@@ -84,25 +83,35 @@ def read_callback(ID, size, ptr):
             print("Tick %d"%tick)
             # print("Gates (syngen): ", get_open_gates(gate_output))
             # print("Gates (py): ", get_open_gates(ACTIVITY["GATES"]))
-            print("Layer tokens (syngen|py)")
+            if run_py_version:
+                print("Layer tokens (syngen|py)")
+            else:
+                print("Layer tokens")
 
     if ID > 0:
         if do_print:
-            print("%4s: %7s | %s"%(
-                callback_layers[ID],
-                get_token(FloatArray(size,ptr).to_list()),
-                get_token(ACTIVITY[callback_layers[ID]])))
+            if run_py_version:
+                syn_tok = get_token(FloatArray(size,ptr).to_list())
+                py_tok = get_token(ACTIVITY[callback_layers[ID]])
+                print("%4s: %7s %s %s"%(
+                    callback_layers[ID],
+                    syn_tok, "|" if syn_tok == py_tok else "X", py_tok))
+            else:
+                print("%4s: %7s"%(
+                    callback_layers[ID],
+                    get_token(FloatArray(size,ptr).to_list())))
                 
     if ID in [callback_layers.index(layer) for layer in stat_layers]:
         if do_print:
             v = np.array(FloatArray(size,ptr).to_list())
             print("%s (syngen): %f, %f, %f"%(
                 callback_layers[ID], v.min(), v.max(), np.fabs(v).mean()))
-            v = ACTIVITY[callback_layers[ID]]
-            print("%s (py): %f, %f, %f"%(
-                callback_layers[ID], v.min(), v.max(), np.fabs(v).mean()))
+            if run_py_version:
+                v = ACTIVITY[callback_layers[ID]]
+                print("%s (py): %f, %f, %f"%(
+                    callback_layers[ID], v.min(), v.max(), np.fabs(v).mean()))
                 
-    if ID == len(callback_layers)-1:
+    if run_py_version and ID == len(callback_layers)-1:
         if do_print: print("")
         ACTIVITY = pytick(ACTIVITY, weights)
     
@@ -175,12 +184,10 @@ modules = [
 #    },
 ]
 env = Environment({"modules" : modules})
-device = get_cpu()
 print(network.run(env, {"multithreaded" : "true",
-                        "worker threads" : 1,
-                        "iterations" : 0,
-                        "refresh rate" : 5,
-                        "devices" : device,
+                        "worker threads" : 0,
+                        "iterations" : 1000,
+                        "refresh rate" : 0,
                         "verbose" : "true",
                         "learning flag" : "false"}))
 
