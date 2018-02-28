@@ -137,11 +137,6 @@ modules = [
             {"structure": "nvm", "layer": layer}
                 for layer in callback_layers[1:] + ["GATES"]]
     },
-    {
-        "type" : "periodic_input",
-        "value" : 1.0,
-        "layers" : [{"structure": "nvm", "layer": "bias"}]
-    },
 #    {
 #        "type" : "csv_output",
 #        "cutoff" : 1,

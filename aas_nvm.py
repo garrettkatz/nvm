@@ -123,7 +123,11 @@ def nvm_synapto(weights):
         "name" : "bias",
         "neural model" : "relay",
         "rows" : 1,
-        "columns" : 1}]
+        "columns" : 1,
+        "noise config" : {
+            "type" : "flat",
+            "val" : 1.0,
+        }}]
     for layer in LAYERS + DEVICES + ["GATES"]:
         dendrites = []
         if layer not in ["CMPH", "CMPO"]:
