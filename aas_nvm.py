@@ -1,5 +1,6 @@
 import numpy as np
-from tokens import get_token, N_LAYER, LAYERS, DEVICES, TOKENS
+from sys import exit
+from tokens import get_token, N_LAYER, N_LAYER_DIM, LAYERS, DEVICES, TOKENS
 from gates import get_gates, get_open_gates, get_gate_index, PAD, LAMBDA, N_GATES, N_HGATES, N_GH
 from flash_rom import W_ROM
 
@@ -53,7 +54,7 @@ def store_program(weights, program, do_global=False):
     print("Flash ram residual mad: %f"%np.fabs(Y - np.tanh(W_ram.dot(X))).mean())
     print("Flash ram sign diffs: %d"%(np.sign(Y) != np.sign(np.tanh(W_ram.dot(X)))).sum())
     if (np.sign(Y) != np.sign(np.tanh(W_ram.dot(X)))).sum() > 0:
-        sys.exit(0)
+        exit(0)
     
     # ram
     weights[("MEM","MEMH")] = W_ram[:N_LAYER,:]
@@ -123,7 +124,11 @@ def nvm_synapto(weights):
         "name" : "bias",
         "neural model" : "relay",
         "rows" : 1,
-        "columns" : 1}]
+        "columns" : 1,
+        "noise config" : {
+            "type" : "flat",
+            "val" : 1.0,
+        }}]
     for layer in LAYERS + DEVICES + ["GATES"]:
         dendrites = []
         if layer not in ["CMPH", "CMPO"]:
@@ -150,8 +155,8 @@ def nvm_synapto(weights):
             "name" : layer,
             "neural model" : "nvm",
             "dendrites" : dendrites,
-            "rows" : 1 if layer == "GATES" else 32,
-            "columns" : N_GH if layer == "GATES" else 32})
+            "rows" : 1 if layer == "GATES" else N_LAYER_DIM,
+            "columns" : N_GH if layer == "GATES" else N_LAYER_DIM})
     structures = [{"name" : "nvm", "type" : "parallel", "layers": layers}]
     
     connections = []
@@ -201,9 +206,9 @@ def nvm_synapto(weights):
                 "from column start" : gate_index,
                 "from column end" : gate_index+1,
                 "to row start" : 0,
-                "to row end" : 1 if to_layer == "GATES" else 32,
+                "to row end" : 1 if to_layer == "GATES" else N_LAYER_DIM,
                 "to column start" : 0,
-                "to column end" : N_GH if to_layer == "GATES" else 32,
+                "to column end" : N_GH if to_layer == "GATES" else N_LAYER_DIM,
             },
             "opcode": "mult_heaviside",
             "plastic" : "false",
@@ -255,9 +260,9 @@ def nvm_synapto(weights):
                 "from column start" : update_gate_index,
                 "from column end" : update_gate_index+1,
                 "to row start" : 0,
-                "to row end" : 1 if layer == "GATES" else 32,
+                "to row end" : 1 if layer == "GATES" else N_LAYER_DIM,
                 "to column start" : 0,
-                "to column end" : N_GH if layer == "GATES" else 32,
+                "to column end" : N_GH if layer == "GATES" else N_LAYER_DIM,
             },
             "opcode": "sub_heaviside",
             "plastic" : "false",
@@ -293,9 +298,9 @@ def nvm_synapto(weights):
                 "from column start" : decay_gate_index,
                 "from column end" : decay_gate_index+1,
                 "to row start" : 0,
-                "to row end" : 1 if layer == "GATES" else 32,
+                "to row end" : 1 if layer == "GATES" else N_LAYER_DIM,
                 "to column start" : 0,
-                "to column end" : N_GH if layer == "GATES" else 32,
+                "to column end" : N_GH if layer == "GATES" else N_LAYER_DIM,
             },
             "opcode": "sub_heaviside",
             "plastic" : "false",
@@ -367,7 +372,7 @@ def nvm_synapto(weights):
     connections.append({
         "name": "CMPO<bias",
         "from layer": "bias",
-        "to layer": "CMPH",
+        "to layer": "CMPO",
         "type": "fully connected",
         "opcode": "sub",
         "plastic" : "false",
