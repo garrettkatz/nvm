@@ -1,12 +1,14 @@
 import numpy as np
 
 class Activator:
-    def __init__(self, f, g, e, make_pattern, hash_pattern):
+    def __init__(self, f, g, e, make_pattern, hash_pattern, on, off):
         self.f = f
         self.g = g
         self.e = e
         self.make_pattern = make_pattern
         self.hash_pattern = hash_pattern
+        self.on = on
+        self.off = off
 
 def tanh_activator(pad, layer_size):
     return Activator(
@@ -14,7 +16,9 @@ def tanh_activator(pad, layer_size):
         g = np.arctanh,
         e = lambda a, b: ((a > 0) == (b > 0)),
         make_pattern = lambda : pad*np.sign(np.random.randn(layer_size,1)),
-        hash_pattern = lambda p: (p > 0).tobytes())
+        hash_pattern = lambda p: (p > 0).tobytes(),
+        on = pad,
+        off = -pad)
 
 def logistic_activator(pad, layer_size):
     return Activator(
@@ -22,4 +26,6 @@ def logistic_activator(pad, layer_size):
         g = lambda v: np.arctanh(2*v-1),
         e = lambda a, b: ((a > .5) == (b > .5)),
         make_pattern = lambda : .5*(pad*np.sign(np.random.randn(layer_size,1)) + 1.),
-        hash_pattern = lambda p: (p > .5).tobytes())
+        hash_pattern = lambda p: (p > .5).tobytes(),
+        on = .5*(+pad + 1.),
+        off = .5*(-pad + 1.))

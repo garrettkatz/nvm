@@ -1,4 +1,5 @@
 next steps:
+    double check new default gates in gate_sequencer
     finish debugging nvm 0.0 syngen
     positive neural activity with sigmoid, relu, or hard relu fake inverse
     no copying

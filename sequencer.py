@@ -1,32 +1,30 @@
 import numpy as np
+from layer import Layer
 from coder import Coder
 
 class Sequencer:
 
-    def __init__(self, layer_name, coder):
-        self.layer_name = layer_name
-        self.coder = coder
+    def __init__(self, sequence_layer, input_layers):
+        self.sequence_layer = sequence_layer
+        self.input_layers = input_layers        
         self.transits = []
 
-    def add_transit(self, new_state=None, old_state=None, **input_states):
+    def add_transit(self, new_state=None, **input_states):
 
         # Generate states if not provided, encode as necessary
-        if new_state is None: new_state = self.coder.make_pattern()
-        if type(new_state) is str: new_state = self.coder.encode(new_state)
+        if new_state is None:
+            new_state = self.sequence_layer.coder.make_pattern()
+        if type(new_state) is str:
+            new_state = self.sequence_layer.coder.encode(new_state)
 
-        if old_state is None: old_state = np.zeros(new_state.shape)
-        if type(old_state) is str: old_state = self.coder.encode(old_state)
-
-        for layer, pattern in input_states.items():
+        for name, pattern in input_states.items():
             if type(pattern) is str:
-                input_states[layer] = self.coder.encode(pattern)
+                input_states[name] = self.input_layers[name].coder.encode(pattern)
 
         # Check for non-determinism
-        for n, o, i in self.transits:
+        for n, i in self.transits:
             # Different new state
             if (n != new_state).any(): continue
-            # Different old state
-            if (o != old_state).any(): continue
             # Different input layers
             if set(i.keys()) != set(input_states.keys()): continue
             # Different input patterns
@@ -35,46 +33,39 @@ class Sequencer:
             raise Exception("Created non-deterministic transit!")
 
         # Save transit
-        self.transits.append((new_state, old_state, input_states))
+        self.transits.append((new_state, input_states))
 
         # Return new state
         return new_state
         
     def flash(self, f, g):
-        
-        # Unzip transits
-        new_states, old_states, input_states = zip(*self.transits)
-        P = len(self.transits)
-        
-        # Collect all input layer names and sizes
-        layer_size = {self.layer_name: new_states[0].shape[0]}
-        for states in input_states:
-            for name, pattern in states.items():
-                layer_size[name] = pattern.shape[0]
-        
-        # Fix layer order with sequence layer first
-        names = layer_size.keys()
-        names.remove(self.layer_name)
-        names.insert(0, self.layer_name)
 
-        # Populate transit matrices
-        X = {self.layer_name : np.concatenate(old_states, axis=1)}
-        for i, states in enumerate(input_states):
-            for name, pattern in states.items():
+        # Unzip transits
+        all_new_states, all_input_states = zip(*self.transits)
+        P = len(self.transits)
+
+        # Populate input matrices
+        X = {}
+        for i, input_states in enumerate(all_input_states):
+            for name, pattern in input_states.items():
                 if name not in X: X[name] = np.zeros((pattern.shape[0], P))
                 X[name][:, [i]] = pattern
-        X = np.concatenate([X[name] for name in names], axis=0)
-        Y = np.concatenate(new_states, axis=1)
+
+        # Fixed layer order
+        names = X.keys()
         
         # Solve with hidden step
+        X = np.concatenate([X[name] for name in names], axis=0)
+        Y = np.concatenate(all_new_states, axis=1)
         W, bias, _ = zsolve(X, Y, f, g)
         
         # Split up weights by layer
         weights = {}
         offset = 0
         for name in names:
-            weights[(self.layer_name, name)] = W[:,offset:offset + layer_size[name]]
-            offset += layer_size[name]
+            layer_size = self.input_layers[name].size
+            weights[(self.sequence_layer.name, name)] = W[:,offset:offset + layer_size]
+            offset += layer_size
         
         # return final weights and bias
         return weights, bias
@@ -121,16 +112,17 @@ if __name__ == '__main__':
     # act = tanh_activator(PAD, N)
     act = logistic_activator(PAD, N)
 
-    c = Coder(act.make_pattern, act.hash_pattern)
+    c = Coder(act)
     
-    s = Sequencer("gates", c)
+    g = Layer("gates",N, act, c)
+    input_layers = {name: Layer(name, N, act, c) for name in ["gates","op1","op2"]}
+    s = Sequencer(g, input_layers)
     v_old = s.add_transit(new_state="SET")
     for to_layer in ["FEF","SC"]:
         for from_layer in ["FEF","SC"]:
             v_new = s.add_transit(
                 new_state = to_layer + from_layer,
-                old_state = v_old,
-                op1 = to_layer, op2 = from_layer)
+                gates = v_old, op1 = to_layer, op2 = from_layer)
 
     print(c.list_tokens())
 
