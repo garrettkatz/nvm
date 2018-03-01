@@ -29,3 +29,13 @@ def logistic_activator(pad, layer_size):
         hash_pattern = lambda p: (p > .5).tobytes(),
         on = .5*(+pad + 1.),
         off = .5*(-pad + 1.))
+
+def heaviside_activator(layer_size):
+    return Activator(
+        f = lambda v: (v > .5).astype(float),
+        g = lambda v: (-1.)**(v < .5),
+        e = lambda a, b: ((a > .5) == (b > .5)),
+        make_pattern = lambda : (np.random.randn(layer_size,1) > 0).astype(float),
+        hash_pattern = lambda p: (p > .5).tobytes(),
+        on = 1.,
+        off = 0.)

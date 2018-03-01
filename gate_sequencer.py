@@ -2,28 +2,35 @@ import numpy as np
 from layer import Layer
 from coder import Coder
 from sequencer import Sequencer
+from associator import Associator
 import gate_map as gm
 
 PAD = 0.9
 LAMBDA = np.arctanh(PAD)/PAD
 
-class GateSequencer:
+class GateSequencer(Sequencer, object):
     def __init__(self, gate_map, gate_output, gate_hidden, input_layers):
         self.gate_map = gate_map
         self.gate_output = gate_output
-        self.gate_hidden = gate_hidden
-        self.output_sequencer = Sequencer(gate_output, input_layers)
-        self.hidden_sequencer = Sequencer(gate_hidden, input_layers)
-        
-    def default_gate_output(self):
-        """Default to all gates off except gate dynamics themselves"""
+        super(GateSequencer, self).__init__(gate_hidden, input_layers)
+        self.gate_hidden = self.sequence_layer
+        self.transit_outputs = []
+
+    def make_gate_output(self, ungate=[]):
+        """Make gate output pattern where specified gate key units are on"""
+
+        # Default to all off except internal gate activity
         pattern = self.gate_output.activator.off * np.ones((self.gate_output.size,1))
         gate_keys = [
-            (self.gate_hidden.name, self.gate_hidden.name, 'U')
-            (self.gate_output.name, self.gate_hidden.name, 'U')
+            (self.gate_hidden.name, self.gate_hidden.name, 'U'),
+            (self.gate_output.name, self.gate_hidden.name, 'U'),
             (self.gate_output.name, self.gate_output.name, 'D')]
-        for k in gate_keys:
-            pattern[self.gate_map.get_gate_index(k),0] = self.gate_output.activator.on
+
+        # Ungate provided keys
+        for k in gate_keys + ungate:
+            i = self.gate_map.get_gate_index(k)
+            pattern[i,0] = self.gate_output.activator.on
+
         return pattern
 
     def add_transit(self, ungate=[], new_hidden=None, old_gates=None, old_hidden=None, **input_states):
@@ -32,7 +39,7 @@ class GateSequencer:
         if new_hidden is None: new_hidden = self.gate_hidden.activator.make_pattern()
 
         # Default old gates if not provided
-        if old_gates is None: old_gates = self.default_gate_output()
+        if old_gates is None: old_gates = self.make_gate_output()
 
         # Error if inputs are provided whose layers are not ungated
         for from_name in input_states:
@@ -43,18 +50,52 @@ class GateSequencer:
 
         # Include old hidden pattern in input for new hidden
         hidden_input_states = dict(input_states)
-        hidden_input_states[gate_hidden.name] = old_hidden
-        self.hidden_sequencer.add_transit(
+        hidden_input_states[self.gate_hidden.name] = old_hidden
+        super(GateSequencer, self).add_transit(
             new_state=new_hidden, **hidden_input_states)
 
         # Ungate specified gates
-        new_gates = self.default_gate_output()
-        for ug in ungate:
-            new_gates[self.gate_map.get_gate_index(ug),0] = self.gate_output.activator.on
+        new_gates = self.make_gate_output(ungate)
 
-        # add transit
-        self.output_sequencer.add_transit(
-            new_state=new_gates, **{self.gate_hidden.name: old_hidden})
+        # add output to transit
+        self.transit_outputs.append(new_gates)
+
+        return new_hidden
+
+    def stabilize(self, hidden, num_iters=1):
+        """Stabilize activity for a few iterations"""
+        for i in range(num_iters):
+            hidden = self.add_transit(old_hidden=hidden)
+        return hidden
+
+    def flash(self):
+        
+        # Flash sequencer
+        weights, bias, XYZ = super(GateSequencer, self).flash()
+
+        # Form output associations
+        X, _, Z = XYZ
+        X = X[:self.gate_hidden.size,:] # hidden layer portions
+        Z = Z[:self.gate_hidden.size,:] # hidden layer portions
+        Y = np.concatenate((
+            self.make_gate_output()*np.ones((1, X.shape[1])), # intermediate output
+            np.concatenate(self.transit_outputs, axis=1), # transit output
+        ),axis=1)
+
+        # solve linear equations for output
+        XZ = np.concatenate((
+            np.concatenate((X, Z), axis=1),
+            np.ones((1,2*X.shape[1])) # bias
+        ), axis = 0)
+        g = self.gate_output.activator.g
+        W = np.linalg.lstsq(XZ.T, g(Y).T, rcond=None)[0].T
+
+        # update weights and bias with output
+        weights[(self.gate_output.name, self.gate_hidden.name)] = W[:,:-1]
+        bias[self.gate_output.name] = W[:,[-1]]
+    
+        # weights, bias, hidden
+        return weights, bias
 
 def gcopy(to_layer, from_layer):
     """gates for inter-layer signal"""
@@ -63,12 +104,6 @@ def gcopy(to_layer, from_layer):
 def gmem():
     """gates for memory (token and hidden) layer updates"""
     return [("MEM","MEM","D"), ("MEM","MEMH","U") ("MEMH","MEMH","U")]
-
-def stabilize(X, Y, v):
-    """Stabilize memory for a few iterations"""
-    for s in range(1):
-        v = add_transit(X, Y, v, cpu_state())
-    return v
 
 if __name__ == '__main__':
 
@@ -84,14 +119,26 @@ if __name__ == '__main__':
 
     layer_names = ["A","B","C"]
     layers = [Layer(name, N, act, coder) for name in layer_names]
-    
-    gate_map = gm.make_nvm_gate_map(layers)
-    NG = gate_map.get_gate_count()
-    actg = logistic_activator(PAD,NG)
+
+    NL = len(layers) + 2 # +2 for gate out/hidden
+    NG = NL**2 + NL
     NH = N
+    actg = heaviside_activator(NG)
     acth = logistic_activator(PAD,NH)
-    
     gate_output = Layer("gates", NG, actg, Coder(actg))
     gate_hidden = Layer("ghide", NH, acth, Coder(acth))
+    layers.extend([gate_hidden, gate_output])
     
-    gs = GateSequencer(gate_map, gate_output, gate_hidden, layers)
+    gate_map = gm.make_nvm_gate_map(layers)
+    gs = GateSequencer(gate_map, gate_output, gate_hidden,
+        {layer.name: layer for layer in layers})
+
+    go_start = gs.make_gate_output()
+    gh_start = acth.make_pattern()
+    gh = gs.stabilize(gh_start)
+    # for reg in ["OPC","OP1","OP2","OP3"]:
+    #     # load op from memory and step memory
+    #     v = add_transit(X, Y, v, cpu_state(ungate = memu + cop(reg,"MEM")))
+    #     v = stabilize(X, Y, v)
+
+    gs.flash()

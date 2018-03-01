@@ -2,18 +2,18 @@ import numpy as np
 from layer import Layer
 from coder import Coder
 
-class Sequencer:
+class Sequencer(object):
 
     def __init__(self, sequence_layer, input_layers):
         self.sequence_layer = sequence_layer
-        self.input_layers = input_layers        
+        self.input_layers = input_layers
         self.transits = []
 
     def add_transit(self, new_state=None, **input_states):
 
         # Generate states if not provided, encode as necessary
         if new_state is None:
-            new_state = self.sequence_layer.coder.make_pattern()
+            new_state = self.sequence_layer.activator.make_pattern()
         if type(new_state) is str:
             new_state = self.sequence_layer.coder.encode(new_state)
 
@@ -38,7 +38,7 @@ class Sequencer:
         # Return new state
         return new_state
         
-    def flash(self, f, g):
+    def flash(self):
 
         # Unzip transits
         all_new_states, all_input_states = zip(*self.transits)
@@ -51,13 +51,17 @@ class Sequencer:
                 if name not in X: X[name] = np.zeros((pattern.shape[0], P))
                 X[name][:, [i]] = pattern
 
-        # Fixed layer order
+        # Fixed layer order, make sure sequence layer comes first for zsolve
         names = X.keys()
+        names.remove(self.sequence_layer.name)
+        names.insert(0, self.sequence_layer.name)
         
         # Solve with hidden step
         X = np.concatenate([X[name] for name in names], axis=0)
         Y = np.concatenate(all_new_states, axis=1)
-        W, bias, _ = zsolve(X, Y, f, g)
+        W, bias, Z = zsolve(X, Y,
+            self.sequence_layer.activator.f,
+            self.sequence_layer.activator.g)
         
         # Split up weights by layer
         weights = {}
@@ -67,8 +71,11 @@ class Sequencer:
             weights[(self.sequence_layer.name, name)] = W[:,offset:offset + layer_size]
             offset += layer_size
         
-        # return final weights and bias
-        return weights, bias
+        # Also label bias with layer
+        bias = {self.sequence_layer.name: bias}
+        
+        # return final weights, bias, and matrices
+        return weights, bias, (X, Y, Z)
 
 def zsolve(X, Y, f, g, verbose=True):
     """
@@ -117,7 +124,7 @@ if __name__ == '__main__':
     g = Layer("gates",N, act, c)
     input_layers = {name: Layer(name, N, act, c) for name in ["gates","op1","op2"]}
     s = Sequencer(g, input_layers)
-    v_old = s.add_transit(new_state="SET")
+    v_old = g.coder.encode("SET") # s.add_transit(new_state="SET")
     for to_layer in ["FEF","SC"]:
         for from_layer in ["FEF","SC"]:
             v_new = s.add_transit(
@@ -126,7 +133,7 @@ if __name__ == '__main__':
 
     print(c.list_tokens())
 
-    weights, bias = s.flash(act.f, act.g)
+    weights, bias = s.flash()
     for k,w in weights.items():
         print(k)
         print(w)

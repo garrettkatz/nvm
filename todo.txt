@@ -1,6 +1,4 @@
 next steps:
-    double check new default gates in gate_sequencer
-    finish debugging nvm 0.0 syngen
     positive neural activity with sigmoid, relu, or hard relu fake inverse
     no copying
     check Z that randomly interpolates X,Y
@@ -9,6 +7,7 @@ next steps:
     axons can excite either excitatory or inhibitory neurons in other regions
     axons can only inhibit within region
     expose gating, user-oriented library for building instructions
+    base gate sequencer?
 
 dl new neural computation pubs
 
