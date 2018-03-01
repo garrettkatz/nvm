@@ -115,8 +115,8 @@ def read_callback(ID, size, ptr):
         if do_print: print("")
         ACTIVITY = pytick(ACTIVITY, weights)
     
-init_cb,init_addr = create_io_callback(init_callback)
-read_cb,read_addr = create_io_callback(read_callback)
+create_io_callback("nvm_init", init_callback)
+create_io_callback("nvm_read", read_callback)
 
 
 # Create network
@@ -159,7 +159,7 @@ modules = [
                 "structure" : "nvm",
                 "layer" : layer,
                 "input" : "true",
-                "function" : init_addr,
+                "function" : "nvm_init",
                 "id" : i
             } for i,layer in enumerate(init_layers + pad_init_layers)
         ]
@@ -171,7 +171,7 @@ modules = [
                 "structure" : "nvm",
                 "layer" : layer,
                 "output" : "true",
-                "function" : read_addr,
+                "function" : "nvm_read",
                 "id" : i
             } for i,layer in enumerate(callback_layers)
         ]
