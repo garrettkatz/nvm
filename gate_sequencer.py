@@ -2,7 +2,6 @@ import numpy as np
 from layer import Layer
 from coder import Coder
 from sequencer import Sequencer
-from associator import Associator
 import gate_map as gm
 
 PAD = 0.9
@@ -19,7 +18,7 @@ class GateSequencer(Sequencer, object):
     def make_gate_output(self, ungate=[]):
         """Make gate output pattern where specified gate key units are on"""
 
-        # Default to all off except internal gate activity
+        # Internal gate activity always on
         pattern = self.gate_output.activator.off * np.ones((self.gate_output.size,1))
         gate_keys = [
             (self.gate_hidden.name, self.gate_hidden.name, 'U'),
@@ -34,6 +33,7 @@ class GateSequencer(Sequencer, object):
         return pattern
 
     def add_transit(self, ungate=[], new_hidden=None, old_gates=None, old_hidden=None, **input_states):
+
         # Default to random hidden patterns
         if old_hidden is None: old_hidden = self.gate_hidden.activator.make_pattern()
         if new_hidden is None: new_hidden = self.gate_hidden.activator.make_pattern()
@@ -43,10 +43,22 @@ class GateSequencer(Sequencer, object):
 
         # Error if inputs are provided whose layers are not ungated
         for from_name in input_states:
-            gate_key = (self.gate_output.name, from_name, 'U')
+            gate_key = (self.gate_hidden.name, from_name, 'U')
             gate_value = self.gate_map.get_gate_value(gate_key, old_gates)
             if gate_value == self.gate_output.activator.off:
-                raise Exception("Using input from layer that is not ungated!")
+                raise Exception(
+                    "Using input from layer that is not ungated! Expected "+str(gate_key))
+
+        # Error if ungated layers not provided as input
+        for p in range(old_gates.shape[0]):
+            if old_gates[p,0] == self.gate_output.activator.on:
+                gate_key = self.gate_map.get_gate_key(p)
+                to_name, from_name, gate_type = gate_key
+                if not to_name == self.gate_hidden.name: continue
+                if not gate_type == 'U': continue
+                if from_name in input_states: continue
+                if from_name == self.gate_hidden.name: continue
+                raise Exception("No input provided for ungated layer!  Expected "+str(gate_key))
 
         # Include old hidden pattern in input for new hidden
         hidden_input_states = dict(input_states)
@@ -56,16 +68,14 @@ class GateSequencer(Sequencer, object):
 
         # Ungate specified gates
         new_gates = self.make_gate_output(ungate)
-
-        # add output to transit
         self.transit_outputs.append(new_gates)
 
-        return new_hidden
+        return new_gates, new_hidden
 
     def stabilize(self, hidden, num_iters=1):
         """Stabilize activity for a few iterations"""
         for i in range(num_iters):
-            hidden = self.add_transit(old_hidden=hidden)
+            _, hidden = self.add_transit(old_hidden=hidden)
         return hidden
 
     def flash(self):
@@ -103,7 +113,7 @@ def gcopy(to_layer, from_layer):
 
 def gmem():
     """gates for memory (token and hidden) layer updates"""
-    return [("MEM","MEM","D"), ("MEM","MEMH","U") ("MEMH","MEMH","U")]
+    return [("mem","mem","D"), ("mem","memh","U"), ("memh","memh","U")]
 
 if __name__ == '__main__':
 
@@ -117,12 +127,12 @@ if __name__ == '__main__':
     act = logistic_activator(PAD, N)
     coder = Coder(act)
 
-    layer_names = ["A","B","C"]
+    layer_names = ["mem","memh","opc","op1","op2","op3"]
     layers = [Layer(name, N, act, coder) for name in layer_names]
 
     NL = len(layers) + 2 # +2 for gate out/hidden
     NG = NL**2 + NL
-    NH = N
+    NH = 100
     actg = heaviside_activator(NG)
     acth = logistic_activator(PAD,NH)
     gate_output = Layer("gates", NG, actg, Coder(actg))
@@ -133,12 +143,33 @@ if __name__ == '__main__':
     gs = GateSequencer(gate_map, gate_output, gate_hidden,
         {layer.name: layer for layer in layers})
 
-    go_start = gs.make_gate_output()
-    gh_start = acth.make_pattern()
-    gh = gs.stabilize(gh_start)
-    # for reg in ["OPC","OP1","OP2","OP3"]:
-    #     # load op from memory and step memory
-    #     v = add_transit(X, Y, v, cpu_state(ungate = memu + cop(reg,"MEM")))
-    #     v = stabilize(X, Y, v)
+    h_start = acth.make_pattern()
+    h = h_start
+    for reg in ["opc"]:#,"op1","op2","op3"]:
+        # load op from memory and step memory
+        _, h = gs.add_transit(ungate = gmem() + gcopy(reg,"mem"), old_hidden = h)
+        h = gs.stabilize(h)
 
-    gs.flash()
+    # Let opcode bias the gate layer
+    g, h = gs.add_transit(ungate = [("ghide","opc","U")], old_hidden=h)
+    
+    # Ready to execute instruction
+    h_ready = h.copy()
+    
+    # _, _ = gs.add_transit(
+    #     new_hidden = h_start, # begin next clock cycle
+    #     old_gates = g, old_hidden = h_ready)
+
+    
+    ###### NOP instruction
+    
+    g, h = gs.add_transit(
+        new_hidden = h_start, # begin next clock cycle
+        old_gates = g, old_hidden = h_ready, opc = "nop")
+
+    weights, bias = gs.flash()
+
+    h = h_start
+    for i in range(30):
+        h = acth.f(weights[("ghide","ghide")].dot(h) + bias["ghide"])
+        print(i, acth.e(h, h_ready).all())
