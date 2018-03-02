@@ -24,16 +24,17 @@ class GateMap:
         return gate_pattern[self.gate_index[gate_key], 0]
     
 def make_nvm_gate_map(layers):
+    """layers: dict of layers"""
 
     # set up gate keys
     gate_keys = []
     for to_layer in layers:
     
         # Add within-layer decay gate
-        gate_keys.append((to_layer.name, to_layer.name, "D"))
+        gate_keys.append((to_layer, to_layer, "D"))
 
         # Add inter-layer update gates
         for from_layer in layers:
-            gate_keys.append((to_layer.name, from_layer.name, "U"))
+            gate_keys.append((to_layer, from_layer, "U"))
 
     return GateMap(gate_keys)

@@ -21,14 +21,15 @@ class Coder:
         """Return a list of all tokens encoded so far."""
         return self.encodings.keys()
 
-    def encode(self, token):
+    def encode(self, token, pattern=None):
         """
         Return the pattern encoding a token.
         Uses make_pattern() if token was not already encoded.
+        Uses given pattern if provided.
         """
         # Encode if not already encoded
         if token not in self.encodings:
-            pattern = self.activator.make_pattern()
+            if pattern is None: pattern = self.activator.make_pattern()
             self.encodings[token] = pattern
             self.decodings[self.activator.hash_pattern(pattern)] = token
         return self.encodings[token]
