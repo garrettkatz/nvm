@@ -21,9 +21,9 @@ class GateSequencer(Sequencer, object):
         # Internal gate activity always on
         pattern = self.gate_output.activator.off * np.ones((self.gate_output.size,1))
         gate_keys = [
-            (self.gate_hidden.name, self.gate_hidden.name, 'U'),
-            (self.gate_output.name, self.gate_hidden.name, 'U'),
-            (self.gate_output.name, self.gate_output.name, 'D')]
+            (self.gate_hidden.name, self.gate_hidden.name, 'u'),
+            (self.gate_output.name, self.gate_hidden.name, 'u'),
+            (self.gate_output.name, self.gate_output.name, 'd')]
 
         # Ungate provided keys
         for k in gate_keys + ungate:
@@ -43,7 +43,7 @@ class GateSequencer(Sequencer, object):
 
         # Error if inputs are provided whose layers are not ungated
         for from_name in input_states:
-            gate_key = (self.gate_hidden.name, from_name, 'U')
+            gate_key = (self.gate_hidden.name, from_name, 'u')
             gate_value = self.gate_map.get_gate_value(gate_key, old_gates)
             if gate_value == self.gate_output.activator.off:
                 raise Exception(
@@ -55,7 +55,7 @@ class GateSequencer(Sequencer, object):
                 gate_key = self.gate_map.get_gate_key(p)
                 to_name, from_name, gate_type = gate_key
                 if not to_name == self.gate_hidden.name: continue
-                if not gate_type == 'U': continue
+                if not gate_type == 'u': continue
                 if from_name in input_states: continue
                 if from_name == self.gate_hidden.name: continue
                 raise Exception("No input provided for ungated layer!  Expected "+str(gate_key))
@@ -109,11 +109,11 @@ class GateSequencer(Sequencer, object):
 
 def gcopy(to_layer, from_layer):
     """gates for inter-layer signal"""
-    return [(to_layer,from_layer,"U"), (to_layer,to_layer,"D")]
+    return [(to_layer,from_layer,'u'), (to_layer,to_layer,'d')]
 
-def gmem():
-    """gates for memory (token and hidden) layer updates"""
-    return [("mem","mem","D"), ("mem","memh","U"), ("memh","memh","U")]
+def gprog():
+    """gates for program memory (ip and op) layer updates"""
+    return [('ip','ip','u')]+[k for x in ['c','1','2','3'] for k in gcopy("op"+x, 'ip')]
 
 if __name__ == '__main__':
 
@@ -127,7 +127,7 @@ if __name__ == '__main__':
     act = logistic_activator(PAD, N)
     coder = Coder(act)
 
-    layer_names = ["mem","memh","opc","op1","op2","op3"]
+    layer_names = ['mem','memh','opc','op1','op2','op3']
     layers = [Layer(name, N, act, coder) for name in layer_names]
 
     NL = len(layers) + 2 # +2 for gate out/hidden
@@ -135,8 +135,8 @@ if __name__ == '__main__':
     NH = 100
     actg = heaviside_activator(NG)
     acth = logistic_activator(PAD,NH)
-    gate_output = Layer("gates", NG, actg, Coder(actg))
-    gate_hidden = Layer("ghide", NH, acth, Coder(acth))
+    gate_output = Layer('gates', NG, actg, Coder(actg))
+    gate_hidden = Layer('ghide', NH, acth, Coder(acth))
     layers.extend([gate_hidden, gate_output])
     
     gate_map = gm.make_nvm_gate_map(layers)
@@ -145,13 +145,13 @@ if __name__ == '__main__':
 
     h_start = acth.make_pattern()
     h = h_start
-    for reg in ["opc"]:#,"op1","op2","op3"]:
+    for reg in ['opc']:#,'op1','op2','op3']:
         # load op from memory and step memory
-        _, h = gs.add_transit(ungate = gmem() + gcopy(reg,"mem"), old_hidden = h)
+        _, h = gs.add_transit(ungate = gmem() + gcopy(reg,'mem'), old_hidden = h)
         h = gs.stabilize(h)
 
     # Let opcode bias the gate layer
-    g, h = gs.add_transit(ungate = [("ghide","opc","U")], old_hidden=h)
+    g, h = gs.add_transit(ungate = [('ghide','opc','u')], old_hidden=h)
     
     # Ready to execute instruction
     h_ready = h.copy()
@@ -165,11 +165,11 @@ if __name__ == '__main__':
     
     g, h = gs.add_transit(
         new_hidden = h_start, # begin next clock cycle
-        old_gates = g, old_hidden = h_ready, opc = "nop")
+        old_gates = g, old_hidden = h_ready, opc = 'nop')
 
     weights, bias = gs.flash()
 
     h = h_start
     for i in range(30):
-        h = acth.f(weights[("ghide","ghide")].dot(h) + bias["ghide"])
+        h = acth.f(weights[('ghide','ghide')].dot(h) + bias['ghide'])
         print(i, acth.e(h, h_ready).all())

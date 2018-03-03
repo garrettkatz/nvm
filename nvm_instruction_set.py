@@ -1,4 +1,4 @@
-from gate_sequencer import GateSequencer, gmem, gcopy
+from gate_sequencer import GateSequencer, gprog, gcopy
 
 def flash_instruction_set(nvm):
     """
@@ -13,29 +13,28 @@ def flash_instruction_set(nvm):
     ### Start executing new instruction
 
     g_start = gs.make_gate_output()
-    gate_output.coder.encode("start", g_start)
+    gate_output.coder.encode("off", g_start)
     h_start = gate_hidden.coder.encode("start")
-
-    h = h_start
-    _, h = gs.add_transit(new_hidden = h, old_hidden = h)
     
-    # for reg in ["opc"]:#,"op1","op2","op3"]:
-    #     # load op from memory and step memory
-    #     _, h = gs.add_transit(ungate = gmem() + gcopy(reg,"mem"), old_hidden = h)
-    #     # h = gs.stabilize(h)
-
-    # # Let opcode bias the gate layer
-    # g, h = gs.add_transit(ungate = [("ghide","opc","U")], old_hidden=h)
+    # load ops from program memory and step program memory
+    g, h = gs.add_transit(ungate = gprog(), old_hidden = h_start)
+    gate_output.coder.encode("load op",g)
+    gate_hidden.coder.encode("load op",h)
     
-    # # Ready to execute instruction
-    # h_ready = h.copy()
+    # stabilize memory
+    h = gs.stabilize(h)
+    gate_hidden.coder.encode("stable",h)
     
-    # # _, _ = gs.add_transit(
-    # #     new_hidden = h_start, # begin next clock cycle
-    # #     old_gates = g, old_hidden = h_ready)
-
+    # Let opcode bias the gate layer
+    g, h = gs.add_transit(ungate = [
+        ("gate_hidden","op"+x,"u") for x in 'c123'], old_hidden=h)
+    gate_output.coder.encode('op bias', g)
     
-    # ###### NOP instruction
+    # Ready to execute instruction
+    h_ready = h.copy()
+    gate_hidden.coder.encode('ready', h_ready)
+    
+    # # ###### NOP instruction
     
     # g, h = gs.add_transit(
     #     new_hidden = h_start, # begin next clock cycle

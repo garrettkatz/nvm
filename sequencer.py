@@ -23,8 +23,8 @@ class Sequencer(object):
 
         # Check for non-determinism
         for n, i in self.transits:
-            # Different new state
-            if (n != new_state).any(): continue
+            # Same new state
+            if self.sequence_layer.activator.e(n, new_state).all(): continue
             # Different input layers
             if set(i.keys()) != set(input_states.keys()): continue
             # Different input patterns
