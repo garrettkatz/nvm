@@ -4,6 +4,7 @@ from coder import Coder
 from gate_map import make_nvm_gate_map
 from activator import heaviside_activator, logistic_activator
 from nvm_instruction_set import flash_instruction_set
+from nvm_assembler import assemble
 
 class NVMNet:
     
@@ -16,7 +17,7 @@ class NVMNet:
 
         # set up layers
         act = logistic_activator(pad, layer_size)
-        layer_names = ['ip','opc','op1','op2','op3','cmph','cmpo']
+        layer_names = ['ip','opc','op1','op2','op3']#,'cmph','cmpo']
         layer_names = layer_names[:5]
         layers = {name: Layer(name, layer_size, act, Coder(act)) for name in layer_names}
         layers.update(devices)
@@ -46,6 +47,11 @@ class NVMNet:
 
     def set_pattern(self, layer_name, pattern):
         self.activity[layer_name] = pattern
+
+    def assemble(self, program, name, do_global=False, verbose=False):
+        weights, bias = assemble(self, program, name, do_global=do_global, verbose=verbose)
+        nvmnet.weights.update(weights)
+        nvmnet.bias.update(bias)
 
     def tick(self):
 
@@ -87,18 +93,29 @@ if __name__ == '__main__':
 
     np.set_printoptions(linewidth=200, formatter = {'float': lambda x: '% .2f'%x})
 
+    program = """
+    
+start:  nop
+end
+
+    """
+    name = "test"
+
     layer_size = 8
     pad = 0.9
     devices = {}
 
     nvmnet = NVMNet(layer_size, pad, devices)
-    # print(nvmnet.weights)
-    # print(nvmnet.bias)
+    nvmnet.assemble(program, name, do_global=True)
+    nvmnet.activity["ip"] = nvmnet.layers["ip"].coder.encode(name)
     
+    show_layers = ["gate_output","gate_hidden", "ip"] + ["op"+x for x in "c123"]
     for t in range(20):
         if t % 2 == 0:
             print('t = %d'%t)
-            for name in ['gate_output','gate_hidden']:
+            for name in show_layers:
                 print(name + ': ' + nvmnet.layers[name].coder.decode(nvmnet.activity[name]))
             # print(nvmnet.activity['gate_hidden'].T)
+        # if nvmnet.layers["opc"].coder.decode(nvmnet.activity["opc"]) == "end":
+        #     break
         nvmnet.tick()

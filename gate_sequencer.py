@@ -107,14 +107,6 @@ class GateSequencer(Sequencer, object):
         # weights, bias, hidden
         return weights, bias
 
-def gcopy(to_layer, from_layer):
-    """gates for inter-layer signal"""
-    return [(to_layer,from_layer,'u'), (to_layer,to_layer,'d')]
-
-def gprog():
-    """gates for program memory (ip and op) layer updates"""
-    return [('ip','ip','u')]+[k for x in ['c','1','2','3'] for k in gcopy("op"+x, 'ip')]
-
 if __name__ == '__main__':
 
     np.set_printoptions(linewidth=200, formatter = {'float': lambda x: '% .2f'%x})
@@ -143,11 +135,20 @@ if __name__ == '__main__':
     gs = GateSequencer(gate_map, gate_output, gate_hidden,
         {layer.name: layer for layer in layers})
 
+    def gcopy(to_layer, from_layer):
+        """gates for inter-layer signal"""
+        return [(to_layer,from_layer,'u'), (to_layer,to_layer,'d')]
+    
+    def gprog():
+        """gates for program memory (ip and op) layer updates"""
+        return [('ip','ip','u')]+[k for x in ['c','1','2','3'] for k in gcopy("op"+x, 'ip')]
+
+
     h_start = acth.make_pattern()
     h = h_start
     for reg in ['opc']:#,'op1','op2','op3']:
         # load op from memory and step memory
-        _, h = gs.add_transit(ungate = gmem() + gcopy(reg,'mem'), old_hidden = h)
+        _, h = gs.add_transit(ungate = gprog() + gcopy(reg,'mem'), old_hidden = h)
         h = gs.stabilize(h)
 
     # Let opcode bias the gate layer
