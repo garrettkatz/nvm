@@ -2,7 +2,7 @@ import numpy as np
 from layer import Layer
 from coder import Coder
 from gate_map import make_nvm_gate_map
-from activator import heaviside_activator, logistic_activator
+from activator import *
 from nvm_instruction_set import flash_instruction_set
 from nvm_assembler import assemble
 
@@ -17,6 +17,7 @@ class NVMNet:
 
         # set up layers
         act = logistic_activator(pad, layer_size)
+        # act = tanh_activator(pad, layer_size)
         layer_names = ['ip','opc','op1','op2','op3']#,'cmph','cmpo']
         layer_names = layer_names[:5]
         layers = {name: Layer(name, layer_size, act, Coder(act)) for name in layer_names}

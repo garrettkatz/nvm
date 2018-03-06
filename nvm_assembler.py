@@ -1,6 +1,7 @@
 import numpy as np
+from learning_rules import *
 
-def assemble(nvmnet, program, name, do_global=False, verbose=False):
+def assemble(nvmnet, program, name, learning_rule, verbose=False):
 
     ### Preprocess program string
 
@@ -44,7 +45,7 @@ def assemble(nvmnet, program, name, do_global=False, verbose=False):
     for x in "c123":
         weights[("op"+x,"ip")], bias["op"+x] = flash_mem(
             ips[:,:-1], encodings["op"+x], nvmnet.layers["op"+x].activator,
-            do_global=do_global, verbose=verbose)
+            learning_rule, verbose=verbose)
 
     ### Set up unbiased instruction sequence
     X_ip = np.concatenate((
@@ -76,29 +77,16 @@ def assemble(nvmnet, program, name, do_global=False, verbose=False):
         np.concatenate((X_ip, X_label), axis=1),
         np.concatenate((Y_ip, Y_label), axis=1),
         nvmnet.layers["ip"].activator,
-        do_global=do_global, verbose=verbose)
+        learning_rule, verbose=verbose)
     weights[("ip","ip")] = W[:,:nvmnet.layers["ip"].size]
     weights[("ip","op2")] = W[:,nvmnet.layers["ip"].size:]
     bias["ip"] = b
     
     return weights, bias
 
-def flash_mem(X, Y, activator, do_global=False, verbose=False):
+def flash_mem(X, Y, activator, learning_rule, verbose=False):
     
-    # y = f(Wx)
-    # W = g(y)/x
-    # W ~ g(y)x.T
-
-    if do_global:
-        W = np.linalg.lstsq(
-            np.concatenate((X.T, np.ones((X.shape[1],1))), axis=1), # ones for bias
-            activator.g(Y).T, rcond=None)[0].T
-    else:
-        W = activator.g(Y).dot(
-            np.concatenate((X.T, np.ones((X.shape[1],1))),axis=1) # ones for bias
-            ) / X.shape[0]
-
-    weights, bias = W[:,:-1], W[:,[-1]]
+    weights, bias = learning_rule(X, Y, activator)
 
     if verbose:
         _Y = activator.f(weights.dot(X) + bias)
@@ -112,7 +100,7 @@ if __name__ == '__main__':
 
     np.set_printoptions(linewidth=200, formatter = {'float': lambda x: '% .2f'%x})
 
-    layer_size = 8
+    layer_size = 128
     pad = 0.9
     devices = {}
 
@@ -124,23 +112,26 @@ if __name__ == '__main__':
 start:  nop
         set r1 true
         mov r2, r1
-
+        end
     """
     name = "test"
     
-    weights, bias = assemble(nvmnet, program, name, do_global=True, verbose=True)
+    weights, bias = assemble(nvmnet, program, name, logistic_hebbian, verbose=True)
 
     v = nvmnet.layers["ip"].coder.encode(name)
 
     ip = nvmnet.layers["ip"]
     f = ip.activator.f
     b = bias["ip"]
-    for t in range(5):
+    end = False
+    for t in range(10):
         line = ""
         for x in "c123":
             opx = nvmnet.layers["op"+x]
             o = opx.activator.f(weights[("op"+x,"ip")].dot(v) + bias["op"+x])
             line += " " + opx.coder.decode(o)
+            if x == 'c' and opx.coder.decode(o) == "end": end = True
         v = f(weights[("ip","ip")].dot(v) + bias["ip"])
         line = ip.coder.decode(v) + " " + line
         print(line)
+        if end: break
