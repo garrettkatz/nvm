@@ -30,25 +30,29 @@ def flash_instruction_set(nvm):
     gate_hidden.coder.encode("load op",h)
     
     # stabilize memory
-    h = gs.stabilize(h)
+    g, h = gs.stabilize(h)
     gate_hidden.coder.encode("stable",h)
-    
-    # Let opcode bias the gate layer
-    g, h = gs.add_transit(ungate = [("gate_hidden","opc","u")], old_hidden=h)
-    gate_output.coder.encode('op bias', g)
-    
-    # Ready to execute instruction
-    h_ready = h.copy()
-    g_ready = g.copy()
-    gate_hidden.coder.encode('ready', h_ready)
-    gate_output.coder.encode('ready', g_ready)
-    
-    ###### NOP instruction
+    # gate_output.coder.encode("stable",g)
     
     g, h = gs.add_transit(
         new_hidden = h_start, # begin next clock cycle
-        old_gates = g_ready, old_hidden = h_ready, opc = "nop")
+        old_gates = g, old_hidden = h)
+    
+    # # Let opcode bias the gate layer
+    # g, h = gs.add_transit(ungate = [("gate_hidden","opc","u")], old_hidden=h)
+    # gate_output.coder.encode('op bias', g)
+    
+    # # Ready to execute instruction
+    # h_ready = h.copy()
+    # g_ready = g.copy()
+    # gate_hidden.coder.encode('ready', h_ready)
+    # gate_output.coder.encode('ready', g_ready)
+    
+    # ###### NOP instruction
+    
+    # g, h = gs.add_transit(
+    #     new_hidden = h_start, # begin next clock cycle
+    #     old_gates = g_ready, old_hidden = h_ready, opc = "nop")
 
-    weights, bias = gs.flash()
-    g_start = gs.make_gate_output()
-    return weights, bias
+    weights, biases = gs.flash()
+    return weights, biases

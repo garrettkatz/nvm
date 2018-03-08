@@ -24,12 +24,13 @@ def assemble(nvmnet, program, name, learning_rule, verbose=False):
             lines[l].append("null")
 
     ### Encode instruction pointers and labels
-    ips = []
+    ips = [nvmnet.layers["ip"].coder.encode(name)] # pointer to program
     for l in range(len(lines)):
         ips.append(nvmnet.layers["ip"].coder.encode("ip %2d"%l))
     for label, line_index in labels.items():
-        nvmnet.layers["ip"].coder.encode(label, ips[line_index])
-    ips.insert(0, nvmnet.layers["ip"].coder.encode(name)) # pointer to program
+        ip_index = line_index + 1 # + 1 for leading program pointer
+        ip_index -= 1 # but - 1 for ip -> opx step
+        nvmnet.layers["ip"].coder.encode(label, ips[ip_index])
     ips = np.concatenate(ips, axis=1)
 
     ### Encode tokens and replace labels
@@ -41,67 +42,53 @@ def assemble(nvmnet, program, name, learning_rule, verbose=False):
     encodings = {k: np.concatenate(v,axis=1) for k,v in encodings.items()}
     
     ### Store tokens
-    weights, bias = {}, {}
+    weights, biases = {}, {}
     for x in "c123":
-        weights[("op"+x,"ip")], bias["op"+x] = flash_mem(
-            ips[:,:-1], encodings["op"+x], nvmnet.layers["op"+x].activator,
+        weights[("op"+x,"ip")], biases[("op"+x,"ip")] = flash_mem(
+            ips[:,:-1], encodings["op"+x],
+            nvmnet.layers["op"+x].activator,
             learning_rule, verbose=verbose)
 
-    ### Set up unbiased instruction sequence
-    X_ip = np.concatenate((
-        ips[:,:-1], # pointers
-        np.zeros((nvmnet.layers["op2"].size, ips.shape[1]-1)), # no label bias
-        ), axis=0)
-    Y_ip = ips[:,1:] # pointers at next step
-
-    ### Set up label links
-    if len(labels) > 0:
-        label_tokens = labels.keys()
-        label_op_patterns = np.concatenate([
-            nvmnet.layers["op2"].coder.encode(tok)
-            for tok in label_tokens])
-        label_ip_patterns = np.concatenate([
-            nvmnet.layers["ip"].coder.encode(tok)
-            for tok in label_tokens])
-        X_label = np.concatenate((
-            np.zeros((nvmnet.layers["ip"].size, len(labels))), # no ip bias
-            label_op_patterns, # op bias
-            ), axis=0)
-        Y_label = label_ip_patterns
-    else:
-        X_label = np.zeros((X_ip.shape[0],0))
-        Y_label = np.zeros((Y_ip.shape[0],0))
-    
-    # Store ip associations
-    W, b = flash_mem(
-        np.concatenate((X_ip, X_label), axis=1),
-        np.concatenate((Y_ip, Y_label), axis=1),
+    ### Store instruction pointer sequence
+    weights[("ip","ip")], biases[("ip","ip")] = flash_mem(
+        ips[:,:-1], ips[:,1:],
         nvmnet.layers["ip"].activator,
         learning_rule, verbose=verbose)
-    weights[("ip","ip")] = W[:,:nvmnet.layers["ip"].size]
-    weights[("ip","op2")] = W[:,nvmnet.layers["ip"].size:]
-    bias["ip"] = b
+
+    ### Store label links
+    if len(labels) > 0:
+        label_tokens = labels.keys()
+        X_label = np.concatenate([
+            nvmnet.layers["op2"].coder.encode(tok)
+            for tok in label_tokens], axis=1)
+        Y_label = np.concatenate([
+            nvmnet.layers["ip"].coder.encode(tok)
+            for tok in label_tokens], axis=1)
+        weights[("ip","op2")], biases[("ip","op2")] = flash_mem(
+            X_label, Y_label,
+            nvmnet.layers["ip"].activator,
+            learning_rule, verbose=verbose)
     
-    return weights, bias
+    return weights, biases
 
 def flash_mem(X, Y, activator, learning_rule, verbose=False):
     
-    weights, bias = learning_rule(X, Y, activator)
+    w, b = learning_rule(X, Y, activator)
 
     if verbose:
-        _Y = activator.f(weights.dot(X) + bias)
+        _Y = activator.f(w.dot(X) + b)
         print("Flash ram residual max: %f"%np.fabs(Y - _Y).max())
         print("Flash ram residual mad: %f"%np.fabs(Y - _Y).mean())
         print("Flash ram sign diffs: %d"%((np.ones(Y.shape) - activator.e(Y, _Y)).sum()))
 
-    return weights, bias
+    return w, b
 
 if __name__ == '__main__':
 
     np.set_printoptions(linewidth=200, formatter = {'float': lambda x: '% .2f'%x})
 
-    layer_size = 128
-    pad = 0.9
+    layer_size = 64
+    pad = 0.95
     devices = {}
 
     from nvm_net import NVMNet
@@ -111,27 +98,35 @@ if __name__ == '__main__':
     
 start:  nop
         set r1 true
-        mov r2, r1
+        mov r2 r1
+        jmp cond start
         end
     """
-    name = "test"
-    
-    weights, bias = assemble(nvmnet, program, name, logistic_hebbian, verbose=True)
 
-    v = nvmnet.layers["ip"].coder.encode(name)
+    program_name = "test"    
+    weights, biases = assemble(nvmnet, program, program_name, logistic_hebbian, verbose=True)
+
 
     ip = nvmnet.layers["ip"]
     f = ip.activator.f
-    b = bias["ip"]
+    jmp = False
     end = False
-    for t in range(10):
+    v = nvmnet.layers["ip"].coder.encode(program_name)
+    for t in range(20):
         line = ""
         for x in "c123":
             opx = nvmnet.layers["op"+x]
-            o = opx.activator.f(weights[("op"+x,"ip")].dot(v) + bias["op"+x])
+            o = opx.activator.f(weights[("op"+x,"ip")].dot(v) + biases[("op"+x,"ip")])
             line += " " + opx.coder.decode(o)
+            if x == 'c' and opx.coder.decode(o) == "jmp": jmp = True
             if x == 'c' and opx.coder.decode(o) == "end": end = True
-        v = f(weights[("ip","ip")].dot(v) + bias["ip"])
+        v = f(weights[("ip","ip")].dot(v) + biases[("ip","ip")])
         line = ip.coder.decode(v) + " " + line
         print(line)
         if end: break
+        if jmp:
+            v = nvmnet.layers["op2"].coder.encode("start")    
+            v = f(weights[("ip","op2")].dot(v) + biases[("ip","op2")])
+            jmp = False
+
+    print(ip.coder.decode(v))

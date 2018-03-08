@@ -75,37 +75,35 @@ class GateSequencer(Sequencer, object):
     def stabilize(self, hidden, num_iters=1):
         """Stabilize activity for a few iterations"""
         for i in range(num_iters):
-            _, hidden = self.add_transit(old_hidden=hidden)
-        return hidden
+            g_off, hidden = self.add_transit(old_hidden=hidden)
+        return g_off, hidden
 
     def flash(self):
         
         # Flash sequencer
-        weights, bias, XYZ = super(GateSequencer, self).flash()
+        weights, biases, XYZ = super(GateSequencer, self).flash()
 
         # Form output associations
         X, _, Z = XYZ
-        X = X[:self.gate_hidden.size,:] # hidden layer portions
-        Z = Z[:self.gate_hidden.size,:] # hidden layer portions
+        X = X[:self.gate_hidden.size + 1,:] # hidden layer portion with bias
+        Z = Z[:self.gate_hidden.size + 1,:] # hidden layer portion with bias
         Y = np.concatenate((
             self.make_gate_output()*np.ones((1, X.shape[1])), # intermediate output
             np.concatenate(self.transit_outputs, axis=1), # transit output
         ),axis=1)
 
         # solve linear equations for output
-        XZ = np.concatenate((
-            np.concatenate((X, Z), axis=1),
-            np.ones((1,2*X.shape[1])) # bias
-        ), axis = 0)
+        XZ = np.concatenate((X, Z), axis=1)
         g = self.gate_output.activator.g
         W = np.linalg.lstsq(XZ.T, g(Y).T, rcond=None)[0].T
 
         # update weights and bias with output
-        weights[(self.gate_output.name, self.gate_hidden.name)] = W[:,:-1]
-        bias[self.gate_output.name] = W[:,[-1]]
+        pair_key = (self.gate_output.name, self.gate_hidden.name)
+        weights[pair_key] = W[:,:-1]
+        biases[pair_key] = W[:,[-1]]
     
-        # weights, bias, hidden
-        return weights, bias
+        # weights, biases
+        return weights, biases
 
 if __name__ == '__main__':
 
@@ -119,7 +117,7 @@ if __name__ == '__main__':
     act = logistic_activator(PAD, N)
     coder = Coder(act)
 
-    layer_names = ['mem','memh','opc','op1','op2','op3']
+    layer_names = ['mem','ip','opc','op1','op2','op3']
     layers = [Layer(name, N, act, coder) for name in layer_names]
 
     NL = len(layers) + 2 # +2 for gate out/hidden
@@ -131,7 +129,7 @@ if __name__ == '__main__':
     gate_hidden = Layer('ghide', NH, acth, Coder(acth))
     layers.extend([gate_hidden, gate_output])
     
-    gate_map = gm.make_nvm_gate_map(layers)
+    gate_map = gm.make_nvm_gate_map([layer.name for layer in layers])
     gs = GateSequencer(gate_map, gate_output, gate_hidden,
         {layer.name: layer for layer in layers})
 
@@ -157,20 +155,15 @@ if __name__ == '__main__':
     # Ready to execute instruction
     h_ready = h.copy()
     
-    # _, _ = gs.add_transit(
-    #     new_hidden = h_start, # begin next clock cycle
-    #     old_gates = g, old_hidden = h_ready)
-
-    
     ###### NOP instruction
     
     g, h = gs.add_transit(
         new_hidden = h_start, # begin next clock cycle
         old_gates = g, old_hidden = h_ready, opc = 'nop')
 
-    weights, bias = gs.flash()
+    weights, biases = gs.flash()
 
     h = h_start
     for i in range(30):
-        h = acth.f(weights[('ghide','ghide')].dot(h) + bias['ghide'])
+        h = acth.f(weights[('ghide','ghide')].dot(h) + biases[('ghide','ghide')])
         print(i, acth.e(h, h_ready).all())

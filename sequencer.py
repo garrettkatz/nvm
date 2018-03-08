@@ -48,10 +48,11 @@ class Sequencer(object):
         X = {}
         for i, input_states in enumerate(all_input_states):
             for name, pattern in input_states.items():
-                if name not in X: X[name] = np.zeros((pattern.shape[0], P))
-                X[name][:, [i]] = pattern
+                if name not in X: X[name] = np.zeros((pattern.shape[0]+1, P))
+                X[name][:-1, [i]] = pattern
+                X[name][-1, i] = 1. # bias
 
-        # Fixed layer order, make sure sequence layer comes first for zsolve
+        # Fix layer order, make sure sequence layer comes first for zsolve
         names = X.keys()
         names.remove(self.sequence_layer.name)
         names.insert(0, self.sequence_layer.name)
@@ -59,25 +60,25 @@ class Sequencer(object):
         # Solve with hidden step
         X = np.concatenate([X[name] for name in names], axis=0)
         Y = np.concatenate(all_new_states, axis=1)
-        W, bias, Z = zsolve(X, Y,
+        W, Z = zsolve(X, Y,
             self.sequence_layer.activator.f,
             self.sequence_layer.activator.g)
         
-        # Split up weights by layer
+        # Split up weights and biases
         weights = {}
+        biases = {}
         offset = 0
         for name in names:
+            pair_key = (self.sequence_layer.name, name)
             layer_size = self.input_layers[name].size
-            weights[(self.sequence_layer.name, name)] = W[:,offset:offset + layer_size]
-            offset += layer_size
-        
-        # Also label bias with layer
-        bias = {self.sequence_layer.name: bias}
+            weights[pair_key] = W[:,offset:offset + layer_size]
+            biases[pair_key] = W[:,[offset + layer_size]]
+            offset += layer_size + 1
         
         # return final weights, bias, and matrices
-        return weights, bias, (X, Y, Z)
+        return weights, biases, (X, Y, Z)
 
-def zsolve(X, Y, f, g, verbose=True):
+def zsolve(X, Y, f, g, verbose=False):
     """
     Construct W that transitions states in X to corresponding states in Y
     X, Y are arrays, with paired activity patterns as columns
@@ -96,17 +97,18 @@ def zsolve(X, Y, f, g, verbose=True):
     # use A to set intermediate Z that is low-rank pre non-linearity
     Z = np.zeros(X.shape)
     Z[:N,:] = f(np.random.randn(N, A.shape[0]).dot(A))
+    Z[N,:] = 1. # bias
 
     # solve linear equations
-    XZ = np.concatenate((
-        np.concatenate((X, Z), axis=1),
-        np.ones((1,2*X.shape[1])) # bias
-    ), axis = 0)
+    XZ = np.concatenate((X, Z), axis=1)
     ZY = np.concatenate((Z[:N,:], Y), axis=1)
     W = np.linalg.lstsq(XZ.T, g(ZY).T, rcond=None)[0].T
 
-    # weights, bias, hidden
-    return W[:,:-1], W[:,[-1]], Z
+    if verbose:
+        print("Sequencer flash residual = %.f"%(np.fabs(ZY - f(W.dot(XZ))).max()))
+
+    # solution and hidden patterns
+    return W, Z
 
 if __name__ == '__main__':
 
@@ -133,21 +135,25 @@ if __name__ == '__main__':
 
     print(c.list_tokens())
 
-    weights, bias = s.flash()
-    for k,w in weights.items():
+    weights, biases, _ = s.flash()
+    for k in weights:
+        w, b = weights[k], biases[k]
         print(k)
         print(w)
-    print("bias")
-    print(bias.T)
+        print(b.T)
 
     a = {"gates":v_old, "op1":c.encode("SC"), "op2":c.encode("SC")}
-    wv = bias.copy()
-    for (_,from_layer),w in weights.items(): wv += w.dot(a[from_layer])
+    wvb = np.zeros(v_old.shape)
+    for k in weights:
+        w, b = weights[k], biases[k]
+        wvb += w.dot(a[k[1]]) + b
     z = np.zeros(v_old.shape)
-    a = {"gates":act.f(wv), "op1": z, "op2":z}
-    wv = bias.copy()
-    for (_,from_layer),w in weights.items(): wv += w.dot(a[from_layer])
-    v_test = act.f(wv)
+    a = {"gates":act.f(wvb), "op1": z, "op2":z}
+    wvb = np.zeros(v_old.shape)
+    for k in weights:
+        w, b = weights[k], biases[k]
+        wvb += w.dot(a[k[1]]) + b
+    v_test = act.f(wvb)
 
     for v in [v_old, v_test, v_new]:
         print(c.decode(v), v.T)
