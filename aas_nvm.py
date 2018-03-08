@@ -3,6 +3,16 @@ from sys import exit
 from tokens import get_token, N_LAYER, N_LAYER_DIM, LAYERS, DEVICES, TOKENS
 from gates import get_gates, get_open_gates, get_gate_index, PAD, LAMBDA, N_GATES, N_HGATES, N_GH
 from flash_rom import W_ROM
+from syngen import ConnectionFactory
+
+# Comparison values
+# activity_new["CMPH"] = W_CMPH * activity["CMPA"] * activity["CMPB"]
+# activity_new["CMPO"] = np.ones((N_LAYER,1)) * (W_CMPO * activity["CMPH"].sum() - B_CMPO)
+CMP_E = 1./(2.*N_LAYER)
+W_CMPH = np.arctanh(1. - CMP_E) / (PAD / 2.)**2
+W_CMPO = 2. * np.arctanh(PAD) / (N_LAYER*(1-CMP_E) - (N_LAYER-1))
+B_CMPO = W_CMPO * (N_LAYER*(1 - CMP_E) + (N_LAYER-1)) / 2.
+
 
 #### FINALIZE WEIGHTS ###
 
@@ -100,12 +110,8 @@ def tick(activity, weights):
         activity_new[to_layer] += wv
 
     # handle compare specially, never gated
-    cmp_e = 1./(2.*N_LAYER)
-    w_cmph = np.arctanh(1. - cmp_e) / (PAD / 2.)**2
-    w_cmpo = 2. * np.arctanh(PAD) / (N_LAYER*(1-cmp_e) - (N_LAYER-1))
-    b_cmpo = w_cmpo * (N_LAYER*(1 - cmp_e) + (N_LAYER-1)) / 2.
-    activity_new["CMPH"] = w_cmph * activity["CMPA"] * activity["CMPB"]
-    activity_new["CMPO"] = np.ones((N_LAYER,1)) * (w_cmpo * activity["CMPH"].sum() - b_cmpo)
+    activity_new["CMPH"] = W_CMPH * activity["CMPA"] * activity["CMPB"]
+    activity_new["CMPO"] = np.ones((N_LAYER,1)) * (W_CMPO * activity["CMPH"].sum() - B_CMPO)
     
     for layer in activity_new:
         activity_new[layer] = np.tanh(activity_new[layer])
@@ -120,242 +126,241 @@ def weight_update(W, x, y):
     return W + np.arctanh(y) * x.T / N_LAYER #/ (N_LAYER*PAD**2)
 
 def nvm_synapto(weights):
-    layers = [{
-        "name" : "bias",
-        "neural model" : "relay",
-        "rows" : 1,
-        "columns" : 1,
-        "noise config" : {
-            "type" : "flat",
-            "val" : 1.0,
-        }}]
-    for layer in LAYERS + DEVICES + ["GATES"]:
+    comp_external_layers = ["CMPA", "CMPB"]
+    comp_internal_layers = ["CMPH", "CMPO"]
+    other_layers = [
+        l for l in LAYERS + DEVICES + ["GATES"]
+            if l not in comp_internal_layers + comp_external_layers]
+
+    layer_configs = []
+    for layer in other_layers + comp_external_layers:
         dendrites = []
-        if layer not in ["CMPH", "CMPO"]:
-            dendrites.extend(
-                {"name" : layer + "<" + from_layer}
-                    for (to_layer,from_layer),w in weights.iteritems()
-                        if to_layer == layer and (type(w) is not str or (type(w) is str and w != "none"))
-            )
-            dendrites.append(
-                {"name" : "gain",
-                 "children" : [
-                     {
-                         "name" : "gain-update",
-                         "opcode" : "add"
-                     },
-                     {
-                         "name" : "gain-decay",
-                         "opcode" : "mult"
-                     }
-                 ]
-                }
-            )
-        layers.append({
+        # Add dendrites for other layers
+        for (to_layer,from_layer),w in weights.iteritems():
+            if to_layer == layer and \
+                (type(w) is not str or (type(w) is str and w != "none")):
+                dendrites.append({"name" : layer + "<" + from_layer})
+
+        # Add dendrites for update/decay gain
+        dendrites.append(
+            {
+                "name" : "gain",
+                "children" : [
+                    {
+                        "name" : "gain-update",
+                        "opcode" : "add",
+                        "init" : 1.0 # bias
+                    },
+                    {
+                        "name" : "gain-decay",
+                        "opcode" : "mult",
+                        "init" : 1.0 # bias
+                    }
+                ]
+            }
+        )
+
+        # Build layer config
+        layer_configs.append({
             "name" : layer,
             "neural model" : "nvm",
             "dendrites" : dendrites,
             "rows" : 1 if layer == "GATES" else N_LAYER_DIM,
-            "columns" : N_GH if layer == "GATES" else N_LAYER_DIM})
-    structures = [{"name" : "nvm", "type" : "parallel", "layers": layers}]
-    
-    connections = []
-    for (to_layer, from_layer),w in weights.iteritems():
-        if to_layer in ["CMPH", "CMPO"] or from_layer in ["CMPH", "CMPA", "CMPB"]: continue
-        if type(w) == str and w == "none": continue
-        elif type(w) == str and w == "relay":
-            # wv = u * LAMBDA * activity[from_layer]
-            connections.append({
-                "name": to_layer + "<"+  from_layer + "-input",
-                "dendrite": to_layer + "<"+  from_layer,
-                "from layer": from_layer,
-                "to layer": to_layer,
-                "type": "one to one",
-                "opcode": "add",
-                "plastic" : "false",
-                "weight config" : {
-                    "type" : "flat",
-                    "weight" : LAMBDA,
-                },
-            })
-        else:
-            # wv = u * w.dot(activity[from_layer])
-            connections.append({
-                "name": to_layer + "<"+  from_layer + "-input",
-                "dendrite": to_layer + "<"+  from_layer,
-                "from layer": from_layer,
-                "to layer": to_layer,
-                "type": "fully connected",
-                "opcode": "add",
-                "plastic" : "false",
-                "weight config" : {
-                    "type" : "flat",
-                    "weight" : "0.0",
-                },
-            })
-        gate_index = get_gate_index(to_layer, from_layer, "U")
-        connections.append({
-            "name": to_layer + "<"+  from_layer + "-input-update",
-            "dendrite": to_layer + "<"+  from_layer,
-            "from layer": "GATES",
-            "to layer": to_layer,
-            "type": "subset",
-            "subset config" : {
-                "from row start" : 0,
-                "from row end" : 1,
-                "from column start" : gate_index,
-                "from column end" : gate_index+1,
-                "to row start" : 0,
-                "to row end" : 1 if to_layer == "GATES" else N_LAYER_DIM,
-                "to column start" : 0,
-                "to column end" : N_GH if to_layer == "GATES" else N_LAYER_DIM,
-            },
-            "opcode": "mult_heaviside",
-            "plastic" : "false",
-            "weight config" : {
-                "type" : "flat",
-                "weight" : 1
-            },
+            "columns" : N_GH if layer == "GATES" else N_LAYER_DIM
         })
 
-    for layer in LAYERS + DEVICES + ["GATES"]:
-        if layer in ["CMPH", "CMPO"]: continue
+    layer_configs.append({
+        "name" : "CMPH",
+        "neural model" : "nvm",
+        "rows" : N_LAYER_DIM,
+        "columns" : N_LAYER_DIM,
+        "noise config" : {
+            "type" : "flat",
+            "val" : W_CMPH  # bias
+        }
+    })
+    layer_configs.append({
+        "name" : "CMPO",
+        "neural model" : "nvm",
+        "rows" : N_LAYER_DIM,
+        "columns" : N_LAYER_DIM,
+        "noise config" : {
+            "type" : "flat",
+            "val" : -B_CMPO  # bias
+        }
+    })
+
+    structures = [{"name" : "nvm",
+                   "type" : "parallel",
+                   "layers": layer_configs}]
+
+    # Parameters shared by all connections
+    defaults = { "plastic" : "false" }
+
+    # Builds a name for a connection or dendrite
+    def build_name(from_layer, to_layer, suffix=""):
+        return to_layer + "<" + from_layer + suffix
+
+    # Build relay (one to one) connection
+    def build_relay(from_layer, to_layer, props):
+        props["name"] = build_name(from_layer, to_layer, "input")
+        props["from layer"] = from_layer
+        props["to layer"] = to_layer
+        props["dendrite"] = build_name(from_layer, to_layer)
+        props["type"] = "one to one"
+        props["opcode"] = "add"
+        props["weight config"] = {
+            "type" : "flat",
+            "weight" : LAMBDA
+        }
+
+    # Build fully connected connection
+    def build_full(from_layer, to_layer, props):
+        props["name"] = build_name(from_layer, to_layer, "-input")
+        props["from layer"] = from_layer
+        props["to layer"] = to_layer
+        props["dendrite"] = build_name(from_layer, to_layer)
+        props["type"] = "fully connected"
+        props["opcode"] = "add"
+        props["weight config"] = {
+            "type" : "flat",
+            "weight" : 0.0  # This will get overwritten when the ROM is flashed
+        }
+
+    # Build gate for another connection
+    def build_update(from_layer, to_layer, props):
+        props["name"] = build_name(from_layer, to_layer, "-input-update")
+        props["from layer"] = "GATES"
+        props["to layer"] = to_layer
+        props["dendrite"] = build_name(from_layer, to_layer)
+        props["opcode"] = "mult_heaviside"
+        props["weight config"] = {
+            "type" : "flat",
+            "weight" : 1
+        }
+        props["type"] = "subset"
+
+        gate_index = get_gate_index(to_layer, from_layer, "U")
+        props["subset config"] = {
+            "from row start" : 0,
+            "from row end" : 1,
+            "from column start" : gate_index,
+            "from column end" : gate_index+1,
+            "to row start" : 0,
+            "to row end" : 1 if to_layer == "GATES" else N_LAYER_DIM,
+            "to column start" : 0,
+            "to column end" : N_GH if to_layer == "GATES" else N_LAYER_DIM,
+        }
+
+    # Builds a multiplicative gain connection (from_layer = to_layer)
+    def build_gain(from_layer, to_layer, props):
+        props["name"] = build_name(from_layer, to_layer, "-gain")
+        props["from layer"] = from_layer
+        props["to layer"] = to_layer
+        props["dendrite"] = "gain"
+        props["type"] = "one to one"
+        props["opcode"] = "mult"
+        props["weight config"] = {
+            "type" : "flat",
+            "weight" : LAMBDA
+        }
+
+    # Builds update gate of gain (from_layer = GATES)
+    def build_gain_update(from_layer, to_layer, props):
+        props["name"] = build_name(from_layer, to_layer, "-update")
+        props["from layer"] = from_layer
+        props["to layer"] = to_layer
+        props["dendrite"] = "gain-update"
+        props["opcode"] = "sub_heaviside"  # (1 - hs(u)), dendrite has bias
+        props["weight config"] = {
+            "type" : "flat",
+            "weight" : 1
+        }
+        props["type"] = "subset"
+
+        update_gate_index = get_gate_index(to_layer, to_layer, "U")
+        props["subset config"] = {
+            "from row start" : 0,
+            "from row end" : 1,
+            "from column start" : update_gate_index,
+            "from column end" : update_gate_index+1,
+            "to row start" : 0,
+            "to row end" : 1 if to_layer == "GATES" else N_LAYER_DIM,
+            "to column start" : 0,
+            "to column end" : N_GH if to_layer == "GATES" else N_LAYER_DIM,
+        }
+
+    # Builds decay gate of gain (from_layer = GATES)
+    def build_gain_decay(from_layer, to_layer, props):
+        props["name"] = build_name(from_layer, to_layer,"-decay")
+        props["from layer"] = from_layer
+        props["to layer"] = to_layer
+        props["dendrite"] = "gain-decay"
+        props["opcode"] = "sub_heaviside"  # (1 - hs(d)), dendrite has bias
+        props["weight config"] = {
+            "type" : "flat",
+            "weight" : 1
+        }
+        props["type"] = "subset"
+
+        decay_gate_index = get_gate_index(to_layer, to_layer, "C")
+        props["subset config"] = {
+            "from row start" : 0,
+            "from row end" : 1,
+            "from column start" : decay_gate_index,
+            "from column end" : decay_gate_index+1,
+            "to row start" : 0,
+            "to row end" : 1 if to_layer == "GATES" else N_LAYER_DIM,
+            "to column start" : 0,
+            "to column end" : N_GH if to_layer == "GATES" else N_LAYER_DIM,
+        }
+
+    # Create factories
+    relay_factory = ConnectionFactory(defaults, build_relay)
+    full_factory = ConnectionFactory(defaults, build_full)
+    update_factory = ConnectionFactory(defaults, build_update)
+    gain_factory = ConnectionFactory(defaults, build_gain)
+    gain_update_factory = ConnectionFactory(defaults, build_gain_update)
+    gain_decay_factory = ConnectionFactory(defaults, build_gain_decay)
+
+    connections = []
+
+    # Build standard connections and their gates
+    for (to_layer, from_layer),w in weights.iteritems():
+        if to_layer in ["CMPH", "CMPO"] \
+            or from_layer in ["CMPH", "CMPA", "CMPB"] \
+            or (type(w) == str and w == "none"):
+            continue
+
+        if type(w) == str and w == "relay":
+            # wv = u * LAMBDA * activity[from_layer]
+            connections.append(relay_factory.build(from_layer, to_layer))
+        else:
+            # wv = u * w.dot(activity[from_layer])
+            connections.append(full_factory.build(from_layer, to_layer))
+
+        connections.append(update_factory.build(from_layer, to_layer))
+
+    # Add gain connections
+    for layer in other_layers + comp_external_layers:
+        connections.append(gain_factory.build(layer, layer))
+        connections.append(gain_update_factory.build("GATES", layer))
+        connections.append(gain_decay_factory.build("GATES", layer))
+
+    # Build comparison connections
+    for from_layer in comp_external_layers:
         connections.append({
-            "name": layer + "<"+  layer + "-gain",
-            "dendrite": "gain",
-            "from layer": layer,
-            "to layer": layer,
+            "name": build_name(from_layer, "CMPH"),
+            "from layer": from_layer,
+            "to layer": "CMPH",
             "type": "one to one",
             "opcode": "mult",
             "plastic" : "false",
             "weight config" : {
                 "type" : "flat",
-                "weight" : LAMBDA,
-            },
-        })
-
-        update_gate_index = get_gate_index(layer, layer, "U")
-        connections.append({
-            "name": layer + "<"+  "GATES" + "-update-bias",
-            "dendrite": "gain-update",
-            "from layer": "bias",
-            "to layer": layer,
-            "type": "fully connected",
-            "opcode": "add",
-            "plastic" : "false",
-            "weight config" : {
-                "type" : "flat",
                 "weight" : 1
             },
         })
-        connections.append({
-            "name": layer + "<"+  "GATES" + "-update",
-            "dendrite": "gain-update",
-            "from layer": "GATES",
-            "to layer": layer,
-            "type": "subset",
-            "subset config" : {
-                "from row start" : 0,
-                "from row end" : 1,
-                "from column start" : update_gate_index,
-                "from column end" : update_gate_index+1,
-                "to row start" : 0,
-                "to row end" : 1 if layer == "GATES" else N_LAYER_DIM,
-                "to column start" : 0,
-                "to column end" : N_GH if layer == "GATES" else N_LAYER_DIM,
-            },
-            "opcode": "sub_heaviside",
-            "plastic" : "false",
-            "weight config" : {
-                "type" : "flat",
-                "weight" : 1
-            },
-        })
-
-        decay_gate_index = get_gate_index(layer, layer, "C")
-        connections.append({
-            "name": layer + "<"+  "GATES" + "-decay-bias",
-            "dendrite": "gain-decay",
-            "from layer": "bias",
-            "to layer": layer,
-            "type": "fully connected",
-            "opcode": "add",
-            "plastic" : "false",
-            "weight config" : {
-                "type" : "flat",
-                "weight" : 1
-            },
-        })
-        connections.append({
-            "name": layer + "<"+  "GATES" + "-decay",
-            "dendrite": "gain-decay",
-            "from layer": "GATES",
-            "to layer": layer,
-            "type": "subset",
-            "subset config" : {
-                "from row start" : 0,
-                "from row end" : 1,
-                "from column start" : decay_gate_index,
-                "from column end" : decay_gate_index+1,
-                "to row start" : 0,
-                "to row end" : 1 if layer == "GATES" else N_LAYER_DIM,
-                "to column start" : 0,
-                "to column end" : N_GH if layer == "GATES" else N_LAYER_DIM,
-            },
-            "opcode": "sub_heaviside",
-            "plastic" : "false",
-            "weight config" : {
-                "type" : "flat",
-                "weight" : 1
-            },
-        })
-
-    cmp_e = 1./(2.*N_LAYER)
-    w_cmph = np.arctanh(1. - cmp_e) / (PAD / 2.)**2
-    w_cmpo = 2. * np.arctanh(PAD) / (N_LAYER*(1-cmp_e) - (N_LAYER-1))
-    b_cmpo = w_cmpo * (N_LAYER*(1 - cmp_e) + (N_LAYER-1)) / 2.
-    # activity_new["CMPH"] = w_cmph * activity["CMPA"] * activity["CMPB"]
-    # activity_new["CMPO"] = np.ones((N_LAYER,1)) * (w_cmpo * activity["CMPH"].sum() - b_cmpo)
-
-    connections.append({
-        "name": "CMPH<bias",
-        "from layer": "bias",
-        "to layer": "CMPH",
-        "type": "fully connected",
-        "opcode": "add",
-        "plastic" : "false",
-        "weight config" : {
-            "type" : "flat",
-            "weight" : w_cmph
-        },
-    })
-
-    connections.append({
-        "name": "CMPH<CMPA",
-        "from layer": "CMPA",
-        "to layer": "CMPH",
-        "type": "one to one",
-        "opcode": "mult",
-        "plastic" : "false",
-        "weight config" : {
-            "type" : "flat",
-            "weight" : 1
-        },
-    })
-
-    connections.append({
-        "name": "CMPH<CMPB",
-        "from layer": "CMPB",
-        "to layer": "CMPH",
-        "type": "one to one",
-        "opcode": "mult",
-        "plastic" : "false",
-        "weight config" : {
-            "type" : "flat",
-            "weight" : 1
-        },
-    })
-
     connections.append({
         "name": "CMPO<CMPH",
         "from layer": "CMPH",
@@ -365,20 +370,7 @@ def nvm_synapto(weights):
         "plastic" : "false",
         "weight config" : {
             "type" : "flat",
-            "weight" : w_cmpo
-        },
-    })
-
-    connections.append({
-        "name": "CMPO<bias",
-        "from layer": "bias",
-        "to layer": "CMPO",
-        "type": "fully connected",
-        "opcode": "sub",
-        "plastic" : "false",
-        "weight config" : {
-            "type" : "flat",
-            "weight" : b_cmpo
+            "weight" : W_CMPO
         },
     })
 
