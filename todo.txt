@@ -1,29 +1,22 @@
 next steps:
-    no copying
     different coding semantics/errors when pattern provided and token already used?
-    check Z that randomly interpolates X,Y
+    check Z that randomly interpolates X,Y and multiple intermediate Z steps
     distinct excitatory/inhibitory populations
     outgoing connections are all to excitatory or all to inhibitory
     axons can excite either excitatory or inhibitory neurons in other regions
     axons can only inhibit within region
     expose gating, user-oriented library for building instructions
     base gate sequencer?
-
-dl new neural computation pubs
+    study more carefully:
+        increasing hidden layer improves stability?
+        smaller pad improves stability?
 
 empirical experiments:
     how size of N_HGATES (and N_LAYER?) affects stability in long loops
     noise injection
 
-why does loop but not look label show up in xlabels?
-
-synapto aas
-if W_RAM doesn't have token->hidden, jmp only needs to copy to hidden, not token.  so, label doesn't even have to be paired with hidden, it can *be* the hidden pattern.
 memory read/write and n-back program
 call/return instructions
-look into memh larger than n_layer (need non-square W's mapping up and down)
-consider no g->g, only hg -> g
-post-flash tokens
 more robustness to noise?
 
 first lram infinity run!!! needed 2048 n_layer (will barely fit on outpost) and worked with fewer stability iterations.  and rare; same code with different randomness usually fails.  doesn't always fail at same place.  at least one run had a successful iteration before failing.

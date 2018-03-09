@@ -27,8 +27,7 @@ class NVMNet:
         self.layers = layers
 
         # set up gain
-        self.w_gain = (act.g(act.on) - act.g(act.off))/(act.on - act.off)
-        self.b_gain = (act.g(act.off)*act.on - act.g(act.on)*act.off)/(act.on - act.off)
+        self.w_gain, self.b_gain = act.gain()
 
         # set up gates
         NL = len(layers) + 2 # +2 for gate out/hidden
@@ -36,8 +35,8 @@ class NVMNet:
         NH = 64 # number of hidden units
         acto = heaviside_activator(NG)
         acth = activator(pad,NH)
-        layers['gate_output'] = Layer('gate_output', NG, acto, Coder(acto))
-        layers['gate_hidden'] = Layer('gate_hidden', NH, acth, Coder(acth))
+        layers['go'] = Layer('go', NG, acto, Coder(acto))
+        layers['gh'] = Layer('gh', NH, acth, Coder(acth))
         self.gate_map = make_nvm_gate_map(layers.keys())        
 
         # setup connection matrices
@@ -49,15 +48,15 @@ class NVMNet:
         self.activity = {
             name: layer.activator.off * np.ones((layer.size,1))
             for name, layer in self.layers.items()}
-        self.activity['gate_output'] = self.layers['gate_output'].coder.encode('start')
-        self.activity['gate_hidden'] = self.layers['gate_hidden'].coder.encode('start')
+        self.activity['go'] = self.layers['go'].coder.encode('start')
+        self.activity['gh'] = self.layers['gh'].coder.encode('start')
 
     def set_pattern(self, layer_name, pattern):
         self.activity[layer_name] = pattern
 
     def get_open_gates(self):
-        pattern = self.activity['gate_output']
-        a = self.layers['gate_output'].activator
+        pattern = self.activity['go']
+        a = self.layers['go'].activator
         open_gates = []
         for k in self.gate_map.gate_keys:
             g = self.gate_map.get_gate_value(k, pattern)
@@ -65,21 +64,23 @@ class NVMNet:
                 open_gates.append(k)
         return open_gates
 
-    def assemble(self, program, name, verbose=False):
-        weights, biases = assemble(self,
-            program, name, verbose)
+    def assemble(self, program, name, verbose=1):
+        weights, biases, diff_count = assemble(self,
+            program, name, verbose=(verbose > 1))
+        if verbose > 0: print("assembler diff count = %d"%diff_count)
         self.weights.update(weights)
         self.biases.update(biases)
 
-    def link(self, verbose=False):
-        weights, biases = link(self, verbose)
+    def link(self, verbose=1):
+        weights, biases, diff_count = link(self, verbose=(verbose > 1))
         self.weights.update(weights)
         self.biases.update(biases)
+        if verbose > 0: print("linker diff count = %d"%diff_count)
 
     def tick(self):
 
         # NVM tick
-        current_gates = self.activity['gate_output']
+        current_gates = self.activity['go']
         activity_new = {name: np.zeros(pattern.shape) for name, pattern in self.activity.items()}
         for (to_layer, from_layer) in self.weights:
             u = self.gate_map.get_gate_value((to_layer, from_layer, 'u'), current_gates)
@@ -115,9 +116,9 @@ def make_nvmnet():
 
     program = """
 
-    start:  nop
             set d1 true
-            end
+            mov d2 d1
+            exit
 
     """
     pname = "test"
@@ -125,15 +126,15 @@ def make_nvmnet():
     activator, learning_rule = logistic_activator, logistic_hebbian
     # activator, learning_rule = tanh_activator, tanh_hebbian
 
-    layer_size = 64
-    pad = 0.05
+    layer_size = 128
+    pad = 0.025
     act = activator(pad, layer_size)
     devices = {"d%d"%d: Layer("d%d"%d, layer_size, act, Coder(act))
         for d in range(3)}
 
     nvmnet = NVMNet(layer_size, pad, activator, learning_rule, devices)
-    nvmnet.assemble(program, pname)
-    nvmnet.link(verbose=True)
+    nvmnet.assemble(program, pname, verbose=1)
+    nvmnet.link(verbose=1)
     nvmnet.activity["ip"] = nvmnet.layers["ip"].coder.encode(pname)
 
     return nvmnet
@@ -143,22 +144,27 @@ if __name__ == '__main__':
     np.set_printoptions(linewidth=200, formatter = {'float': lambda x: '% .2f'%x})
    
     nvmnet = make_nvmnet()
+    raw_input("continue?")
         
     show_layers = [
-        ["gate_output"],
-        ["gate_hidden"],
-        ["ip"] + ["op"+x for x in "c123"] + ["d1"],
+        ["go", "gh","ip"] + ["op"+x for x in "c123"] + ["d1","d2"],
     ]
-    for t in range(20):
+    for t in range(30):
+        at_start = nvmnet.layers["gh"].coder.decode(nvmnet.activity["gh"]) == "start"
+        at_exit = nvmnet.layers["opc"].coder.decode(nvmnet.activity["opc"]) == "exit"
         # if True:
-        if t % 2 == 0:
-        # if nvmnet.layers["gate_hidden"].coder.decode(nvmnet.activity["gate_hidden"]) == "start":
+        # if t % 2 == 0 or at_exit:
+        if at_start or at_exit:
             print('t = %d'%t)
             for sl in show_layers:
                 print(", ".join(["%s=%s"%(
                     name, nvmnet.layers[name].coder.decode(nvmnet.activity[name]))
                     for name in sl]))
+                # print(", ".join(["%s~%.2f"%(
+                #     name,
+                #     nvmnet.layers[name].activator.corrosion(nvmnet.activity[name]))
+                #     for name in sl]))
             # print(nvmnet.get_open_gates())
-            if nvmnet.layers["opc"].coder.decode(nvmnet.activity["opc"]) == "end":
-                break
+        if at_exit:
+            break
         nvmnet.tick()

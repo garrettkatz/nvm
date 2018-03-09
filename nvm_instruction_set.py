@@ -15,7 +15,7 @@ def flash_instruction_set(nvmnet):
     """
     
     gate_map, layers, devices = nvmnet.gate_map, nvmnet.layers, nvmnet.devices
-    gate_output, gate_hidden = layers["gate_output"], layers["gate_hidden"]
+    gate_output, gate_hidden = layers["go"], layers["gh"]
     gs = GateSequencer(gate_map, gate_output, gate_hidden, layers)
 
     ### Start executing new instruction
@@ -27,12 +27,11 @@ def flash_instruction_set(nvmnet):
     g_start, h_start = g.copy(), h.copy()    
     
     # Let opcode bias the gate layer
-    g, h = gs.add_transit(ungate = [("gate_hidden","opc","u")],
+    g, h = gs.add_transit(ungate = [("gh","opc","u")],
         old_gates = g, old_hidden=h)
 
     # Ready to execute instruction
-    h_ready = h.copy()
-    g_ready = g.copy()
+    g_ready, h_ready = g.copy(), h.copy()
     gate_hidden.coder.encode('ready', h_ready)
     gate_output.coder.encode('ready', g_ready)
     
@@ -40,15 +39,15 @@ def flash_instruction_set(nvmnet):
     
     # just return to start state
     g, h = gs.add_transit(
-        ungate = gprog(),
-        new_hidden = h_start,
+        new_gates = g_start, new_hidden = h_start,
         old_gates = g_ready, old_hidden = h_ready, opc = "nop")
 
     ###### SET
 
     # Let op1 bias the gate layer
-    g_set, h_set = gs.add_transit(ungate = [("gate_hidden","op1","u")],
+    g, h = gs.add_transit(ungate = [("gh","op1","u")],
         old_gates = g_ready, old_hidden = h_ready, opc="set")
+    g_set, h_set = g.copy(), h.copy()
     gate_hidden.coder.encode('set', h_set)
     gate_output.coder.encode('set', g_set)    
 
@@ -62,9 +61,34 @@ def flash_instruction_set(nvmnet):
 
         # return to start state
         g, h = gs.add_transit(
-            ungate = gprog(),
-            new_hidden = h_start,
+            new_gates = g_start, new_hidden = h_start,
             old_gates = g, old_hidden = h)
 
-    weights, biases = gs.flash()
+    ###### MOV
+
+    # Let op1 and op2 bias the gate layer
+    g, h = gs.add_transit(ungate = [
+        ("gh","op1","u"),("gh","op2","u")
+        ],
+        old_gates = g_ready, old_hidden = h_ready, opc="mov")
+    g_mov, h_mov = g.copy(), h.copy()
+    gate_hidden.coder.encode('mov', h_mov)
+    gate_output.coder.encode('mov', g_mov)    
+
+    for from_name, from_device in devices.items():
+        for to_name, to_device in devices.items():
+            # Open flow between devices
+            g, h = gs.add_transit(
+                ungate = gcopy(to_name, from_name),
+                old_gates = g_mov, old_hidden = h_mov,
+                op1 = to_name, op2 = from_name)
+            gate_hidden.coder.encode('mov_'+to_name+'_'+from_name, h)
+            gate_output.coder.encode('mov_'+to_name+'_'+from_name, g)
+
+            # return to start state
+            g, h = gs.add_transit(
+                new_gates = g_start, new_hidden = h_start,
+                old_gates = g, old_hidden = h)
+
+    weights, biases, residual = gs.flash()
     return weights, biases

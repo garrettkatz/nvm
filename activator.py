@@ -9,6 +9,14 @@ class Activator:
         self.hash_pattern = hash_pattern
         self.on = on
         self.off = off
+    def gain(self):
+        w = (self.g(self.on) - self.g(self.off))/(self.on - self.off)
+        b = (self.g(self.off)*self.on - self.g(self.on)*self.off)/(self.on - self.off)
+        return w, b
+    def corrosion(self, pattern):
+        return np.minimum(
+            np.fabs(pattern - self.on), np.fabs(pattern - self.off)
+            ).max()
 
 def tanh_activator(pad, layer_size):
     return Activator(
@@ -25,7 +33,7 @@ def logistic_activator(pad, layer_size):
         f = lambda v: .5*(np.tanh(v)+1),
         g = lambda v: np.arctanh(2*v-1),
         e = lambda a, b: ((a > .5) == (b > .5)),
-        make_pattern = lambda : .5*((1.-pad)*np.sign(np.random.randn(layer_size,1)) + 1.),
+        make_pattern = lambda : .5*((1.-pad*2)*np.sign(np.random.randn(layer_size,1)) + 1.),
         hash_pattern = lambda p: (p > .5).tobytes(),
         on = 1. - pad,
         off = 0. + pad)

@@ -29,13 +29,13 @@ class GateSequencer(Sequencer, object):
 
         return pattern
 
-    def add_transit(self, ungate=[], new_hidden=None, old_gates=None, old_hidden=None, **input_states):
+    def add_transit(self, ungate=[], new_gates=None, new_hidden=None, old_gates=None, old_hidden=None, **input_states):
 
         # Default to random hidden patterns
         if old_hidden is None: old_hidden = self.gate_hidden.activator.make_pattern()
         if new_hidden is None: new_hidden = self.gate_hidden.activator.make_pattern()
 
-        # Default old gates if not provided
+        # Default old gates to off
         if old_gates is None: old_gates = self.make_gate_output()
 
         # Error if inputs are provided whose layers are not ungated
@@ -57,6 +57,10 @@ class GateSequencer(Sequencer, object):
                 if from_name == self.gate_hidden.name: continue
                 raise Exception("No input provided for ungated layer!  Expected "+str(gate_key))
 
+        # Provide new gates, or ungate, but not both
+        if len(ungate) > 0 and new_gates is not None:
+            raise Exception("Provided both new_gates and ungate!")
+
         # Include old hidden pattern in input for new hidden
         hidden_input_states = dict(input_states)
         hidden_input_states[self.gate_hidden.name] = old_hidden
@@ -64,7 +68,7 @@ class GateSequencer(Sequencer, object):
             new_state=new_hidden, **hidden_input_states)
 
         # Ungate specified gates
-        new_gates = self.make_gate_output(ungate)
+        if new_gates is None: new_gates = self.make_gate_output(ungate)
         self.transit_outputs.append(new_gates)
 
         return new_gates, new_hidden
@@ -75,10 +79,10 @@ class GateSequencer(Sequencer, object):
             g_off, hidden = self.add_transit(old_hidden=hidden)
         return g_off, hidden
 
-    def flash(self):
+    def flash(self, verbose=True):
         
         # Flash sequencer
-        weights, biases, XYZ = super(GateSequencer, self).flash()
+        weights, biases, XYZ, residual = super(GateSequencer, self).flash(verbose)
 
         # Form output associations
         X, _, Z = XYZ
@@ -91,8 +95,12 @@ class GateSequencer(Sequencer, object):
 
         # solve linear equations for output
         XZ = np.concatenate((X, Z), axis=1)
+        f = self.gate_output.activator.f
         g = self.gate_output.activator.g
         W = np.linalg.lstsq(XZ.T, g(Y).T, rcond=None)[0].T
+        
+        residual = max(residual, np.fabs(f(W.dot(XZ)) - Y).max())
+        if verbose: print("gate sequencer residual = %f"%residual)
 
         # update weights and bias with output
         pair_key = (self.gate_output.name, self.gate_hidden.name)
@@ -100,7 +108,7 @@ class GateSequencer(Sequencer, object):
         biases[pair_key] = W[:,[-1]]
     
         # weights, biases
-        return weights, biases
+        return weights, biases, residual
 
 if __name__ == '__main__':
 
@@ -160,7 +168,7 @@ if __name__ == '__main__':
         new_hidden = h_start, # begin next clock cycle
         old_gates = g, old_hidden = h_ready, opc = 'nop')
 
-    weights, biases = gs.flash()
+    weights, biases, residual = gs.flash()
 
     h = h_start
     for i in range(30):

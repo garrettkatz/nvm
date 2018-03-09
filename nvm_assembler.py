@@ -40,20 +40,27 @@ def assemble(nvmnet, program, name, verbose=False):
             pattern = nvmnet.layers["op"+x].coder.encode(lines[l][o])
             encodings["op"+x].append(pattern)
     encodings = {k: np.concatenate(v,axis=1) for k,v in encodings.items()}
+
+    ### Track total number of errors
+    diff_count = 0
     
     ### Bind op tokens to instruction pointers
     weights, biases = {}, {}
     for x in "c123":
-        weights[("op"+x,"ip")], biases[("op"+x,"ip")] = flash_mem(
+        if verbose: print("Binding ip -> op"+x)
+        weights[("op"+x,"ip")], biases[("op"+x,"ip")], dc = flash_mem(
             ips[:,:-1], encodings["op"+x],
             nvmnet.layers["op"+x].activator,
             nvmnet.learning_rule, verbose=verbose)
+        diff_count += dc
 
     ### Store instruction pointer sequence
-    weights[("ip","ip")], biases[("ip","ip")] = flash_mem(
+    if verbose: print("Binding ip -> ip"+x)
+    weights[("ip","ip")], biases[("ip","ip")], dc = flash_mem(
         ips[:,:-1], ips[:,1:],
         nvmnet.layers["ip"].activator,
         nvmnet.learning_rule, verbose=verbose)
+    diff_count += dc
 
     ### Bind labels to instruction pointers
     if len(labels) > 0:
@@ -64,12 +71,14 @@ def assemble(nvmnet, program, name, verbose=False):
         Y_label = np.concatenate([
             nvmnet.layers["ip"].coder.encode(tok)
             for tok in label_tokens], axis=1)
-        weights[("ip","op2")], biases[("ip","op2")] = flash_mem(
+        if verbose: print("Binding op2 -> ip")
+        weights[("ip","op2")], biases[("ip","op2")], dc = flash_mem(
             X_label, Y_label,
             nvmnet.layers["ip"].activator,
             nvmnet.learning_rule, verbose=verbose)
+        diff_count += dc
     
-    return weights, biases
+    return weights, biases, dc
 
 if __name__ == '__main__':
 

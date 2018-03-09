@@ -38,7 +38,7 @@ class Sequencer(object):
         # Return new state
         return new_state
         
-    def flash(self):
+    def flash(self, verbose):
 
         # Unzip transits
         all_new_states, all_input_states = zip(*self.transits)
@@ -60,9 +60,10 @@ class Sequencer(object):
         # Solve with hidden step
         X = np.concatenate([X[name] for name in names], axis=0)
         Y = np.concatenate(all_new_states, axis=1)
-        W, Z = zsolve(X, Y,
+        W, Z, residual = zsolve(X, Y,
             self.sequence_layer.activator.f,
-            self.sequence_layer.activator.g)
+            self.sequence_layer.activator.g,
+            verbose=verbose)
         
         # Split up weights and biases
         weights = {}
@@ -75,8 +76,8 @@ class Sequencer(object):
             biases[pair_key] = W[:,[offset + layer_size]]
             offset += layer_size + 1
         
-        # return final weights, bias, and matrices
-        return weights, biases, (X, Y, Z)
+        # return final weights, bias, matrices, residual
+        return weights, biases, (X, Y, Z), residual
 
 def zsolve(X, Y, f, g, verbose=True):
     """
@@ -104,11 +105,11 @@ def zsolve(X, Y, f, g, verbose=True):
     ZY = np.concatenate((Z[:N,:], Y), axis=1)
     W = np.linalg.lstsq(XZ.T, g(ZY).T, rcond=None)[0].T
 
-    if verbose:
-        print("Sequencer flash residual = %.f"%(np.fabs(ZY - f(W.dot(XZ))).max()))
+    residual = np.fabs(ZY - f(W.dot(XZ))).max()
+    if verbose: print("Sequencer flash residual = %f"%residual)
 
     # solution and hidden patterns
-    return W, Z
+    return W, Z, residual
 
 if __name__ == '__main__':
 
@@ -135,7 +136,7 @@ if __name__ == '__main__':
 
     print(c.list_tokens())
 
-    weights, biases, _ = s.flash()
+    weights, biases, _, residual = s.flash()
     for k in weights:
         w, b = weights[k], biases[k]
         print(k)
