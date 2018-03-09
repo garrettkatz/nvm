@@ -3,8 +3,10 @@ from layer import Layer
 from coder import Coder
 from gate_map import make_nvm_gate_map
 from activator import *
+from learning_rules import *
 from nvm_instruction_set import flash_instruction_set
 from nvm_assembler import assemble
+from nvm_linker import link
 
 class NVMNet:
     
@@ -21,6 +23,7 @@ class NVMNet:
         layer_names = layer_names[:5]
         layers = {name: Layer(name, layer_size, act, Coder(act)) for name in layer_names}
         layers.update(devices)
+        self.devices = devices
         self.layers = layers
 
         # set up gain
@@ -46,7 +49,7 @@ class NVMNet:
         self.activity = {
             name: layer.activator.off * np.ones((layer.size,1))
             for name, layer in self.layers.items()}
-        self.activity['gate_output'] = self.layers['gate_output'].coder.encode('off')
+        self.activity['gate_output'] = self.layers['gate_output'].coder.encode('start')
         self.activity['gate_hidden'] = self.layers['gate_hidden'].coder.encode('start')
 
     def set_pattern(self, layer_name, pattern):
@@ -65,6 +68,11 @@ class NVMNet:
     def assemble(self, program, name, verbose=False):
         weights, biases = assemble(self,
             program, name, verbose)
+        self.weights.update(weights)
+        self.biases.update(biases)
+
+    def link(self, verbose=False):
+        weights, biases = link(self, verbose)
         self.weights.update(weights)
         self.biases.update(biases)
 
@@ -103,40 +111,48 @@ class NVMNet:
         
         self.activity = activity_new
 
-if __name__ == '__main__':
-
-    np.set_printoptions(linewidth=200, formatter = {'float': lambda x: '% .2f'%x})
-    from learning_rules import *
+def make_nvmnet():
 
     program = """
-    
-start:  nop
-        set r1 true
-        mov r2 r1
-        jmp cond start
-        end
+
+    start:  nop
+            set d1 true
+            end
+
     """
     pname = "test"
-
-    layer_size = 64
-    pad = 0.05
-    devices = {}
 
     activator, learning_rule = logistic_activator, logistic_hebbian
     # activator, learning_rule = tanh_activator, tanh_hebbian
 
+    layer_size = 64
+    pad = 0.05
+    act = activator(pad, layer_size)
+    devices = {"d%d"%d: Layer("d%d"%d, layer_size, act, Coder(act))
+        for d in range(3)}
+
     nvmnet = NVMNet(layer_size, pad, activator, learning_rule, devices)
     nvmnet.assemble(program, pname)
+    nvmnet.link(verbose=True)
     nvmnet.activity["ip"] = nvmnet.layers["ip"].coder.encode(pname)
-    
+
+    return nvmnet
+
+if __name__ == '__main__':
+
+    np.set_printoptions(linewidth=200, formatter = {'float': lambda x: '% .2f'%x})
+   
+    nvmnet = make_nvmnet()
+        
     show_layers = [
         ["gate_output"],
         ["gate_hidden"],
-        ["ip"] + ["op"+x for x in "c123"]]
-    for t in range(40):
+        ["ip"] + ["op"+x for x in "c123"] + ["d1"],
+    ]
+    for t in range(20):
         # if True:
-        # if t % 2 == 0:
-        if nvmnet.layers["gate_hidden"].coder.decode(nvmnet.activity["gate_hidden"]) == "start":
+        if t % 2 == 0:
+        # if nvmnet.layers["gate_hidden"].coder.decode(nvmnet.activity["gate_hidden"]) == "start":
             print('t = %d'%t)
             for sl in show_layers:
                 print(", ".join(["%s=%s"%(

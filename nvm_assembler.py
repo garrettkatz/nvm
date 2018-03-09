@@ -33,7 +33,7 @@ def assemble(nvmnet, program, name, verbose=False):
         nvmnet.layers["ip"].coder.encode(label, ips[ip_index])
     ips = np.concatenate(ips, axis=1)
 
-    ### Encode tokens and replace labels
+    ### Encode tokens in op layers
     encodings = {"op"+x:list() for x in "c123"}
     for l in range(len(lines)):
         for o,x in enumerate("c123"):
@@ -41,7 +41,7 @@ def assemble(nvmnet, program, name, verbose=False):
             encodings["op"+x].append(pattern)
     encodings = {k: np.concatenate(v,axis=1) for k,v in encodings.items()}
     
-    ### Store tokens
+    ### Bind op tokens to instruction pointers
     weights, biases = {}, {}
     for x in "c123":
         weights[("op"+x,"ip")], biases[("op"+x,"ip")] = flash_mem(
@@ -55,7 +55,7 @@ def assemble(nvmnet, program, name, verbose=False):
         nvmnet.layers["ip"].activator,
         nvmnet.learning_rule, verbose=verbose)
 
-    ### Store label links
+    ### Bind labels to instruction pointers
     if len(labels) > 0:
         label_tokens = labels.keys()
         X_label = np.concatenate([
@@ -70,18 +70,6 @@ def assemble(nvmnet, program, name, verbose=False):
             nvmnet.learning_rule, verbose=verbose)
     
     return weights, biases
-
-def flash_mem(X, Y, activator, learning_rule, verbose=False):
-    
-    w, b = learning_rule(X, Y, activator)
-
-    if verbose:
-        _Y = activator.f(w.dot(X) + b)
-        print("Flash ram residual max: %f"%np.fabs(Y - _Y).max())
-        print("Flash ram residual mad: %f"%np.fabs(Y - _Y).mean())
-        print("Flash ram sign diffs: %d"%((np.ones(Y.shape) - activator.e(Y, _Y)).sum()))
-
-    return w, b
 
 if __name__ == '__main__':
 

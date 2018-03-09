@@ -78,7 +78,7 @@ class Sequencer(object):
         # return final weights, bias, and matrices
         return weights, biases, (X, Y, Z)
 
-def zsolve(X, Y, f, g, verbose=False):
+def zsolve(X, Y, f, g, verbose=True):
     """
     Construct W that transitions states in X to corresponding states in Y
     X, Y are arrays, with paired activity patterns as columns

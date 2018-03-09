@@ -18,6 +18,19 @@ def logistic_hebbian(X, Y, activator):
     b = -activator.g(Y).dot(2*X.T - np.ones(X.T.shape)).dot(np.ones((N,1)))/N
     return W, b
 
+def flash_mem(X, Y, activator, learning_rule, verbose=False):
+    
+    w, b = learning_rule(X, Y, activator)
+
+    if verbose:
+        _Y = activator.f(w.dot(X) + b)
+        print("Flash ram residual max: %f"%np.fabs(Y - _Y).max())
+        print("Flash ram residual mad: %f"%np.fabs(Y - _Y).mean())
+        print("Flash ram sign diffs: %d"%((np.ones(Y.shape) - activator.e(Y, _Y)).sum()))
+
+    return w, b
+
+
 if __name__ == "__main__":
     
     N = 8
