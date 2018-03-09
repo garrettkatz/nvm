@@ -115,11 +115,11 @@ if __name__ == '__main__':
     np.set_printoptions(linewidth=200, formatter = {'float': lambda x: '% .2f'%x})
 
     N = 8
-    PAD = 0.9
+    PAD = 0.05
 
     from activator import *
-    # act = tanh_activator(PAD, N)
-    act = logistic_activator(PAD, N)
+    act = tanh_activator(PAD, N)
+    # act = logistic_activator(PAD, N)
 
     c = Coder(act)
     

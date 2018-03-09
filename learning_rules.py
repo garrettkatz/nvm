@@ -22,7 +22,7 @@ if __name__ == "__main__":
     
     N = 8
     K = 3
-    act = logistic_activator(0.9, N)
+    act = logistic_activator(0.05, N)
     X = np.empty((N,K))
     for k in range(K):
         X[:,[k]] = act.make_pattern()

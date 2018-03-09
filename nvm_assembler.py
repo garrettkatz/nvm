@@ -1,7 +1,7 @@
 import numpy as np
 from learning_rules import *
 
-def assemble(nvmnet, program, name, learning_rule, verbose=False):
+def assemble(nvmnet, program, name, verbose=False):
 
     ### Preprocess program string
 
@@ -47,13 +47,13 @@ def assemble(nvmnet, program, name, learning_rule, verbose=False):
         weights[("op"+x,"ip")], biases[("op"+x,"ip")] = flash_mem(
             ips[:,:-1], encodings["op"+x],
             nvmnet.layers["op"+x].activator,
-            learning_rule, verbose=verbose)
+            nvmnet.learning_rule, verbose=verbose)
 
     ### Store instruction pointer sequence
     weights[("ip","ip")], biases[("ip","ip")] = flash_mem(
         ips[:,:-1], ips[:,1:],
         nvmnet.layers["ip"].activator,
-        learning_rule, verbose=verbose)
+        nvmnet.learning_rule, verbose=verbose)
 
     ### Store label links
     if len(labels) > 0:
@@ -67,7 +67,7 @@ def assemble(nvmnet, program, name, learning_rule, verbose=False):
         weights[("ip","op2")], biases[("ip","op2")] = flash_mem(
             X_label, Y_label,
             nvmnet.layers["ip"].activator,
-            learning_rule, verbose=verbose)
+            nvmnet.learning_rule, verbose=verbose)
     
     return weights, biases
 
@@ -92,7 +92,10 @@ if __name__ == '__main__':
     devices = {}
 
     from nvm_net import NVMNet
-    nvmnet = NVMNet(layer_size, pad, devices)
+    # activator, learning_rule = logistic_activator, logistic_hebbian
+    activator, learning_rule = tanh_activator, tanh_hebbian
+    
+    nvmnet = NVMNet(layer_size, pad, activator, learning_rule, devices)
 
     program = """
     
@@ -104,8 +107,7 @@ start:  nop
     """
 
     program_name = "test"    
-    weights, biases = assemble(nvmnet, program, program_name, logistic_hebbian, verbose=True)
-
+    weights, biases = assemble(nvmnet, program, program_name, verbose=True)
 
     ip = nvmnet.layers["ip"]
     f = ip.activator.f

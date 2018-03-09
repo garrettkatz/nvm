@@ -1,9 +1,4 @@
 next steps:
-    turn off global assembly
-    debug logistic hebbian
-    gain should also accommodate logistic
-    dict of layer pairs -> learning rules
-    positive neural activity with sigmoid, relu, or hard relu fake inverse
     no copying
     check Z that randomly interpolates X,Y
     distinct excitatory/inhibitory populations

@@ -4,9 +4,6 @@ from coder import Coder
 from sequencer import Sequencer
 import gate_map as gm
 
-PAD = 0.9
-LAMBDA = np.arctanh(PAD)/PAD
-
 class GateSequencer(Sequencer, object):
     def __init__(self, gate_map, gate_output, gate_hidden, input_layers):
         self.gate_map = gate_map
@@ -110,11 +107,13 @@ if __name__ == '__main__':
     np.set_printoptions(linewidth=200, formatter = {'float': lambda x: '% .2f'%x})
 
     N = 8
-    PAD = 0.9
+    PAD = 0.05
 
     from activator import *
-    # act = tanh_activator(PAD, N)
-    act = logistic_activator(PAD, N)
+    # act_fun = tanh_activator
+    act_fun = logistic_activator
+
+    act = act_fun(PAD, N)
     coder = Coder(act)
 
     layer_names = ['mem','ip','opc','op1','op2','op3']
@@ -124,7 +123,7 @@ if __name__ == '__main__':
     NG = NL**2 + NL
     NH = 100
     actg = heaviside_activator(NG)
-    acth = logistic_activator(PAD,NH)
+    acth = act_fun(PAD,NH)
     gate_output = Layer('gates', NG, actg, Coder(actg))
     gate_hidden = Layer('ghide', NH, acth, Coder(acth))
     layers.extend([gate_hidden, gate_output])
@@ -147,7 +146,7 @@ if __name__ == '__main__':
     for reg in ['opc']:#,'op1','op2','op3']:
         # load op from memory and step memory
         _, h = gs.add_transit(ungate = gprog() + gcopy(reg,'mem'), old_hidden = h)
-        h = gs.stabilize(h)
+        _, h = gs.stabilize(h)
 
     # Let opcode bias the gate layer
     g, h = gs.add_transit(ungate = [('ghide','opc','u')], old_hidden=h)
