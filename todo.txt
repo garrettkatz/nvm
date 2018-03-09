@@ -1,4 +1,5 @@
 next steps:
+    wm read/write/sequencing
     different coding semantics/errors when pattern provided and token already used?
     check Z that randomly interpolates X,Y and multiple intermediate Z steps
     distinct excitatory/inhibitory populations

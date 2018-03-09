@@ -112,8 +112,8 @@ def make_nvmnet():
 
     loop:   set d1 here
             jmp d1
-            set d2 false
-    here:   set d2 true
+            set d2 true
+    here:   set d0 true
             exit
 
     """
@@ -143,7 +143,7 @@ if __name__ == '__main__':
     raw_input("continue?")
         
     show_layers = [
-        ["go", "gh","ip"] + ["op"+x for x in "c123"] + ["d1","d2"],
+        ["go", "gh","ip"] + ["op"+x for x in "c123"] + ["d0","d1","d2"],
     ]
     show_corrosion = True
     show_tokens = True
