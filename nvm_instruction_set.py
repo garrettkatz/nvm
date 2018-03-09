@@ -122,10 +122,41 @@ def flash_instruction_set(nvmnet):
         gate_hidden.coder.encode('jif_true', h_jt)
         gate_output.coder.encode('jif_true', g_jt)
 
+        # Stabilize ip
+        g, h = gs.stabilize(h, num_iters=5)
+
         # then return to start state
         gs.add_transit(
             new_gates = g_start, new_hidden = h_start,
             old_gates = g, old_hidden = h)
+
+    ###### JMP
+
+    # Let op1 bias the gate layer
+    g, h = gs.add_transit(ungate = [("gh","op1","u")],
+        old_gates = g_ready, old_hidden = h_ready, opc="jmp")
+    g_jmp, h_jmp = g.copy(), h.copy()
+    gate_hidden.coder.encode('jmp', h_jmp)
+
+    for device in devices:
+
+        # Open flow from device in op1 to ip
+        g, h = gs.add_transit(
+            ungate = gflow("ip", device),
+            old_gates = g_jmp, old_hidden = h_jmp,
+            op1 = device)
+        g_jmd, h_jmd = g.copy(), h.copy()
+        gate_hidden.coder.encode('jmp_'+device, h_jmd)
+        gate_output.coder.encode('jmp_'+device, g_jmd)
+
+        # Stabilize ip
+        g, h = gs.stabilize(h, num_iters=5)
+
+        # then return to start state
+        gs.add_transit(
+            new_gates = g_start, new_hidden = h_start,
+            old_gates = g, old_hidden = h)
+
 
     weights, biases, residual = gs.flash()
     return weights, biases

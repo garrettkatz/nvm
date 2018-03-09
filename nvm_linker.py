@@ -1,33 +1,47 @@
 import numpy as np
 from learning_rules import *
 
-def link(nvmnet, tokens=[], verbose=False):
+def link(nvmnet, tokens=[], verbose=0):
     """Link token encodings between layer pairs"""
 
     weights, biases, diff_count = {}, {}, 0
 
     # include any constants and value/label tokens from op2
+    ip = nvmnet.layers["ip"]
     op2 = nvmnet.layers["op2"]
-    all_tokens = tokens + op2.coder.list_tokens() + nvmnet.constants
+    all_tokens = set()
+    all_tokens.update(tokens)
+    all_tokens.update(op2.coder.list_tokens())
+    all_tokens.update(ip.coder.list_tokens())
+    all_tokens.update(nvmnet.constants)
 
     # link op2 layer with device layers for set instruction
-    X = np.concatenate(map(op2.coder.encode, all_tokens), axis=1)
     for name, layer in nvmnet.devices.items():
+        X = np.concatenate(map(op2.coder.encode, all_tokens), axis=1)
         Y = np.concatenate(map(layer.coder.encode, all_tokens), axis=1)
-        if verbose: print("Linking op2 -> %s"%(name))
+        if verbose > 0: print("Linking op2 -> %s"%(name))
         weights[(name, "op2")], biases[(name, "op2")], dc = flash_mem(
             X, Y, layer.activator, nvmnet.learning_rule, verbose=verbose)
         diff_count += dc
 
     # link device layers with each other for mov instruction
     for from_name, from_layer in nvmnet.devices.items():
-        X = np.concatenate(map(from_layer.coder.encode, all_tokens), axis=1)
         for to_name, to_layer in nvmnet.devices.items():
+            X = np.concatenate(map(from_layer.coder.encode, all_tokens), axis=1)
             Y = np.concatenate(map(to_layer.coder.encode, all_tokens), axis=1)
-            if verbose: print("Linking %s -> %s"%(from_name, to_name))
+            if verbose > 0: print("Linking %s -> %s"%(from_name, to_name))
             weights[(to_name, from_name)], biases[(to_name, from_name)], dc = flash_mem(
                 X, Y, to_layer.activator, nvmnet.learning_rule, verbose=verbose)
             diff_count += dc    
+
+    # link device layers to ip for jmp instruction
+    for name, layer in nvmnet.devices.items():
+        X = np.concatenate(map(layer.coder.encode, all_tokens), axis=1)
+        Y = np.concatenate(map(ip.coder.encode, all_tokens), axis=1)
+        if verbose > 0: print("Linking %s -> ip"%(name))
+        weights[("ip", name)], biases[("ip", name)], dc = flash_mem(
+            X, Y, layer.activator, nvmnet.learning_rule, verbose=verbose)
+        diff_count += dc
 
     return weights, biases, diff_count
 

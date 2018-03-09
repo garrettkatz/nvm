@@ -110,9 +110,10 @@ def make_nvmnet():
 
     program = """
 
-    loop:   set d1 true
-            mov d2 d1
-            jif d2 start
+    loop:   set d1 here
+            jmp d1
+            set d2 false
+    here:   set d2 true
             exit
 
     """
@@ -121,8 +122,8 @@ def make_nvmnet():
     activator, learning_rule = logistic_activator, logistic_hebbian
     # activator, learning_rule = tanh_activator, tanh_hebbian
 
-    layer_size = 128
-    pad = 0.025
+    layer_size = 256
+    pad = 0.01
     act = activator(pad, layer_size)
     devices = {"d%d"%d: Layer("d%d"%d, layer_size, act, Coder(act))
         for d in range(3)}
@@ -144,7 +145,9 @@ if __name__ == '__main__':
     show_layers = [
         ["go", "gh","ip"] + ["op"+x for x in "c123"] + ["d1","d2"],
     ]
-    for t in range(60):
+    show_corrosion = True
+    show_tokens = True
+    for t in range(100):
         at_start = nvmnet.layers["gh"].coder.decode(nvmnet.activity["gh"]) == "start"
         at_exit = nvmnet.layers["opc"].coder.decode(nvmnet.activity["opc"]) == "exit"
         # if True:
@@ -152,13 +155,16 @@ if __name__ == '__main__':
         if at_start or at_exit:
             print('t = %d'%t)
             for sl in show_layers:
-                print(", ".join(["%s=%s"%(
-                    name, nvmnet.layers[name].coder.decode(nvmnet.activity[name]))
-                    for name in sl]))
-                # print(", ".join(["%s~%.2f"%(
-                #     name,
-                #     nvmnet.layers[name].activator.corrosion(nvmnet.activity[name]))
-                #     for name in sl]))
+                if show_tokens:
+                    print(", ".join(["%s=%s"%(
+                        name, nvmnet.layers[name].coder.decode(
+                            nvmnet.activity[name]))
+                        for name in sl]))
+                if show_corrosion:
+                    print(", ".join(["%s~%.2f"%(
+                        name, nvmnet.layers[name].activator.corrosion(
+                            nvmnet.activity[name]))
+                        for name in sl]))
             # print(nvmnet.get_open_gates())
         if at_exit:
             break
