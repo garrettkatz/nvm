@@ -32,7 +32,7 @@ class NVMNet:
         # set up gates
         NL = len(layers) + 2 # +2 for gate out/hidden
         NG = NL**2 + NL # number of gates
-        NH = 64 # number of hidden units
+        NH = 256 # number of hidden units
         acto = heaviside_activator(NG)
         acth = activator(pad,NH)
         layers['go'] = Layer('go', NG, acto, Coder(acto))
@@ -50,6 +50,9 @@ class NVMNet:
             for name, layer in self.layers.items()}
         self.activity['go'] = self.layers['go'].coder.encode('start')
         self.activity['gh'] = self.layers['gh'].coder.encode('start')
+
+        # initialize constants
+        self.constants = ["true", "false", "null"]
 
     def set_pattern(self, layer_name, pattern):
         self.activity[layer_name] = pattern
@@ -81,9 +84,12 @@ class NVMNet:
 
         # NVM tick
         current_gates = self.activity['go']
-        activity_new = {name: np.zeros(pattern.shape) for name, pattern in self.activity.items()}
+        activity_new = {name: np.zeros(pattern.shape)
+            for name, pattern in self.activity.items()}
+        
         for (to_layer, from_layer) in self.weights:
-            u = self.gate_map.get_gate_value((to_layer, from_layer, 'u'), current_gates)
+            u = self.gate_map.get_gate_value(
+                (to_layer, from_layer, 'u'), current_gates)
             w = self.weights[(to_layer, from_layer)]
             b = self.biases[(to_layer, from_layer)]
             wvb = u * (w.dot(self.activity[from_layer]) + b)
@@ -95,20 +101,8 @@ class NVMNet:
             wvb = self.w_gain * self.activity[name] + self.b_gain
             activity_new[name] += (1-u) * (1-d) * wvb
     
-        # # handle compare specially, never gated
-        # cmp_e = 1./(2.*self.layer_size)
-        # w_cmph = np.arctanh(1. - cmp_e) / (PAD / 2.)**2
-        # w_cmpo = 2. * np.arctanh(self.pad) / (self.layer_size*(1-cmp_e) - (self.layer_size-1))
-        # b_cmpo = w_cmpo * (self.layer_size*(1 - cmp_e) + (self.layer_size-1)) / 2.
-        # activity_new['cmph'] = w_cmph * self.activity['CMPA'] * self.activity['CMPB']
-        # activity_new['cmpo'] = np.ones((self.layer_size,1)) * (w_cmpo * self.activity['cmph'].sum() - b_cmpo)
-        
         for name in activity_new:
             activity_new[name] = self.layers[name].activator.f(activity_new[name])
-            # # inject noise
-            # flip = (np.random.rand(activity_new[layer].shape[0]) < FLIP_NOISE)
-            # activity_new[layer][flip,:] = -activity_new[layer][flip,:]
-            # activity_new[layer] += np.random.randn(*activity_new[layer].shape)*CTS_NOISE
         
         self.activity = activity_new
 
@@ -116,8 +110,9 @@ def make_nvmnet():
 
     program = """
 
-            set d1 true
+    loop:   set d1 true
             mov d2 d1
+            jif d2 start
             exit
 
     """
@@ -149,7 +144,7 @@ if __name__ == '__main__':
     show_layers = [
         ["go", "gh","ip"] + ["op"+x for x in "c123"] + ["d1","d2"],
     ]
-    for t in range(30):
+    for t in range(60):
         at_start = nvmnet.layers["gh"].coder.decode(nvmnet.activity["gh"]) == "start"
         at_exit = nvmnet.layers["opc"].coder.decode(nvmnet.activity["opc"]) == "exit"
         # if True:

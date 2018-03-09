@@ -7,6 +7,7 @@ next steps:
     axons can only inhibit within region
     expose gating, user-oriented library for building instructions
     base gate sequencer?
+    compare? if so, activator-agnostic
     study more carefully:
         increasing hidden layer improves stability?
         smaller pad improves stability?
