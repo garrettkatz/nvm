@@ -106,17 +106,44 @@ class NVMNet:
         
         self.activity = activity_new
 
-def make_nvmnet():
+    def at_start(self):
+        return self.layers["gh"].coder.decode(self.activity["gh"]) == "start"
 
-    program = """
+    def at_exit(self):
+        return (self.layers["opc"].coder.decode(self.activity["opc"]) == "exit")
 
-    loop:   set d1 here
-            jmp d1
-            set d2 true
-    here:   set d0 true
-            exit
+    def state_string(self, show_layers=[], show_tokens=False, show_corrosion=False, show_gates=False):
+        s = ""
+        for sl in show_layers:
+            if show_tokens:
+                s += ", ".join(["%s=%s"%(
+                    name, self.layers[name].coder.decode(
+                        self.activity[name]))
+                    for name in sl])
+                s += "\n"
+            if show_corrosion:
+                s += ", ".join(["%s~%.2f"%(
+                    name, self.layers[name].activator.corrosion(
+                        self.activity[name]))
+                    for name in sl])
+                s += "\n"
+        if show_gates:
+            s += self.get_open_gates()
+            s += "\n"
+        return s
 
-    """
+def make_nvmnet(program=None):
+
+    if program is None:
+        program = """
+    
+        loop:   set d1 here
+                jmp d1
+                set d2 true
+        here:   set d0 true
+                exit
+    
+        """
     pname = "test"
 
     activator, learning_rule = logistic_activator, logistic_hebbian
@@ -145,27 +172,16 @@ if __name__ == '__main__':
     show_layers = [
         ["go", "gh","ip"] + ["op"+x for x in "c123"] + ["d0","d1","d2"],
     ]
-    show_corrosion = True
     show_tokens = True
+    show_corrosion = True
+    show_gates = False
+
     for t in range(100):
-        at_start = nvmnet.layers["gh"].coder.decode(nvmnet.activity["gh"]) == "start"
-        at_exit = nvmnet.layers["opc"].coder.decode(nvmnet.activity["opc"]) == "exit"
         # if True:
         # if t % 2 == 0 or at_exit:
-        if at_start or at_exit:
+        if nvmnet.at_start() or nvmnet.at_exit():
             print('t = %d'%t)
-            for sl in show_layers:
-                if show_tokens:
-                    print(", ".join(["%s=%s"%(
-                        name, nvmnet.layers[name].coder.decode(
-                            nvmnet.activity[name]))
-                        for name in sl]))
-                if show_corrosion:
-                    print(", ".join(["%s~%.2f"%(
-                        name, nvmnet.layers[name].activator.corrosion(
-                            nvmnet.activity[name]))
-                        for name in sl]))
-            # print(nvmnet.get_open_gates())
-        if at_exit:
+            print(nvmnet.state_string(show_layers, show_tokens, show_corrosion, show_gates))
+        if nvmnet.at_exit():
             break
         nvmnet.tick()
