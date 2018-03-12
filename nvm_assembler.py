@@ -36,6 +36,14 @@ def assemble(nvmnet, program, name, verbose=False):
     ### Encode tokens in op layers
     encodings = {"op"+x:list() for x in "c123"}
     for l in range(len(lines)):
+        # replace generic instructions with value/device distinctions
+        if lines[l][0] == "mov":
+            if lines[l][2] in nvmnet.devices: lines[l][0] += "d"
+            else: lines[l][0] += "v"
+        if lines[l][0] == "jmp":
+            if lines[l][1] in nvmnet.devices: lines[l][0] += "d"
+            else: lines[l][0] += "v"
+        # encode ops
         for o,x in enumerate("c123"):
             pattern = nvmnet.layers["op"+x].coder.encode(lines[l][o])
             encodings["op"+x].append(pattern)

@@ -12,17 +12,15 @@ from nvm_net import NVMNet
 
 aas_program = {"aas":"""
 
-        set wm1 act
-        set wm2 loop
-loop:   set fef center
-        set sc off
+loop:   mov fef center
+        mov sc off
 wait:   jmp tc
-left:   set fef right
-        jmp wm1
-right:  set fef left
-        jmp wm1
-act:    set sc on
-        jmp wm2
+left:   mov fef right
+        jmp act
+right:  mov fef left
+        jmp act
+act:    mov sc on
+        jmp loop
         exit
     
 """}
@@ -33,12 +31,9 @@ def make_fef(pad, activator, dim):
     fef_coder = Coder(act)
 
     X, Y = np.mgrid[:dim,:dim]
-    center = act.off*np.ones((dim,dim))
-    left = center.copy()
-    right = center.copy()
-    center[(X-.5*dim)**2 + (Y-.5*dim)**2 < (.25*dim)**2] = act.on
-    left[(X-1.*dim)**2 + (Y-.5*dim)**2 < (.25*dim)**2] = act.on
-    right[(X-0.*dim)**2 + (Y-.5*dim)**2 < (.25*dim)**2] = act.on
+    center = act.off + (act.on-act.off)*np.exp(-((X-.5*dim)**2 + (Y-.5*dim)**2)/(.25*dim)**2)
+    left = act.off + (act.on-act.off)*np.exp(-((X-.0*dim)**2 + (Y-.5*dim)**2)/(.25*dim)**2)
+    right = act.off + (act.on-act.off)*np.exp(-((X-1.*dim)**2 + (Y-.5*dim)**2)/(.25*dim)**2)
 
     fef_coder.encode("center", center.reshape((dim*dim,1)))
     fef_coder.encode("left", left.reshape((dim*dim,1)))
@@ -60,13 +55,11 @@ if __name__ == "__main__":
     # activator, learning_rule = tanh_activator, tanh_hebbian
 
     # make network
-    layer_size = 650
+    layer_size = 512
     pad = 0.001
     act = activator(pad, layer_size)
     
     devices = {
-        "wm1": Layer("wm1", (layer_size,1), act, Coder(act)),
-        "wm2": Layer("wm2", (layer_size,1), act, Coder(act)),
         "tc": Layer("tc", (layer_size,1), act, Coder(act)),
         "fef": make_fef(pad, activator, 32),
         "sc": make_sc(pad, activator, 16)}
@@ -93,12 +86,13 @@ if __name__ == "__main__":
 
     history = []
     start_t = []
-    for t in range(300):
+    for t in range(200):
     
         ### occassionally change tc
-        # if t > 0 and t % 50 == 0:
-        if np.random.rand() < 1./100:
-            tok = ["wait","left","right"][np.random.randint(3)]
+        if t > 0 and t % 100 == 0:
+        # if np.random.rand() < 1./100:
+            # tok = ["wait","left","right"][np.random.randint(3)]
+            tok = ["left","right"][np.random.randint(2)]
             nvmnet.activity["tc"] = nvmnet.layers["tc"].coder.encode(tok) # maybe face appears
 
         ### show state and tick

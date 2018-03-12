@@ -1,9 +1,7 @@
 next steps:
-    preprocessor:
-        "mov","jmp", etc. can be either device or value, but processed into separate sub-user instructions
     new syngen conversion
-    topographic fef
     
+    smarter linking (only what's necessary)
     wm read/write/sequencing
     different coding semantics/errors when pattern provided and token already used?
     check Z that randomly interpolates X,Y and multiple intermediate Z steps

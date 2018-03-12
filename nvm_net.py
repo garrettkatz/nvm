@@ -138,10 +138,10 @@ def make_nvmnet(programs=None, devices=None):
     if programs is None:
         programs = {"test":"""
     
-        loop:   set d1 here
+                mov d2 true
+        loop:   mov d1 here
                 jmp d1
-                set d2 true
-        here:   set d0 true
+        here:   mov d0 d2
                 exit
     
         """}
