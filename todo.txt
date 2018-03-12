@@ -1,5 +1,5 @@
 next steps:
-    new syngen conversion
+    new syngen conversion: biases
     
     smarter linking (only what's necessary)
     wm read/write/sequencing

@@ -10,18 +10,18 @@ from nvm_linker import link
 
 class NVMNet:
     
-    def __init__(self, layer_size, pad, activator, learning_rule, devices, num_gh=512):
+    def __init__(self, layer_shape, pad, activator, learning_rule, devices, num_gh=512):
 
         # set up parameters
-        self.layer_size = layer_size
+        self.layer_size = layer_shape[0]*layer_shape[1]
         self.pad = pad
         self.learning_rule = learning_rule
 
         # set up layers
-        act = activator(pad, layer_size)
+        act = activator(pad, self.layer_size)
         layer_names = ['ip','opc','op1','op2','op3']#,'cmph','cmpo']
         layer_names = layer_names[:5]
-        layers = {name: Layer(name, (layer_size,1), act, Coder(act)) for name in layer_names}
+        layers = {name: Layer(name, layer_shape, act, Coder(act)) for name in layer_names}
         layers.update(devices)
         self.devices = devices
         self.layers = layers
@@ -35,8 +35,8 @@ class NVMNet:
         NH = num_gh # number of hidden units
         acto = heaviside_activator(NG)
         acth = activator(pad,NH)
-        layers['go'] = Layer('go', (NG,1), acto, Coder(acto))
-        layers['gh'] = Layer('gh', (NH,1), acth, Coder(acth))
+        layers['go'] = Layer('go', (1,NG), acto, Coder(acto))
+        layers['gh'] = Layer('gh', (1,NH), acth, Coder(acth))
         self.gate_map = make_nvm_gate_map(layers.keys())        
 
         # setup connection matrices
@@ -147,21 +147,22 @@ def make_nvmnet(programs=None, devices=None):
         """}
 
     # set up activator
-    activator, learning_rule = logistic_activator, logistic_hebbian
-    # activator, learning_rule = tanh_activator, tanh_hebbian
+    # activator, learning_rule = logistic_activator, logistic_hebbian
+    activator, learning_rule = tanh_activator, tanh_hebbian
 
     # make network
-    layer_size = 256
+    layer_shape = (16, 16)
+    layer_size = layer_shape[0]*layer_shape[1]
     pad = 0.01
     act = activator(pad, layer_size)
 
     # default devices
     if devices is None:
-        devices = {"d%d"%d: Layer("d%d"%d, (layer_size,1), act, Coder(act))
+        devices = {"d%d"%d: Layer("d%d"%d, layer_shape, act, Coder(act))
             for d in range(3)}
 
     # assemble and link programs
-    nvmnet = NVMNet(layer_size, pad, activator, learning_rule, devices)
+    nvmnet = NVMNet(layer_shape, pad, activator, learning_rule, devices)
     for name, program in programs.items():
         nvmnet.assemble(program, name, verbose=1)
     nvmnet.link(verbose=1)

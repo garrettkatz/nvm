@@ -31,9 +31,14 @@ def make_fef(pad, activator, dim):
     fef_coder = Coder(act)
 
     X, Y = np.mgrid[:dim,:dim]
-    center = act.off + (act.on-act.off)*np.exp(-((X-.5*dim)**2 + (Y-.5*dim)**2)/(.25*dim)**2)
-    left = act.off + (act.on-act.off)*np.exp(-((X-.0*dim)**2 + (Y-.5*dim)**2)/(.25*dim)**2)
-    right = act.off + (act.on-act.off)*np.exp(-((X-1.*dim)**2 + (Y-.5*dim)**2)/(.25*dim)**2)
+    # # Cts
+    # center = act.off + (act.on-act.off)*np.exp(-((X-.5*dim)**2 + (Y-.5*dim)**2)/(.25*dim)**2)
+    # left = act.off + (act.on-act.off)*np.exp(-((X-.0*dim)**2 + (Y-.5*dim)**2)/(.25*dim)**2)
+    # right = act.off + (act.on-act.off)*np.exp(-((X-1.*dim)**2 + (Y-.5*dim)**2)/(.25*dim)**2)
+    # Binary
+    center = act.off + (act.on-act.off)*((X-.5*dim)**2 + (Y-.5*dim)**2 < (.25*dim)**2)
+    left = act.off + (act.on-act.off)*((X-.0*dim)**2 + (Y-.5*dim)**2 < (.25*dim)**2)
+    right = act.off + (act.on-act.off)*((X-1.*dim)**2 + (Y-.5*dim)**2 < (.25*dim)**2)
 
     fef_coder.encode("center", center.reshape((dim*dim,1)))
     fef_coder.encode("left", left.reshape((dim*dim,1)))
@@ -48,25 +53,25 @@ def make_sc(pad, activator, dim):
     sc_coder.encode("off", act.off*np.ones((dim*dim,1)))
     return Layer("sc", (dim,dim), act, sc_coder)
 
-if __name__ == "__main__":
-    
+def make_saccade_nvm():
+
     # set up activator
-    activator, learning_rule = logistic_activator, logistic_hebbian
-    # activator, learning_rule = tanh_activator, tanh_hebbian
+    # activator, learning_rule = logistic_activator, logistic_hebbian
+    activator, learning_rule = tanh_activator, tanh_hebbian
 
     # make network
-    layer_size = 512
+    layer_shape = (32,16)
+    layer_size = 32*16
     pad = 0.001
     act = activator(pad, layer_size)
     
     devices = {
-        "tc": Layer("tc", (layer_size,1), act, Coder(act)),
+        "tc": Layer("tc", layer_shape, act, Coder(act)),
         "fef": make_fef(pad, activator, 32),
         "sc": make_sc(pad, activator, 16)}
-    device_names = devices.keys()
 
     # assemble and link programs
-    nvmnet = NVMNet(layer_size, pad, activator, learning_rule, devices)
+    nvmnet = NVMNet(layer_shape, pad, activator, learning_rule, devices)
     for name, program in aas_program.items():
         nvmnet.assemble(program, name, verbose=1)
     nvmnet.link(verbose=2)
@@ -75,10 +80,15 @@ if __name__ == "__main__":
     nvmnet.activity["ip"] = nvmnet.layers["ip"].coder.encode(name) # program pointer
     nvmnet.activity["tc"] = nvmnet.layers["tc"].coder.encode("wait") # waiting for face
 
+    return nvmnet
+
+if __name__ == "__main__":
+    
+    nvmnet = make_saccade_nvm()
     raw_input("continue?")
-        
+    
     show_layers = [
-        ["go", "gh","ip"] + ["op"+x for x in "c123"] + device_names,
+        ["go", "gh","ip"] + ["op"+x for x in "c123"] + nvmnet.devices.keys(),
     ]
     show_tokens = True
     show_corrosion = True
@@ -127,6 +137,7 @@ if __name__ == "__main__":
     yt = np.array([history[0][k].shape[0] for sl in show_layers for k in sl])
     yt = yt.cumsum() - yt/2
     
+    act = nvmnet.layers["gh"].activator
     plt.figure()
     plt.imshow(A, cmap='gray', vmin=act.off, vmax=act.on, aspect='auto')
     plt.xticks(xt, xl)
