@@ -27,6 +27,7 @@ def link(nvmnet, tokens=[], verbose=0):
     # link device layers with each other for mov instruction
     for from_name, from_layer in nvmnet.devices.items():
         for to_name, to_layer in nvmnet.devices.items():
+            if from_name == to_name: continue
             X = np.concatenate(map(from_layer.coder.encode, all_tokens), axis=1)
             Y = np.concatenate(map(to_layer.coder.encode, all_tokens), axis=1)
             if verbose > 0: print("Linking %s -> %s"%(from_name, to_name))

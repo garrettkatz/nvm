@@ -28,12 +28,30 @@ act:    set sc on
 """}
 
 def make_fef(pad, activator, dim):
+
     act = activator(pad, dim*dim)
     fef_coder = Coder(act)
-    fef_coder.encode("center")
-    fef_coder.encode("left")
-    fef_coder.encode("right")
+
+    X, Y = np.mgrid[:dim,:dim]
+    center = act.off*np.ones((dim,dim))
+    left = center.copy()
+    right = center.copy()
+    center[(X-.5*dim)**2 + (Y-.5*dim)**2 < (.25*dim)**2] = act.on
+    left[(X-1.*dim)**2 + (Y-.5*dim)**2 < (.25*dim)**2] = act.on
+    right[(X-0.*dim)**2 + (Y-.5*dim)**2 < (.25*dim)**2] = act.on
+
+    fef_coder.encode("center", center.reshape((dim*dim,1)))
+    fef_coder.encode("left", left.reshape((dim*dim,1)))
+    fef_coder.encode("right", right.reshape((dim*dim,1)))
     return Layer("fef", (dim,dim), act, fef_coder)
+
+def make_sc(pad, activator, dim):
+
+    act = activator(pad, dim*dim)
+    sc_coder = Coder(act)
+    sc_coder.encode("on", act.on*np.ones((dim*dim,1)))
+    sc_coder.encode("off", act.off*np.ones((dim*dim,1)))
+    return Layer("sc", (dim,dim), act, sc_coder)
 
 if __name__ == "__main__":
     
@@ -46,16 +64,19 @@ if __name__ == "__main__":
     pad = 0.001
     act = activator(pad, layer_size)
     
-    device_names = ["wm1","wm2","tc","sc"]
-    devices = {name: Layer(name, (layer_size,1), act, Coder(act))
-        for name in device_names}
-    devices["fef"] = make_fef(pad, activator, 32)
+    devices = {
+        "wm1": Layer("wm1", (layer_size,1), act, Coder(act)),
+        "wm2": Layer("wm2", (layer_size,1), act, Coder(act)),
+        "tc": Layer("tc", (layer_size,1), act, Coder(act)),
+        "fef": make_fef(pad, activator, 32),
+        "sc": make_sc(pad, activator, 16)}
+    device_names = devices.keys()
 
     # assemble and link programs
     nvmnet = NVMNet(layer_size, pad, activator, learning_rule, devices)
     for name, program in aas_program.items():
         nvmnet.assemble(program, name, verbose=1)
-    nvmnet.link(verbose=1)
+    nvmnet.link(verbose=2)
 
     # initialize layers
     nvmnet.activity["ip"] = nvmnet.layers["ip"].coder.encode(name) # program pointer
@@ -72,10 +93,11 @@ if __name__ == "__main__":
 
     history = []
     start_t = []
-    for t in range(200):
+    for t in range(300):
     
         ### occassionally change tc
-        if t > 0 and t % 100 == 0:
+        # if t > 0 and t % 50 == 0:
+        if np.random.rand() < 1./100:
             tok = ["wait","left","right"][np.random.randint(3)]
             nvmnet.activity["tc"] = nvmnet.layers["tc"].coder.encode(tok) # maybe face appears
 
