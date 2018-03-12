@@ -10,7 +10,7 @@ from nvm_linker import link
 
 class NVMNet:
     
-    def __init__(self, layer_size, pad, activator, learning_rule, devices):
+    def __init__(self, layer_size, pad, activator, learning_rule, devices, num_gh=512):
 
         # set up parameters
         self.layer_size = layer_size
@@ -21,7 +21,7 @@ class NVMNet:
         act = activator(pad, layer_size)
         layer_names = ['ip','opc','op1','op2','op3']#,'cmph','cmpo']
         layer_names = layer_names[:5]
-        layers = {name: Layer(name, layer_size, act, Coder(act)) for name in layer_names}
+        layers = {name: Layer(name, (layer_size,1), act, Coder(act)) for name in layer_names}
         layers.update(devices)
         self.devices = devices
         self.layers = layers
@@ -32,11 +32,11 @@ class NVMNet:
         # set up gates
         NL = len(layers) + 2 # +2 for gate out/hidden
         NG = NL**2 + NL # number of gates
-        NH = 512 # number of hidden units
+        NH = num_gh # number of hidden units
         acto = heaviside_activator(NG)
         acth = activator(pad,NH)
-        layers['go'] = Layer('go', NG, acto, Coder(acto))
-        layers['gh'] = Layer('gh', NH, acth, Coder(acth))
+        layers['go'] = Layer('go', (NG,1), acto, Coder(acto))
+        layers['gh'] = Layer('gh', (NH,1), acth, Coder(acth))
         self.gate_map = make_nvm_gate_map(layers.keys())        
 
         # setup connection matrices
@@ -52,7 +52,7 @@ class NVMNet:
         self.activity['gh'] = self.layers['gh'].coder.encode('start')
 
         # initialize constants
-        self.constants = ["true", "false", "null"]
+        self.constants = ["null"] #"true", "false"]
 
     def set_pattern(self, layer_name, pattern):
         self.activity[layer_name] = pattern
@@ -157,7 +157,7 @@ def make_nvmnet(programs=None, devices=None):
 
     # default devices
     if devices is None:
-        devices = {"d%d"%d: Layer("d%d"%d, layer_size, act, Coder(act))
+        devices = {"d%d"%d: Layer("d%d"%d, (layer_size,1), act, Coder(act))
             for d in range(3)}
 
     # assemble and link programs

@@ -27,6 +27,14 @@ act:    set sc on
     
 """}
 
+def make_fef(pad, activator, dim):
+    act = activator(pad, dim*dim)
+    fef_coder = Coder(act)
+    fef_coder.encode("center")
+    fef_coder.encode("left")
+    fef_coder.encode("right")
+    return Layer("fef", (dim,dim), act, fef_coder)
+
 if __name__ == "__main__":
     
     # set up activator
@@ -38,9 +46,10 @@ if __name__ == "__main__":
     pad = 0.001
     act = activator(pad, layer_size)
     
-    device_names = ["wm1","wm2","fef","tc","sc"]
-    devices = {name: Layer(name, layer_size, act, Coder(act))
+    device_names = ["wm1","wm2","tc","sc"]
+    devices = {name: Layer(name, (layer_size,1), act, Coder(act))
         for name in device_names}
+    devices["fef"] = make_fef(pad, activator, 32)
 
     # assemble and link programs
     nvmnet = NVMNet(layer_size, pad, activator, learning_rule, devices)

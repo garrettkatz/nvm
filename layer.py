@@ -1,6 +1,7 @@
 class Layer:
-    def __init__(self, name, size, activator, coder):
+    def __init__(self, name, shape, activator, coder):
         self.name = name
-        self.size = size
+        self.shape = shape
         self.activator = activator
         self.coder = coder
+        self.size = reduce(lambda x,y: x*y, shape)
