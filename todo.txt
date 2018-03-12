@@ -1,5 +1,7 @@
 next steps:
     new ps/aas programs
+    preprocessor:
+        "mov","jmp", etc. can be either device or value, but processed into separate sub-user instructions
     new syngen conversion
     wm read/write/sequencing
     different coding semantics/errors when pattern provided and token already used?

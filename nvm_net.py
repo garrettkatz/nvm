@@ -32,7 +32,7 @@ class NVMNet:
         # set up gates
         NL = len(layers) + 2 # +2 for gate out/hidden
         NG = NL**2 + NL # number of gates
-        NH = 256 # number of hidden units
+        NH = 512 # number of hidden units
         acto = heaviside_activator(NG)
         acth = activator(pad,NH)
         layers['go'] = Layer('go', NG, acto, Coder(acto))
@@ -132,10 +132,11 @@ class NVMNet:
             s += "\n"
         return s
 
-def make_nvmnet(program=None):
+def make_nvmnet(programs=None, devices=None):
 
-    if program is None:
-        program = """
+    # default program
+    if programs is None:
+        programs = {"test":"""
     
         loop:   set d1 here
                 jmp d1
@@ -143,22 +144,30 @@ def make_nvmnet(program=None):
         here:   set d0 true
                 exit
     
-        """
-    pname = "test"
+        """}
 
+    # set up activator
     activator, learning_rule = logistic_activator, logistic_hebbian
     # activator, learning_rule = tanh_activator, tanh_hebbian
 
+    # make network
     layer_size = 256
     pad = 0.01
     act = activator(pad, layer_size)
-    devices = {"d%d"%d: Layer("d%d"%d, layer_size, act, Coder(act))
-        for d in range(3)}
 
+    # default devices
+    if devices is None:
+        devices = {"d%d"%d: Layer("d%d"%d, layer_size, act, Coder(act))
+            for d in range(3)}
+
+    # assemble and link programs
     nvmnet = NVMNet(layer_size, pad, activator, learning_rule, devices)
-    nvmnet.assemble(program, pname, verbose=1)
+    for name, program in programs.items():
+        nvmnet.assemble(program, name, verbose=1)
     nvmnet.link(verbose=1)
-    nvmnet.activity["ip"] = nvmnet.layers["ip"].coder.encode(pname)
+
+    # initialize pointer at last program
+    nvmnet.activity["ip"] = nvmnet.layers["ip"].coder.encode(name)
 
     return nvmnet
 
