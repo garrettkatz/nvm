@@ -150,7 +150,7 @@ def flash_instruction_set(nvmnet):
         gate_output.coder.encode('jmp_'+device, g_jmd)
 
         # Stabilize ip
-        g, h = gs.stabilize(h, num_iters=5)
+        g, h = gs.stabilize(h, num_iters=3)
 
         # then return to start state
         gs.add_transit(

@@ -1,4 +1,5 @@
 import numpy as np
+import matplotlib.pyplot as plt
 from layer import Layer
 from coder import Coder
 from gate_map import make_nvm_gate_map
@@ -60,7 +61,9 @@ if __name__ == "__main__":
     show_corrosion = True
     show_gates = False
 
-    for t in range(500):
+    history = []
+    start_t = []
+    for t in range(200):
     
         ### occassionally change tc
         if t > 0 and t % 100 == 0:
@@ -71,9 +74,37 @@ if __name__ == "__main__":
         # if True:
         # if t % 2 == 0 or nvmnet.at_exit():
         if nvmnet.at_start() or nvmnet.at_exit():
+            if nvmnet.at_start(): start_t.append(t)
             print('t = %d'%t)
             print(nvmnet.state_string(show_layers, show_tokens, show_corrosion, show_gates))
-            raw_input(".")
+            # raw_input(".")
         if nvmnet.at_exit():
             break
         nvmnet.tick()
+
+        history.append(dict(nvmnet.activity))
+        
+    ### raster plot
+    A = np.zeros((sum([
+        nvmnet.layers[name].size for sl in show_layers for name in sl]),
+        len(history)))
+    for h in range(len(history)):
+        A[:,[h]] = np.concatenate([history[h][k] for sl in show_layers for k in sl],axis=0)
+    
+    xt = start_t
+    xl = []
+    for t in start_t:
+        ops = []
+        for op in ["opc","op1","op2","op3"]:
+            tok = nvmnet.layers[op].coder.decode(history[t][op])
+            ops.append("" if tok in ["null","?"] else tok)
+        xl.append("\n".join([str(t)]+ops))
+    yt = np.array([history[0][k].shape[0] for sl in show_layers for k in sl])
+    yt = yt.cumsum() - yt/2
+    
+    plt.figure()
+    plt.imshow(A, cmap='gray', vmin=act.off, vmax=act.on, aspect='auto')
+    plt.xticks(xt, xl)
+    plt.yticks(yt, [k for sl in show_layers for k in sl])
+    plt.show()
+    
