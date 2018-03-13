@@ -31,7 +31,7 @@ def make_fef(pad, activator, dim):
     fef_coder = Coder(act)
 
     Y, X = np.mgrid[:dim,:dim] # transpose for bitmap
-    R = .2
+    R = .1
     # Cts
     center = act.off + (act.on-act.off)*np.exp(-((X-.5*dim)**2 + (Y-.5*dim)**2)/(R*dim)**2)
     left = act.off + (act.on-act.off)*np.exp(-((X-.0*dim)**2 + (Y-.5*dim)**2)/(R*dim)**2)
@@ -61,18 +61,18 @@ def make_saccade_nvm():
     activator, learning_rule = tanh_activator, tanh_hebbian
 
     # make network
-    layer_shape = (32,16)
-    layer_size = 32*16
+    layer_shape = (16,16)
+    layer_size = layer_shape[0]*layer_shape[1]
     pad = 0.001
     act = activator(pad, layer_size)
     
     devices = {
         "tc": Layer("tc", layer_shape, act, Coder(act)),
         "fef": make_fef(pad, activator, 64),
-        "sc": make_sc(pad, activator, 16)}
+        "sc": make_sc(pad, activator, 8)}
 
     # assemble and link programs
-    nvmnet = NVMNet(layer_shape, pad, activator, learning_rule, devices, gh_shape=(32,32))
+    nvmnet = NVMNet(layer_shape, pad, activator, learning_rule, devices, gh_shape=(32,16))
     for name, program in aas_program.items():
         nvmnet.assemble(program, name, verbose=1)
     nvmnet.link(verbose=2)
