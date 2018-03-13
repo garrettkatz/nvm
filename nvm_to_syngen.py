@@ -47,6 +47,18 @@ def nvm_to_syngen(nvmnet, initial_patterns={}, run_nvm=False, viz_layers=[], pri
             "columns" : layer.shape[1],
         })
 
+    # one more bias layer
+    layer_configs.append({
+        "name" : "bias",
+        "neural model" : "nvm",
+        "rows" : 1,
+        "columns" : 1,
+        "noise config": {
+            "type": "flat",
+            "val": 1
+        }
+    })
+
     structures = [{"name" : "nvm",
                    "type" : "parallel",
                    "layers": layer_configs}]
@@ -55,7 +67,18 @@ def nvm_to_syngen(nvmnet, initial_patterns={}, run_nvm=False, viz_layers=[], pri
     defaults = { "plastic" : "false" }
 
     # Build fully connected connection
-    def build_full(from_layer, to_layer, props):
+    def build_full_biases(from_layer, to_layer, props):
+        props["name"] = build_name(from_layer.name, to_layer.name, "-biases")
+        props["from layer"] = "bias"
+        props["to layer"] = to_layer.name
+        props["dendrite"] = build_name(from_layer.name, to_layer.name)
+        props["type"] = "fully connected"
+        props["opcode"] = "add"
+        props["weight config"] = {
+            "type" : "flat",
+            "weight" : 0.0  # This will get overwritten when the ROM is flashed
+        }
+    def build_full_weights(from_layer, to_layer, props):
         props["name"] = build_name(from_layer.name, to_layer.name, "-input")
         props["from layer"] = from_layer.name
         props["to layer"] = to_layer.name
@@ -158,7 +181,8 @@ def nvm_to_syngen(nvmnet, initial_patterns={}, run_nvm=False, viz_layers=[], pri
         }
 
     # Create factories
-    full_factory = ConnectionFactory(defaults, build_full)
+    full_biases_factory = ConnectionFactory(defaults, build_full_biases)
+    full_weights_factory = ConnectionFactory(defaults, build_full_weights)
     update_factory = ConnectionFactory(defaults, build_update)
     gain_factory = ConnectionFactory(defaults, build_gain)
     gain_update_factory = ConnectionFactory(defaults, build_gain_update)
@@ -170,7 +194,8 @@ def nvm_to_syngen(nvmnet, initial_patterns={}, run_nvm=False, viz_layers=[], pri
     for (to_name, from_name) in nvmnet.weights:
         to_layer, from_layer = nvmnet.layers[to_name], nvmnet.layers[from_name]
         # u * (w v + b)
-        connections.append(full_factory.build(from_layer, to_layer))
+        connections.append(full_biases_factory.build(from_layer, to_layer))
+        connections.append(full_weights_factory.build(from_layer, to_layer))
         connections.append(update_factory.build(from_layer, to_layer))
 
     # Add gain connections
@@ -188,10 +213,17 @@ def nvm_to_syngen(nvmnet, initial_patterns={}, run_nvm=False, viz_layers=[], pri
          "connections" : connections})
 
     for (to_name, from_name), w in nvmnet.weights.items():
+        # weights
         mat_name = build_name(from_name, to_name, "-input")
         mat = net.get_weight_matrix(mat_name)
         for m in range(mat.size):
             mat.data[m] = w.flat[m]
+        # biases
+        b = nvmnet.biases[(to_name, from_name)]
+        mat_name = build_name(from_name, to_name, "-biases")
+        mat = net.get_weight_matrix(mat_name)
+        for m in range(mat.size):
+            mat.data[m] = b.flat[m]
 
     ### INITIALIZE ENVIRONMENT ###
     layer_names = nvmnet.layers.keys() # deterministic order
@@ -207,13 +239,12 @@ def nvm_to_syngen(nvmnet, initial_patterns={}, run_nvm=False, viz_layers=[], pri
         },
         {
             "type" : "callback",
-            "cutoff" : "1",
             "layers" : [
                 {
                     "structure" : "nvm",
                     "layer" : layer_name,
                     "input" : "true",
-                    "function" : "nvm_init",
+                    "function" : "nvm_input",
                     "id" : i
                 } for i,layer_name in enumerate(layer_names)
             ]
@@ -233,23 +264,57 @@ def nvm_to_syngen(nvmnet, initial_patterns={}, run_nvm=False, viz_layers=[], pri
     ]
     env = Environment({"modules" : modules})
 
-    def init_callback(ID, size, ptr):
-        arr = FloatArray(size,ptr)
-        layer_name = layer_names[ID]
-        act = nvmnet.layers[layer_name].activator
-        # print("Initializing " + layer_name)
-        if layer_name in initial_patterns:
-            for i,x in enumerate(initial_patterns[layer_name]):
-                arr.data[i] = act.g(x)
-        else:
-            for i in xrange(size):
-                arr.data[i] = act.g(act.off)
+    def input_callback(ID, size, ptr):
 
+        layer_name = layer_names[ID]
+    
+        ### initialization
+        if tick == 0:
+        
+            arr = FloatArray(size,ptr)
+            act = nvmnet.layers[layer_name].activator
+
+            if layer_name in initial_patterns:
+                for i,x in enumerate(initial_patterns[layer_name]):
+                    arr.data[i] = act.g(x)
+
+            else:
+                for i in xrange(size):
+                    arr.data[i] = act.g(act.off)
+
+        else:
+            arr = FloatArray(size,ptr)
+
+            # occassionally change tc
+            tc_sched = [60, 110, 120]
+            if layer_name == "tc" and tick % tc_sched[2] in tc_sched[:2]:
+    
+                if tick % tc_sched[2] == tc_sched[0]:
+                    tok = ["left","right"][np.random.randint(2)] # face appears
+                if tick % tc_sched[2] == tc_sched[1]:
+                    tok = "wait" # face disappears
+                    
+                pattern = nvmnet.layers[layer_name].coder.encode(tok)
+    
+                act = nvmnet.layers[layer_name].activator
+                for i,x in enumerate(pattern):
+                    arr.data[i] = act.g(x)*10 # *10 to make sure previous state is wiped
+    
+                if run_nvm:
+                    nvmnet.activity[layer_name] = pattern
+                    
+            else:
+            
+                for i in xrange(size):
+                    arr.data[i] = 0.
+
+    
     def read_callback(ID, size, ptr):
         global tick, do_print
 
         layer_name = layer_names[ID]
-    
+
+        ### Start printing current iteration
         if ID == 0:
             tick += 1
             
@@ -279,7 +344,7 @@ def nvm_to_syngen(nvmnet, initial_patterns={}, run_nvm=False, viz_layers=[], pri
             else:
                 print("%4s: %7s"%(layer_name, syn_tok))
                     
-        # if do_print and layer_name in print_layers:
+        # if do_print and layer_name == "go":
         #     v = np.array(FloatArray(size,ptr).to_list())
         #     print("%s (syngen): %f, %f, %f"%(
         #         layer_name, v.min(), v.max(), np.fabs(v).mean()))
@@ -292,7 +357,7 @@ def nvm_to_syngen(nvmnet, initial_patterns={}, run_nvm=False, viz_layers=[], pri
             if do_print: print("nvm tick")
             nvmnet.tick()
 
-    create_io_callback("nvm_init", init_callback)
+    create_io_callback("nvm_input", input_callback)
     create_io_callback("nvm_read", read_callback)
 
     return net, env
@@ -306,17 +371,17 @@ if __name__ == "__main__":
    
     nvmnet = make_saccade_nvm()
     print(nvmnet.layers["gh"].activator.off)
-    # raw_input("continue?")
+    raw_input("continue?")
 
     net, env = nvm_to_syngen(nvmnet,
         initial_patterns = dict(nvmnet.activity),
         run_nvm=True,
-        viz_layers = ["ip","opc","op1","op2","go"],
-        print_layers = nvmnet.layers,)
+        viz_layers = ["sc","fef","tc","ip","opc","op1","op2","gh","go"],
+        print_layers = nvmnet.layers)
 
     print(net.run(env, {"multithreaded" : "true",
                             "worker threads" : 0,
-                            "iterations" : 2,
+                            "iterations" : 400,
                             "refresh rate" : 0,
                             "verbose" : "true",
                             "learning flag" : "false"}))

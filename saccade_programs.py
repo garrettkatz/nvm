@@ -16,10 +16,10 @@ loop:   mov fef center
         mov sc off
 wait:   jmp tc
 left:   mov fef right
-        jmp act
+        jmp look
 right:  mov fef left
-        jmp act
-act:    mov sc on
+        jmp look
+look:   mov sc on
         jmp loop
         exit
     
@@ -30,15 +30,16 @@ def make_fef(pad, activator, dim):
     act = activator(pad, dim*dim)
     fef_coder = Coder(act)
 
-    X, Y = np.mgrid[:dim,:dim]
-    # # Cts
-    # center = act.off + (act.on-act.off)*np.exp(-((X-.5*dim)**2 + (Y-.5*dim)**2)/(.25*dim)**2)
-    # left = act.off + (act.on-act.off)*np.exp(-((X-.0*dim)**2 + (Y-.5*dim)**2)/(.25*dim)**2)
-    # right = act.off + (act.on-act.off)*np.exp(-((X-1.*dim)**2 + (Y-.5*dim)**2)/(.25*dim)**2)
-    # Binary
-    center = act.off + (act.on-act.off)*((X-.5*dim)**2 + (Y-.5*dim)**2 < (.25*dim)**2)
-    left = act.off + (act.on-act.off)*((X-.0*dim)**2 + (Y-.5*dim)**2 < (.25*dim)**2)
-    right = act.off + (act.on-act.off)*((X-1.*dim)**2 + (Y-.5*dim)**2 < (.25*dim)**2)
+    Y, X = np.mgrid[:dim,:dim] # transpose for bitmap
+    R = .2
+    # Cts
+    center = act.off + (act.on-act.off)*np.exp(-((X-.5*dim)**2 + (Y-.5*dim)**2)/(R*dim)**2)
+    left = act.off + (act.on-act.off)*np.exp(-((X-.0*dim)**2 + (Y-.5*dim)**2)/(R*dim)**2)
+    right = act.off + (act.on-act.off)*np.exp(-((X-1.*dim)**2 + (Y-.5*dim)**2)/(R*dim)**2)
+    # # Binary
+    # center = act.off + (act.on-act.off)*((X-.5*dim)**2 + (Y-.5*dim)**2 < (R*dim)**2)
+    # left = act.off + (act.on-act.off)*((X-.0*dim)**2 + (Y-.5*dim)**2 < (R*dim)**2)
+    # right = act.off + (act.on-act.off)*((X-1.*dim)**2 + (Y-.5*dim)**2 < (R*dim)**2)
 
     fef_coder.encode("center", center.reshape((dim*dim,1)))
     fef_coder.encode("left", left.reshape((dim*dim,1)))
@@ -67,11 +68,11 @@ def make_saccade_nvm():
     
     devices = {
         "tc": Layer("tc", layer_shape, act, Coder(act)),
-        "fef": make_fef(pad, activator, 32),
+        "fef": make_fef(pad, activator, 64),
         "sc": make_sc(pad, activator, 16)}
 
     # assemble and link programs
-    nvmnet = NVMNet(layer_shape, pad, activator, learning_rule, devices)
+    nvmnet = NVMNet(layer_shape, pad, activator, learning_rule, devices, gh_shape=(32,32))
     for name, program in aas_program.items():
         nvmnet.assemble(program, name, verbose=1)
     nvmnet.link(verbose=2)
@@ -96,13 +97,16 @@ if __name__ == "__main__":
 
     history = []
     start_t = []
-    for t in range(200):
+    tc_sched = [60, 110, 120]
+    for t in range(tc_sched[2]*3):
     
         ### occassionally change tc
-        if t > 0 and t % 100 == 0:
+        if t > 0 and t % tc_sched[2] in tc_sched[:2]:
         # if np.random.rand() < 1./100:
-            # tok = ["wait","left","right"][np.random.randint(3)]
-            tok = ["left","right"][np.random.randint(2)]
+            if t % tc_sched[2] == tc_sched[0]:
+                tok = ["left","right"][np.random.randint(2)]
+            if t % tc_sched[2] == tc_sched[1]:
+                tok = "wait"
             nvmnet.activity["tc"] = nvmnet.layers["tc"].coder.encode(tok) # maybe face appears
 
         ### show state and tick

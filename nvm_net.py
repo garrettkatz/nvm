@@ -10,7 +10,7 @@ from nvm_linker import link
 
 class NVMNet:
     
-    def __init__(self, layer_shape, pad, activator, learning_rule, devices, num_gh=512):
+    def __init__(self, layer_shape, pad, activator, learning_rule, devices, gh_shape=(32,32)):
 
         # set up parameters
         self.layer_size = layer_shape[0]*layer_shape[1]
@@ -32,11 +32,11 @@ class NVMNet:
         # set up gates
         NL = len(layers) + 2 # +2 for gate out/hidden
         NG = NL**2 + NL # number of gates
-        NH = num_gh # number of hidden units
+        NH = gh_shape[0]*gh_shape[1] # number of hidden units
         acto = heaviside_activator(NG)
         acth = activator(pad,NH)
         layers['go'] = Layer('go', (1,NG), acto, Coder(acto))
-        layers['gh'] = Layer('gh', (1,NH), acth, Coder(acth))
+        layers['gh'] = Layer('gh', gh_shape, acth, Coder(acth))
         self.gate_map = make_nvm_gate_map(layers.keys())        
 
         # setup connection matrices
