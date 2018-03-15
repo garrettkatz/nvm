@@ -381,7 +381,7 @@ if __name__ == "__main__":
 
     print(net.run(env, {"multithreaded" : "true",
                             "worker threads" : 0,
-                            "iterations" : 400,
+                            "iterations" : 200,
                             "refresh rate" : 0,
                             "verbose" : "true",
                             "learning flag" : "false"}))
