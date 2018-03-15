@@ -98,7 +98,7 @@ if __name__ == "__main__":
     history = []
     start_t = []
     tc_sched = [60, 110, 120]
-    for t in range(tc_sched[2]*3):
+    for t in range(tc_sched[2]*2):
     
         ### occassionally change tc
         if t > 0 and t % tc_sched[2] in tc_sched[:2]:
