@@ -2,7 +2,7 @@ import numpy as np
 from saccade_programs import make_saccade_nvm
 from syngen import Network, Environment, ConnectionFactory, create_io_callback, FloatArray, set_debug
 
-def nvm_to_syngen(nvmnet, initial_patterns={}, run_nvm=False, viz_layers=[], print_layers=[]):
+def nvm_to_syngen(nvmnet, nmod, initial_patterns={}, run_nvm=False, viz_layers=[], print_layers=[], stat_layers=[]):
     
     # Builds a name for a connection or dendrite
     def build_name(from_name, to_name, suffix=""):
@@ -25,15 +25,20 @@ def nvm_to_syngen(nvmnet, initial_patterns={}, run_nvm=False, viz_layers=[], pri
                 "name" : "gain",
                 "children" : [
                     {
-                        "name" : "gain-update",
+                        "name" : "fix",
                         "opcode" : "add",
+                        "init" : 1.0 # bias
+                    },
+                    {
+                        "name" : "gain-update",
+                        "opcode" : "mult",
                         "init" : 1.0 # bias
                     },
                     {
                         "name" : "gain-decay",
                         "opcode" : "mult",
                         "init" : 1.0 # bias
-                    }
+                    },
                 ]
             }
         )
@@ -41,7 +46,7 @@ def nvm_to_syngen(nvmnet, initial_patterns={}, run_nvm=False, viz_layers=[], pri
         # Build layer config
         layer_configs.append({
             "name" : layer_name,
-            "neural model" : "nvm",
+            "neural model" : "nvm_" + layer.activator.label,
             "dendrites" : dendrites,
             "rows" : layer.shape[0],
             "columns" : layer.shape[1],
@@ -50,7 +55,7 @@ def nvm_to_syngen(nvmnet, initial_patterns={}, run_nvm=False, viz_layers=[], pri
     # one more bias layer
     layer_configs.append({
         "name" : "bias",
-        "neural model" : "nvm",
+        "neural model" : "relay",
         "rows" : 1,
         "columns" : 1,
         "noise config": {
@@ -96,7 +101,7 @@ def nvm_to_syngen(nvmnet, initial_patterns={}, run_nvm=False, viz_layers=[], pri
         props["from layer"] = "go" # gate output
         props["to layer"] = to_layer.name
         props["dendrite"] = build_name(from_layer.name, to_layer.name)
-        props["opcode"] = "mult_heaviside"
+        props["opcode"] = "mult" #_heaviside"
         props["weight config"] = {
             "type" : "flat",
             "weight" : 1
@@ -115,12 +120,13 @@ def nvm_to_syngen(nvmnet, initial_patterns={}, run_nvm=False, viz_layers=[], pri
             "to column end" : to_layer.shape[1]
         }
 
-    # Builds a multiplicative gain connection (from_layer = to_layer)
+    # Builds gain self-connections (from_layer = to_layer)
     def build_gain(from_layer, to_layer, props):
         props["name"] = build_name(from_layer.name, to_layer.name, "-gain")
         props["from layer"] = from_layer.name
         props["to layer"] = to_layer.name
-        props["dendrite"] = "gain"
+        # props["dendrite"] = "gain"
+        props["dendrite"] = "fix"
         props["type"] = "one to one"
         props["opcode"] = "mult"
         props["weight config"] = {
@@ -134,7 +140,7 @@ def nvm_to_syngen(nvmnet, initial_patterns={}, run_nvm=False, viz_layers=[], pri
         props["from layer"] = from_layer.name
         props["to layer"] = to_layer.name
         props["dendrite"] = "gain-update"
-        props["opcode"] = "sub_heaviside"  # (1 - hs(u)), dendrite has bias
+        props["opcode"] = "sub" # dendrite has bias, attributes have heaviside
         props["weight config"] = {
             "type" : "flat",
             "weight" : 1
@@ -160,7 +166,7 @@ def nvm_to_syngen(nvmnet, initial_patterns={}, run_nvm=False, viz_layers=[], pri
         props["from layer"] = from_layer.name
         props["to layer"] = to_layer.name
         props["dendrite"] = "gain-decay"
-        props["opcode"] = "sub_heaviside"  # (1 - hs(d)), dendrite has bias
+        props["opcode"] = "sub" # dendrite has bias, attributes have heaviside
         props["weight config"] = {
             "type" : "flat",
             "weight" : 1
@@ -338,20 +344,20 @@ def nvm_to_syngen(nvmnet, initial_patterns={}, run_nvm=False, viz_layers=[], pri
                 py_v = nvmnet.activity[layer_name]
                 py_tok = coder.decode(py_v)
                 residual = np.fabs(syn_v.reshape(py_v.shape) - py_v).max()
-                print("%4s: %7s %s %7s (res=%f)"%(
+                print("%4s: %12s %s %12s (res=%f)"%(
                     layer_name,
                     syn_tok, "|" if syn_tok == py_tok else "X", py_tok, residual))
             else:
-                print("%4s: %7s"%(layer_name, syn_tok))
+                print("%4s: %12s"%(layer_name, syn_tok))
                     
-        # if do_print and layer_name == "go":
-        #     v = np.array(FloatArray(size,ptr).to_list())
-        #     print("%s (syngen): %f, %f, %f"%(
-        #         layer_name, v.min(), v.max(), np.fabs(v).mean()))
-        #     if run_nvm:
-        #         v = nvmnet.activity[layer_name]
-        #         print("%s (py): %f, %f, %f"%(
-        #             layer_name, v.min(), v.max(), np.fabs(v).mean()))
+        if do_print and layer_name in stat_layers:
+            v = np.array(FloatArray(size,ptr).to_list())
+            print("%s (syngen): %f, %f, %f"%(
+                layer_name, v.min(), v.max(), np.fabs(v).mean()))
+            if run_nvm:
+                v = nvmnet.activity[layer_name]
+                print("%s (py): %f, %f, %f"%(
+                    layer_name, v.min(), v.max(), np.fabs(v).mean()))
                     
         if run_nvm and ID == len(layer_names)-1:
             if do_print: print("nvm tick")
@@ -374,14 +380,18 @@ if __name__ == "__main__":
     raw_input("continue?")
 
     net, env = nvm_to_syngen(nvmnet,
+        nmod = "tanh",
+        # nmod = "logistic",
         initial_patterns = dict(nvmnet.activity),
         run_nvm=True,
         viz_layers = ["sc","fef","tc","ip","opc","op1","op2","gh","go"],
-        print_layers = nvmnet.layers)
+        print_layers = nvmnet.layers,
+        # stat_layers=["ip","go","gh"])
+        stat_layers=[])
 
     print(net.run(env, {"multithreaded" : "true",
                             "worker threads" : 0,
-                            "iterations" : 200,
+                            "iterations" : 100,
                             "refresh rate" : 0,
                             "verbose" : "true",
                             "learning flag" : "false"}))

@@ -1,7 +1,7 @@
 import numpy as np
 
 class Activator:
-    def __init__(self, f, g, e, make_pattern, hash_pattern, on, off):
+    def __init__(self, f, g, e, make_pattern, hash_pattern, on, off, label):
         self.f = f
         self.g = g
         self.e = e
@@ -9,6 +9,7 @@ class Activator:
         self.hash_pattern = hash_pattern
         self.on = on
         self.off = off
+        self.label = label
     def gain(self):
         w = (self.g(self.on) - self.g(self.off))/(self.on - self.off)
         b = (self.g(self.off)*self.on - self.g(self.on)*self.off)/(self.on - self.off)
@@ -26,7 +27,8 @@ def tanh_activator(pad, layer_size):
         make_pattern = lambda : (1.-pad)*np.sign(np.random.randn(layer_size,1)),
         hash_pattern = lambda p: (p > 0).tobytes(),
         on = 1. - pad,
-        off = -(1. - pad))
+        off = -(1. - pad),
+        label = "tanh")
 
 def logistic_activator(pad, layer_size):
     return Activator(
@@ -36,7 +38,8 @@ def logistic_activator(pad, layer_size):
         make_pattern = lambda : .5*((1.-pad*2)*np.sign(np.random.randn(layer_size,1)) + 1.),
         hash_pattern = lambda p: (p > .5).tobytes(),
         on = 1. - pad,
-        off = 0. + pad)
+        off = 0. + pad,
+        label = "logistic")
 
 def heaviside_activator(layer_size):
     return Activator(
@@ -46,4 +49,5 @@ def heaviside_activator(layer_size):
         make_pattern = lambda : (np.random.randn(layer_size,1) > 0).astype(float),
         hash_pattern = lambda p: (p > .5).tobytes(),
         on = 1.,
-        off = 0.)
+        off = 0.,
+        label = "heaviside")
