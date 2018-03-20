@@ -1,29 +1,28 @@
 import numpy as np
 from activator import *
 
-def linear_solve(X, Y, activator):
-    W = np.linalg.lstsq(
+def linear_solve(X, Y, actx, acty):
+    Wb = np.linalg.lstsq(
         np.concatenate((X.T, np.ones((X.shape[1],1))), axis=1), # ones for bias
-        activator.g(Y).T, rcond=None)[0].T
-    return W[:,:-1], W[:,[-1]]
-
-def tanh_hebbian(X, Y, activator):
-    W = activator.g(Y).dot(X.T) / X.shape[0]
-    b = np.zeros((Y.shape[0],1))
+        acty.g(Y).T, rcond=None)[0].T
+    W, b =  W[:,:-1], W[:,[-1]]
     return W, b
 
-def logistic_hebbian(X, Y, activator):
+def hebbian(X, Y, actx, acty):
     N = X.shape[0]
-    W = 2*activator.g(Y).dot(2*X.T - np.ones(X.T.shape))/N
-    b = -activator.g(Y).dot(2*X.T - np.ones(X.T.shape)).dot(np.ones((N,1)))/N
+    alpha = 2./(actx.on - actx.off)
+    beta = (alpha * actx.off + 1)
+    one = np.ones(X.shape)
+    W = acty.g(Y).dot(alpha**2 * X.T - alpha * beta * one.T) / N
+    b = acty.g(Y).dot(- alpha * beta * X.T + beta**2 * one.T).dot(one[:,:1]) / N
     return W, b
 
-def flash_mem(X, Y, activator, learning_rule, verbose=False):
+def flash_mem(X, Y, actx, acty, learning_rule, verbose=False):
     
-    w, b = learning_rule(X, Y, activator)
+    w, b = learning_rule(X, Y, actx, acty)
 
-    _Y = activator.f(w.dot(X) + b)
-    diff_count = (np.ones(Y.shape) - activator.e(Y, _Y)).sum()
+    _Y = acty.f(w.dot(X) + b)
+    diff_count = (np.ones(Y.shape) - acty.e(Y, _Y)).sum()
 
     if verbose:
         print("Flash residual max: %f"%np.fabs(Y - _Y).max())

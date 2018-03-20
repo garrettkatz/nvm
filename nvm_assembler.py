@@ -58,6 +58,7 @@ def assemble(nvmnet, program, name, verbose=False):
         if verbose: print("Binding ip -> op"+x)
         weights[("op"+x,"ip")], biases[("op"+x,"ip")], dc = flash_mem(
             ips[:,:-1], encodings["op"+x],
+            nvmnet.layers["ip"].activator,
             nvmnet.layers["op"+x].activator,
             nvmnet.learning_rule, verbose=verbose)
         diff_count += dc
@@ -66,6 +67,7 @@ def assemble(nvmnet, program, name, verbose=False):
     if verbose: print("Binding ip -> ip"+x)
     weights[("ip","ip")], biases[("ip","ip")], dc = flash_mem(
         ips[:,:-1], ips[:,1:],
+        nvmnet.layers["ip"].activator,
         nvmnet.layers["ip"].activator,
         nvmnet.learning_rule, verbose=verbose)
     diff_count += dc
@@ -82,6 +84,7 @@ def assemble(nvmnet, program, name, verbose=False):
         if verbose: print("Binding op2 -> ip")
         weights[("ip","op2")], biases[("ip","op2")], dc = flash_mem(
             X_label, Y_label,
+            nvmnet.layers["op2"].activator,
             nvmnet.layers["ip"].activator,
             nvmnet.learning_rule, verbose=verbose)
         diff_count += dc

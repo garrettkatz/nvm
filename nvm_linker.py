@@ -23,7 +23,8 @@ def link(nvmnet, tokens=[], verbose=0):
         Y = np.concatenate(map(layer.coder.encode, all_tokens), axis=1)
         if verbose > 0: print("Linking op2 -> %s"%(name))
         weights[(name, "op2")], biases[(name, "op2")], dc = flash_mem(
-            X, Y, layer.activator, nvmnet.learning_rule, verbose=verbose)
+            X, Y, op2.activator, layer.activator,
+            nvmnet.learning_rule, verbose=verbose)
         diff_count += dc
 
     # link device layers with each other for movd instruction
@@ -34,7 +35,8 @@ def link(nvmnet, tokens=[], verbose=0):
             Y = np.concatenate(map(to_layer.coder.encode, all_tokens), axis=1)
             if verbose > 0: print("Linking %s -> %s"%(from_name, to_name))
             weights[(to_name, from_name)], biases[(to_name, from_name)], dc = flash_mem(
-                X, Y, to_layer.activator, nvmnet.learning_rule, verbose=verbose)
+                X, Y, from_layer.activator, to_layer.activator,
+                nvmnet.learning_rule, verbose=verbose)
             diff_count += dc    
 
     # link device layers to ip for jmpd instruction
@@ -43,7 +45,8 @@ def link(nvmnet, tokens=[], verbose=0):
         Y = np.concatenate(map(ip.coder.encode, all_tokens), axis=1)
         if verbose > 0: print("Linking %s -> ip"%(name))
         weights[("ip", name)], biases[("ip", name)], dc = flash_mem(
-            X, Y, layer.activator, nvmnet.learning_rule, verbose=verbose)
+            X, Y, layer.activator, ip.activator,
+            nvmnet.learning_rule, verbose=verbose)
         diff_count += dc
 
     # link op1 to ip for jmpv instruction
@@ -51,7 +54,7 @@ def link(nvmnet, tokens=[], verbose=0):
     Y = np.concatenate(map(ip.coder.encode, all_tokens), axis=1)
     if verbose > 0: print("Linking op1 -> ip")
     weights[("ip", "op1")], biases[("ip", "op1")], dc = flash_mem(
-        X, Y, op1.activator, nvmnet.learning_rule, verbose=verbose)
+        X, Y, op1.activator, ip.activator, nvmnet.learning_rule, verbose=verbose)
     diff_count += dc
         
     return weights, biases, diff_count

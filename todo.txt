@@ -1,9 +1,15 @@
 next steps:
-    logistic/heaviside nvm_attributes
     talk to greg about:
+        implementing gain with bias in syngen
         only one input module per layer?
         in input callback I need to explicitly set 0 after first tick
         for tc I needed to overcompensate to cancel out previous activity
+    new comparison approach:
+        two layers with plastic associative weights: cmp in -> cmp out
+        each cmp operation:
+            reset weights so that all cmp in patterns produce false in cmp out
+            mov first operand to cmp in, and do weight learning so that first operand pattern (and only that pattern) associated with true in cmp out
+            mov second operand to cmp in, and let it activate cmp out.  that gives the match result.
     smarter linking (only what's necessary)
     wm read/write/sequencing
     different coding semantics/errors when pattern provided and token already used?
