@@ -12,6 +12,8 @@ next steps:
             mov second operand to cmp in, and let it activate cmp out.  that gives the match result.
     smarter linking (only what's necessary)
     wm read/write/sequencing
+        also erase: antilearning (subtract hebbian contribution)
+    nback: new stimuli presented only once the network outputs match/no match decision on current stimulus
     different coding semantics/errors when pattern provided and token already used?
     check Z that randomly interpolates X,Y and multiple intermediate Z steps
     distinct excitatory/inhibitory populations
