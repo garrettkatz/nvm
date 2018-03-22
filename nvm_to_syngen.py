@@ -23,10 +23,11 @@ def nvm_to_syngen(nvmnet, initial_patterns={}, run_nvm=False, viz_layers=[], pri
         dendrites.append(
             {
                 "name" : "gain",
+                "init" : 0.0,
                 "children" : [
                     {
                         "name" : "gain-update",
-                        "opcode" : "mult",
+                        "opcode" : "add",
                         "init" : 1.0
                     },
                     {
@@ -37,7 +38,7 @@ def nvm_to_syngen(nvmnet, initial_patterns={}, run_nvm=False, viz_layers=[], pri
                     {
                         "name" : "fix",
                         "opcode" : "mult",
-                        "init" : nvmnet.w_gain
+                        "init" : nvmnet.b_gain
                     },
                 ]
             }
@@ -58,9 +59,9 @@ def nvm_to_syngen(nvmnet, initial_patterns={}, run_nvm=False, viz_layers=[], pri
         "neural model" : "relay",
         "rows" : 1,
         "columns" : 1,
-        "noise config": {
+        "init config": {
             "type": "flat",
-            "val": 1
+            "value": 1
         }
     })
 
@@ -127,21 +128,10 @@ def nvm_to_syngen(nvmnet, initial_patterns={}, run_nvm=False, viz_layers=[], pri
         props["to layer"] = to_layer.name
         props["dendrite"] = "fix"
         props["type"] = "one to one"
-        props["opcode"] = "mult"
-        props["weight config"] = {
-            "type" : "flat",
-            "weight" : 1
-        }
-    def build_gain_bias(from_layer, to_layer, props):
-        props["name"] = build_name(from_layer.name, to_layer.name, "-gain-bias")
-        props["from layer"] = "bias"
-        props["to layer"] = to_layer.name
-        props["dendrite"] = "fix"
-        props["type"] = "fully connected"
         props["opcode"] = "add"
         props["weight config"] = {
             "type" : "flat",
-            "weight" : nvmnet.b_gain
+            "init" : nvmnet.w_gain
         }
 
     # Builds update gate of gain (from_layer = gate output)
@@ -201,7 +191,6 @@ def nvm_to_syngen(nvmnet, initial_patterns={}, run_nvm=False, viz_layers=[], pri
     full_weights_factory = ConnectionFactory(defaults, build_full_weights)
     update_factory = ConnectionFactory(defaults, build_update)
     gain_factory = ConnectionFactory(defaults, build_gain)
-    gain_bias_factory = ConnectionFactory(defaults, build_gain_bias)
     gain_update_factory = ConnectionFactory(defaults, build_gain_update)
     gain_decay_factory = ConnectionFactory(defaults, build_gain_decay)
 
@@ -222,7 +211,6 @@ def nvm_to_syngen(nvmnet, initial_patterns={}, run_nvm=False, viz_layers=[], pri
         connections.append(gain_update_factory.build(gate_output, layer))
         connections.append(gain_decay_factory.build(gate_output, layer))
         connections.append(gain_factory.build(layer, layer))
-        connections.append(gain_bias_factory.build(layer, layer))
 
     ### INITIALIZE NETWORK AND WEIGHTS ###
 

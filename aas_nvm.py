@@ -174,9 +174,9 @@ def nvm_synapto(weights):
         "neural model" : "nvm",
         "rows" : N_LAYER_DIM,
         "columns" : N_LAYER_DIM,
-        "noise config" : {
+        "init config" : {
             "type" : "flat",
-            "val" : W_CMPH  # bias
+            "value" : W_CMPH  # bias
         }
     })
     layer_configs.append({
@@ -184,9 +184,9 @@ def nvm_synapto(weights):
         "neural model" : "nvm",
         "rows" : N_LAYER_DIM,
         "columns" : N_LAYER_DIM,
-        "noise config" : {
+        "init config" : {
             "type" : "flat",
-            "val" : -B_CMPO  # bias
+            "value" : -B_CMPO  # bias
         }
     })
 
