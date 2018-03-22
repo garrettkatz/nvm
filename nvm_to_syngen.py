@@ -2,7 +2,7 @@ import numpy as np
 from saccade_programs import make_saccade_nvm
 from syngen import Network, Environment, ConnectionFactory, create_io_callback, FloatArray, set_debug
 
-def nvm_to_syngen(nvmnet, nmod, initial_patterns={}, run_nvm=False, viz_layers=[], print_layers=[], stat_layers=[]):
+def nvm_to_syngen(nvmnet, initial_patterns={}, run_nvm=False, viz_layers=[], print_layers=[], stat_layers=[]):
     
     # Builds a name for a connection or dendrite
     def build_name(from_name, to_name, suffix=""):
@@ -27,7 +27,7 @@ def nvm_to_syngen(nvmnet, nmod, initial_patterns={}, run_nvm=False, viz_layers=[
                     {
                         "name" : "fix",
                         "opcode" : "add",
-                        "init" : 1.0 # bias
+                        "init" : 1.0
                     },
                     {
                         "name" : "gain-update",
@@ -380,8 +380,6 @@ if __name__ == "__main__":
     raw_input("continue?")
 
     net, env = nvm_to_syngen(nvmnet,
-        nmod = "tanh",
-        # nmod = "logistic",
         initial_patterns = dict(nvmnet.activity),
         run_nvm=True,
         viz_layers = ["sc","fef","tc","ip","opc","op1","op2","gh","go"],

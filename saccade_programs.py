@@ -57,8 +57,8 @@ def make_sc(pad, activator, dim):
 def make_saccade_nvm():
 
     # set up activator
-    activator = logistic_activator
-    # activator = tanh_activator
+    # activator = logistic_activator
+    activator = tanh_activator
     learning_rule = hebbian
 
     # make network
