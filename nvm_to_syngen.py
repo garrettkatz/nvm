@@ -284,11 +284,12 @@ def nvm_to_syngen(nvmnet, initial_patterns={}, run_nvm=False, viz_layers=[], pri
                     # Hack: multiply initial inputs by 10, pushing them further
                     #   from the origin and washing out bias corruption
                     # TODO: fix this in a less hacky way
-                    arr.data[i] = act.g(x) * 10
+                    # arr.data[i] = act.g(x) * 10
+                    arr.data[i] = act.g(x) - nvmnet.b_gain # slightly less hacky
 
             else:
                 for i in xrange(size):
-                    arr.data[i] = act.g(act.off)
+                    arr.data[i] = act.g(act.off) - nvmnet.b_gain
 
         else:
             arr = FloatArray(size,ptr)
@@ -377,8 +378,8 @@ if __name__ == "__main__":
     tick = 0
     do_print = False
    
-    # nvmnet = make_saccade_nvm("tanh")
-    nvmnet = make_saccade_nvm("logistic")
+    nvmnet = make_saccade_nvm("tanh")
+    # nvmnet = make_saccade_nvm("logistic")
 
     print(nvmnet.layers["gh"].activator.off)
     print(nvmnet.w_gain, nvmnet.b_gain)
@@ -396,7 +397,7 @@ if __name__ == "__main__":
 
     print(net.run(env, {"multithreaded" : "true",
                             "worker threads" : 0,
-                            "iterations" : 4,
+                            "iterations" : 200,
                             "refresh rate" : 0,
                             "verbose" : "true",
                             "learning flag" : "false"}))
