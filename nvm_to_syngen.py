@@ -23,7 +23,6 @@ def nvm_to_syngen(nvmnet, initial_patterns={}, run_nvm=False, viz_layers=[], pri
         dendrites.append(
             {
                 "name" : "gain",
-                "init" : 0.0,
                 "children" : [
                     {
                         "name" : "gain-update",
@@ -131,7 +130,7 @@ def nvm_to_syngen(nvmnet, initial_patterns={}, run_nvm=False, viz_layers=[], pri
         props["opcode"] = "add"
         props["weight config"] = {
             "type" : "flat",
-            "init" : nvmnet.w_gain
+            "weight" : nvmnet.w_gain
         }
 
     # Builds update gate of gain (from_layer = gate output)
