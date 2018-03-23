@@ -1,6 +1,6 @@
 next steps:
+    omega and beta for gain should be layer activator-specific
     talk to greg about:
-        implementing gain with bias in syngen
         only one input module per layer?
         in input callback I need to explicitly set 0 after first tick
         for tc I needed to overcompensate to cancel out previous activity

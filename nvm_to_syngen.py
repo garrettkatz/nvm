@@ -377,8 +377,13 @@ if __name__ == "__main__":
     tick = 0
     do_print = False
    
-    nvmnet = make_saccade_nvm()
+    # nvmnet = make_saccade_nvm("tanh")
+    nvmnet = make_saccade_nvm("logistic")
+
     print(nvmnet.layers["gh"].activator.off)
+    print(nvmnet.w_gain, nvmnet.b_gain)
+    print(nvmnet.layers["go"].activator.label)
+    print(nvmnet.layers["gh"].activator.label)
     raw_input("continue?")
 
     net, env = nvm_to_syngen(nvmnet,
@@ -391,7 +396,7 @@ if __name__ == "__main__":
 
     print(net.run(env, {"multithreaded" : "true",
                             "worker threads" : 0,
-                            "iterations" : 100,
+                            "iterations" : 4,
                             "refresh rate" : 0,
                             "verbose" : "true",
                             "learning flag" : "false"}))

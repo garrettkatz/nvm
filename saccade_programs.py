@@ -54,11 +54,13 @@ def make_sc(pad, activator, dim):
     sc_coder.encode("off", act.off*np.ones((dim*dim,1)))
     return Layer("sc", (dim,dim), act, sc_coder)
 
-def make_saccade_nvm():
+def make_saccade_nvm(activator_label):
 
     # set up activator
-    # activator = logistic_activator
-    activator = tanh_activator
+    if activator_label == "logistic":
+        activator = logistic_activator
+    if activator_label == "tanh":
+        activator = tanh_activator
     learning_rule = hebbian
 
     # make network
