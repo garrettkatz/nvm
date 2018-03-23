@@ -281,7 +281,10 @@ def nvm_to_syngen(nvmnet, initial_patterns={}, run_nvm=False, viz_layers=[], pri
 
             if layer_name in initial_patterns:
                 for i,x in enumerate(initial_patterns[layer_name]):
-                    arr.data[i] = act.g(x)
+                    # Hack: multiply initial inputs by 10, pushing them further
+                    #   from the origin and washing out bias corruption
+                    # TODO: fix this in a less hacky way
+                    arr.data[i] = act.g(x) * 10
 
             else:
                 for i in xrange(size):
