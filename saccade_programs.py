@@ -91,7 +91,7 @@ def make_saccade_nvm(activator_label):
 
 if __name__ == "__main__":
     
-    nvmnet = make_saccade_nvm()
+    nvmnet = make_saccade_nvm("logistic")
     raw_input("continue?")
     
     show_layers = [
