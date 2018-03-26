@@ -13,6 +13,7 @@ from nvm_net import NVMNet
 aas_program = {"aas":"""
 
 loop:   mov fef center
+        mov sc on
         mov sc off
 wait:   jmp tc
 left:   mov fef right
@@ -20,39 +21,41 @@ left:   mov fef right
 right:  mov fef left
         jmp look
 look:   mov sc on
+        mov sc off
         jmp loop
         exit
     
 """}
 
-def make_fef(pad, activator, dim):
+def make_fef(pad, activator, rows, columns):
+    dim = min(rows, columns)
 
-    act = activator(pad, dim*dim)
+    act = activator(pad, rows*columns)
     fef_coder = Coder(act)
 
-    Y, X = np.mgrid[:dim,:dim] # transpose for bitmap
+    Y, X = np.mgrid[:rows,:columns] # transpose for bitmap
     R = .1
     # Cts
-    center = act.off + (act.on-act.off)*np.exp(-((X-.5*dim)**2 + (Y-.5*dim)**2)/(R*dim)**2)
-    left = act.off + (act.on-act.off)*np.exp(-((X-.0*dim)**2 + (Y-.5*dim)**2)/(R*dim)**2)
-    right = act.off + (act.on-act.off)*np.exp(-((X-1.*dim)**2 + (Y-.5*dim)**2)/(R*dim)**2)
+    center = act.off + (act.on-act.off)*np.exp(-((X-.5*columns)**2 + (Y-.5*rows)**2)/(R*dim)**2)
+    left = act.off + (act.on-act.off)*np.exp(-((X-.0*columns)**2 + (Y-.5*rows)**2)/(R*dim)**2)
+    right = act.off + (act.on-act.off)*np.exp(-((X-1.*columns)**2 + (Y-.5*rows)**2)/(R*dim)**2)
     # # Binary
-    # center = act.off + (act.on-act.off)*((X-.5*dim)**2 + (Y-.5*dim)**2 < (R*dim)**2)
-    # left = act.off + (act.on-act.off)*((X-.0*dim)**2 + (Y-.5*dim)**2 < (R*dim)**2)
-    # right = act.off + (act.on-act.off)*((X-1.*dim)**2 + (Y-.5*dim)**2 < (R*dim)**2)
+    # center = act.off + (act.on-act.off)*((X-.5*columns)**2 + (Y-.5*rows)**2 < (R*dim)**2)
+    # left = act.off + (act.on-act.off)*((X-.0*columns)**2 + (Y-.5*rows)**2 < (R*dim)**2)
+    # right = act.off + (act.on-act.off)*((X-1.*columns)**2 + (Y-.5*rows)**2 < (R*dim)**2)
 
-    fef_coder.encode("center", center.reshape((dim*dim,1)))
-    fef_coder.encode("left", left.reshape((dim*dim,1)))
-    fef_coder.encode("right", right.reshape((dim*dim,1)))
-    return Layer("fef", (dim,dim), act, fef_coder)
+    fef_coder.encode("center", center.reshape((rows*columns,1)))
+    fef_coder.encode("left", left.reshape((rows*columns,1)))
+    fef_coder.encode("right", right.reshape((rows*columns,1)))
+    return Layer("fef", (rows,columns), act, fef_coder)
 
-def make_sc(pad, activator, dim):
+def make_sc(pad, activator, rows, columns):
 
-    act = activator(pad, dim*dim)
+    act = activator(pad, rows*columns)
     sc_coder = Coder(act)
-    sc_coder.encode("on", act.on*np.ones((dim*dim,1)))
-    sc_coder.encode("off", act.off*np.ones((dim*dim,1)))
-    return Layer("sc", (dim,dim), act, sc_coder)
+    sc_coder.encode("on", act.on*np.ones((rows*columns,1)))
+    sc_coder.encode("off", act.off*np.ones((rows*columns,1)))
+    return Layer("sc", (rows,columns), act, sc_coder)
 
 def make_saccade_nvm(activator_label):
 
@@ -71,8 +74,8 @@ def make_saccade_nvm(activator_label):
     
     devices = {
         "tc": Layer("tc", layer_shape, act, Coder(act)),
-        "fef": make_fef(pad, activator, 64),
-        "sc": make_sc(pad, activator, 8)}
+        "fef": make_fef(pad, activator, 68, 96),
+        "sc": make_sc(pad, activator, 2, 2)}
 
     # assemble and link programs
     nvmnet = NVMNet(layer_shape, pad, activator, learning_rule, devices, gh_shape=(32,16))
@@ -92,7 +95,7 @@ if __name__ == "__main__":
     raw_input("continue?")
     
     show_layers = [
-        ["go", "gh","ip"] + ["op"+x for x in "c123"] + nvmnet.devices.keys(),
+        ["go", "gh","ip"] + ["op"+x for x in "c12"] + nvmnet.devices.keys(),
     ]
     show_tokens = True
     show_corrosion = True
@@ -137,7 +140,7 @@ if __name__ == "__main__":
     xl = []
     for t in start_t:
         ops = []
-        for op in ["opc","op1","op2","op3"]:
+        for op in ["opc","op1","op2"]:
             tok = nvmnet.layers[op].coder.decode(history[t][op])
             ops.append("" if tok in ["null","?"] else tok)
         xl.append("\n".join([str(t)]+ops))

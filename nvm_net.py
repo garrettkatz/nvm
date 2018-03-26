@@ -19,7 +19,7 @@ class NVMNet:
 
         # set up layers
         act = activator(pad, self.layer_size)
-        layer_names = ['ip','opc','op1','op2','op3']#,'cmph','cmpo']
+        layer_names = ['ip','opc','op1','op2']#,'cmph','cmpo']
         layer_names = layer_names[:5]
         layers = {name: Layer(name, layer_shape, act, Coder(act)) for name in layer_names}
         layers.update(devices)

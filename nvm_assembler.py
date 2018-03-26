@@ -20,7 +20,7 @@ def assemble(nvmnet, program, name, verbose=False):
             labels[lines[l][0][:-1]] = l
             lines[l] = lines[l][1:]
         # pad with nulls
-        while len(lines[l]) < 4:
+        while len(lines[l]) < 3:
             lines[l].append("null")
 
     ### Encode instruction pointers and labels
@@ -34,7 +34,7 @@ def assemble(nvmnet, program, name, verbose=False):
     ips = np.concatenate(ips, axis=1)
 
     ### Encode tokens in op layers
-    encodings = {"op"+x:list() for x in "c123"}
+    encodings = {"op"+x:list() for x in "c12"}
     for l in range(len(lines)):
         # replace generic instructions with value/device distinctions
         if lines[l][0] == "mov":
@@ -44,7 +44,7 @@ def assemble(nvmnet, program, name, verbose=False):
             if lines[l][1] in nvmnet.devices: lines[l][0] += "d"
             else: lines[l][0] += "v"
         # encode ops
-        for o,x in enumerate("c123"):
+        for o,x in enumerate("c12"):
             pattern = nvmnet.layers["op"+x].coder.encode(lines[l][o])
             encodings["op"+x].append(pattern)
     encodings = {k: np.concatenate(v,axis=1) for k,v in encodings.items()}
@@ -54,7 +54,7 @@ def assemble(nvmnet, program, name, verbose=False):
     
     ### Bind op tokens to instruction pointers
     weights, biases = {}, {}
-    for x in "c123":
+    for x in "c12":
         if verbose: print("Binding ip -> op"+x)
         weights[("op"+x,"ip")], biases[("op"+x,"ip")], dc = flash_mem(
             ips[:,:-1], encodings["op"+x],
@@ -124,7 +124,7 @@ start:  nop
     v = nvmnet.layers["ip"].coder.encode(program_name)
     for t in range(20):
         line = ""
-        for x in "c123":
+        for x in "c12":
             opx = nvmnet.layers["op"+x]
             o = opx.activator.f(weights[("op"+x,"ip")].dot(v) + biases[("op"+x,"ip")])
             line += " " + opx.coder.decode(o)

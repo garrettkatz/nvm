@@ -2,11 +2,11 @@ import numpy as np
 from saccade_programs import make_saccade_nvm
 from syngen import Network, Environment, ConnectionFactory, create_io_callback, FloatArray, set_debug
 
-def nvm_to_syngen(nvmnet, initial_patterns={}, run_nvm=False, viz_layers=[], print_layers=[], stat_layers=[]):
-    
-    # Builds a name for a connection or dendrite
-    def build_name(from_name, to_name, suffix=""):
-        return to_name + "<" + from_name + suffix
+# Builds a name for a connection or dendrite
+def build_name(from_name, to_name, suffix=""):
+    return to_name + "<" + from_name + suffix
+
+def make_syngen_network(nvmnet):
     
     ### SET UP NETWORK CONFIG ###
     
@@ -64,9 +64,9 @@ def nvm_to_syngen(nvmnet, initial_patterns={}, run_nvm=False, viz_layers=[], pri
         }
     })
 
-    structures = [{"name" : "nvm",
-                   "type" : "parallel",
-                   "layers": layer_configs}]
+    structure = {"name" : "nvm",
+                 "type" : "parallel",
+                 "layers": layer_configs}
 
     # Parameters shared by all connections
     defaults = { "plastic" : "false" }
@@ -211,24 +211,20 @@ def nvm_to_syngen(nvmnet, initial_patterns={}, run_nvm=False, viz_layers=[], pri
         connections.append(gain_decay_factory.build(gate_output, layer))
         connections.append(gain_factory.build(layer, layer))
 
-    ### INITIALIZE NETWORK AND WEIGHTS ###
+    # Set structures
+    for conn in connections:
+        conn["from structure"] = "nvm"
+        conn["to structure"] = "nvm"
 
-    net = Network(
-        {"structures" : structures,
-         "connections" : connections})
+    return structure, connections
 
-    for (to_name, from_name), w in nvmnet.weights.items():
-        # weights
-        mat_name = build_name(from_name, to_name, "-input")
-        mat = net.get_weight_matrix(mat_name)
-        for m in range(mat.size):
-            mat.data[m] = w.flat[m]
-        # biases
-        b = nvmnet.biases[(to_name, from_name)]
-        mat_name = build_name(from_name, to_name, "-biases")
-        mat = net.get_weight_matrix(mat_name)
-        for m in range(mat.size):
-            mat.data[m] = b.flat[m]
+tick = 0
+do_print = False
+
+def make_syngen_environment(nvmnet, initial_patterns={}, run_nvm=False, viz_layers=[], print_layers=[], stat_layers=[]):
+    global tick, to_print
+    tick = 0
+    do_print = False
 
     ### INITIALIZE ENVIRONMENT ###
     layer_names = nvmnet.layers.keys() # deterministic order
@@ -267,7 +263,6 @@ def nvm_to_syngen(nvmnet, initial_patterns={}, run_nvm=False, viz_layers=[], pri
             ]
         }
     ]
-    env = Environment({"modules" : modules})
 
     def input_callback(ID, size, ptr):
 
@@ -369,15 +364,26 @@ def nvm_to_syngen(nvmnet, initial_patterns={}, run_nvm=False, viz_layers=[], pri
     create_io_callback("nvm_input", input_callback)
     create_io_callback("nvm_read", read_callback)
 
-    return net, env
+    return modules
+
+def init_syngen_nvm(nvmnet, syngen_net):
+    for (to_name, from_name), w in nvmnet.weights.items():
+        # weights
+        mat_name = build_name(from_name, to_name, "-input")
+        mat = syngen_net.get_weight_matrix(mat_name)
+        for m in range(mat.size):
+            mat.data[m] = w.flat[m]
+        # biases
+        b = nvmnet.biases[(to_name, from_name)]
+        mat_name = build_name(from_name, to_name, "-biases")
+        mat = syngen_net.get_weight_matrix(mat_name)
+        for m in range(mat.size):
+            mat.data[m] = b.flat[m]
 
 if __name__ == "__main__":
 
     np.set_printoptions(linewidth=200, formatter = {'float': lambda x: '% .2f'%x})
 
-    tick = 0
-    do_print = False
-   
     nvmnet = make_saccade_nvm("tanh")
     # nvmnet = make_saccade_nvm("logistic")
 
@@ -387,13 +393,19 @@ if __name__ == "__main__":
     print(nvmnet.layers["gh"].activator.label)
     raw_input("continue?")
 
-    net, env = nvm_to_syngen(nvmnet,
+    structure, connections = make_syngen_network(nvmnet)
+    modules = make_syngen_environment(nvmnet,
         initial_patterns = dict(nvmnet.activity),
-        run_nvm=True,
+        run_nvm=False,
         viz_layers = ["sc","fef","tc","ip","opc","op1","op2","gh","go"],
         print_layers = nvmnet.layers,
         # stat_layers=["ip","go","gh"])
         stat_layers=[])
+
+    net = Network({"structures" : [structure], "connections" : connections})
+    env = Environment({"modules" : modules})
+
+    init_syngen_nvm(nvmnet, net)
 
     print(net.run(env, {"multithreaded" : "true",
                             "worker threads" : 0,
