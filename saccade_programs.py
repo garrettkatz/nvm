@@ -34,7 +34,7 @@ def make_fef(pad, activator, rows, columns):
     fef_coder = Coder(act)
 
     Y, X = np.mgrid[:rows,:columns] # transpose for bitmap
-    R = .1
+    R = .05
     # Cts
     center = act.off + (act.on-act.off)*np.exp(-((X-.5*columns)**2 + (Y-.5*rows)**2)/(R*dim)**2)
     left = act.off + (act.on-act.off)*np.exp(-((X-.0*columns)**2 + (Y-.5*rows)**2)/(R*dim)**2)
