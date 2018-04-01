@@ -158,7 +158,7 @@ modules = [
             {
                 "structure" : "nvm",
                 "layer" : layer,
-                "input" : "true",
+                "input" : True,
                 "function" : "nvm_init",
                 "id" : i
             } for i,layer in enumerate(init_layers + pad_init_layers)
@@ -170,7 +170,7 @@ modules = [
             {
                 "structure" : "nvm",
                 "layer" : layer,
-                "output" : "true",
+                "output" : True,
                 "function" : "nvm_read",
                 "id" : i
             } for i,layer in enumerate(callback_layers)
@@ -184,12 +184,12 @@ modules = [
 #    },
 ]
 env = Environment({"modules" : modules})
-print(network.run(env, {"multithreaded" : "true",
+print(network.run(env, {"multithreaded" : True,
                         "worker threads" : 0,
                         "iterations" : 1000,
                         "refresh rate" : 0,
-                        "verbose" : "true",
-                        "learning flag" : "false"}))
+                        "verbose" : True,
+                        "learning flag" : False}))
 
 
 # Delete the objects

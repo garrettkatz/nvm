@@ -1,17 +1,16 @@
 from syngen import Network, Environment
 from syngen import get_gpus, get_cpu
 from syngen import set_suppress_output, set_warnings, set_debug
-from syngen import create_distance_weight_callback, FloatArray
+from syngen import FloatArray
 
 from os import path
-from math import exp
 import sys
 import argparse
 
 import numpy as np
 from saccade_programs import make_saccade_nvm
 from nvm_to_syngen import make_syngen_network, make_syngen_environment, init_syngen_nvm
-from syngen import ConnectionFactory, create_io_callback, FloatArray
+from syngen import ConnectionFactory, FloatArray
 
 def get_dsst_params(num_rows=8, cell_res=8):
     num_cols = 18
@@ -38,28 +37,6 @@ def get_dsst_params(num_rows=8, cell_res=8):
 
 dsst_params = get_dsst_params(num_rows=8, cell_res=8)
 
-def gauss(dist, peak, sig, norm=False):
-    inv_sqrt_2pi = 0.3989422804014327
-    peak_coeff = peak * (1.0 if norm else inv_sqrt_2pi / sig)
-
-    a = dist / sig
-    return peak_coeff * exp(-0.5 * a * a)
-
-# Create distance weight init callback
-def dist_callback(ID, size, weights, distances):
-    w_arr = FloatArray(size, weights)
-    d_arr = FloatArray(size, distances)
-
-    # Find maximum distance and half it
-    max_dist = max(d_arr.data[i] for i in xrange(size)) / 2
-
-    # Smooth out weights based on distances
-    if max_dist != 0:
-        for i in xrange(size):
-            w_arr.data[i] = gauss(d_arr.data[i], w_arr.data[i], max_dist, True)
-
-create_distance_weight_callback("gaussian", dist_callback)
-
 def build_exc_inh_pair(
         exc_name,
         inh_name,
@@ -77,8 +54,8 @@ def build_exc_inh_pair(
 
         exc_noise_rate = 1,
         inh_noise_rate = 1,
-        exc_noise_random = "false",
-        inh_noise_random = "false",
+        exc_noise_random = False,
+        inh_noise_random = False,
 
         exc_exc_rf = 31,
         exc_inh_rf = 123,
@@ -141,31 +118,31 @@ def build_exc_inh_pair(
             "from layer" : exc_name,
             "to layer" : exc_name,
             "type" : "convergent",
-            "convolutional" : "true",
+            "convolutional" : True,
             "opcode" : "add",
-            "plastic" : "false",
+            "plastic" : False,
             "weight config" : {
                 "type" : "gaussian",
                 "mean" : exc_exc_mean,
                 "std dev" : exc_exc_std_dev,
                 "fraction" : exc_exc_fraction,
-                "diagonal" : "false",
+                "diagonal" : False,
                 "circular mask" : [ { } ],
                 "distance callback" : "gaussian",
             },
             "arborized config" : {
                 "field size" : exc_exc_rf,
                 "stride" : 1,
-                "wrap" : "false"
+                "wrap" : False
             }
         } if exc_exc_rf > 0 else None,
         {
             "from layer" : exc_name,
             "to layer" : inh_name,
             "type" : "convergent",
-            "convolutional" : "true",
+            "convolutional" : True,
             "opcode" : "add",
-            "plastic" : "false",
+            "plastic" : False,
             "weight config" : {
                 "type" : "gaussian",
                 "mean" : exc_inh_mean,
@@ -174,7 +151,7 @@ def build_exc_inh_pair(
                 "circular mask" : [
                     {
                         "diameter" : mask_rf,
-                        "invert" : "true"
+                        "invert" : True
                     },
                     { }
                 ] if mask else [ { } ],
@@ -184,16 +161,16 @@ def build_exc_inh_pair(
             "arborized config" : {
                 "field size" : exc_inh_rf,
                 "stride" : 2 if half_inh else 1,
-                "wrap" : "false"
+                "wrap" : False
             }
         } if exc_inh_rf > 0 else None,
         {
             "from layer" : inh_name,
             "to layer" : exc_name,
             "type" : "divergent" if half_inh else "convergent",
-            "convolutional" : "true",
+            "convolutional" : True,
             "opcode" : "sub",
-            "plastic" : "false",
+            "plastic" : False,
             "weight config" : {
                 "type" : "gaussian",
                 "mean" : inh_exc_mean,
@@ -206,16 +183,16 @@ def build_exc_inh_pair(
             "arborized config" : {
                 "field size" : inh_exc_rf,
                 "stride" : 2 if half_inh else 1,
-                "wrap" : "false"
+                "wrap" : False
             }
         } if inh_exc_rf > 0 else None,
 #        {
 #            "from layer" : inh_name,
 #            "to layer" : inh_name,
 #            "type" : "convergent",
-#            "convolutional" : "true",
+#            "convolutional" : True,
 #            "opcode" : "sub",
-#            "plastic" : "false",
+#            "plastic" : False,
 #                "weight config" : {
 #                "type" : "gaussian",
 #                "mean" : inh_inh_mean,
@@ -226,7 +203,7 @@ def build_exc_inh_pair(
 #            "arborized config" : {
 #                "field size" : inh_inh_rf,
 #                "stride" : 1,
-#                "wrap" : "false"
+#                "wrap" : False
 #            }
 #        } if inh_inh_rf > 0 else None,
     ]
@@ -249,14 +226,14 @@ def build_network(rows=200, cols=200, scale=5):
         "neural model" : "relay",
         "rows" : rows,
         "columns" : cols,
-        "ramp" : "true"}
+        "ramp" : True}
 
     photoreceptor_inverse = {
         "name" : "photoreceptor_inverse",
         "neural model" : "relay",
         "rows" : rows,
         "columns" : cols,
-        "ramp" : "true",
+        "ramp" : True,
         "init config" : {
             "type" : "flat",
             "value" : 1.0
@@ -267,14 +244,14 @@ def build_network(rows=200, cols=200, scale=5):
         "neural model" : "relay",
         "rows" : rows,
         "columns" : cols,
-        "ramp" : "true"}
+        "ramp" : True}
 
     retina_off = {
         "name" : "retina_off",
         "neural model" : "relay",
         "rows" : rows,
         "columns" : cols,
-        "ramp" : "true"}
+        "ramp" : True}
 
     sc_layers, sc_conns = build_exc_inh_pair(
         "sc_exc", "sc_inh",
@@ -290,8 +267,8 @@ def build_network(rows=200, cols=200, scale=5):
 
         exc_noise_rate = 0,
         inh_noise_rate = 0,
-        exc_noise_random = "false",
-        inh_noise_random = "false",
+        exc_noise_random = False,
+        inh_noise_random = False,
 
         exc_exc_rf = dim/sc_rf_scales[0],
         exc_inh_rf = dim/sc_rf_scales[1],
@@ -332,8 +309,8 @@ def build_network(rows=200, cols=200, scale=5):
 
         exc_noise_rate = 0,
         inh_noise_rate = 0,
-        exc_noise_random = "false",
-        inh_noise_random = "false",
+        exc_noise_random = False,
+        inh_noise_random = False,
 
         exc_exc_rf = motor_dim/motor_rf_scales[0],
         exc_inh_rf = motor_dim/motor_rf_scales[1],
@@ -385,7 +362,7 @@ def build_network(rows=200, cols=200, scale=5):
             "to layer" : "photoreceptor_inverse",
             "type" : "one to one",
             "opcode" : "sub",
-            "plastic" : "false",
+            "plastic" : False,
             "weight config" : {
                 "type" : "flat",
                 "weight" : 1.0,
@@ -396,16 +373,16 @@ def build_network(rows=200, cols=200, scale=5):
             "from layer" : "photoreceptor",
             "to layer" : "retina_on",
             "type" : "convergent",
-            "convolutional" : "true",
+            "convolutional" : True,
             "opcode" : "add",
-            "plastic" : "false",
+            "plastic" : False,
             "weight config" : {
                 "type" : "flat",
                 "weight" : -1.0,
                 "circular mask" : [
                     {
                         "diameter" : 1,
-                        "invert" : "true",
+                        "invert" : True,
                         "value" : center_surround_threshold
                     }
                 ]
@@ -413,23 +390,23 @@ def build_network(rows=200, cols=200, scale=5):
             "arborized config" : {
                 "field size" : 5,
                 "stride" : 1,
-                "wrap" : "true"
+                "wrap" : True
             }
         },
         {
             "from layer" : "photoreceptor_inverse",
             "to layer" : "retina_off",
             "type" : "convergent",
-            "convolutional" : "true",
+            "convolutional" : True,
             "opcode" : "add",
-            "plastic" : "false",
+            "plastic" : False,
             "weight config" : {
                 "type" : "flat",
                 "weight" : -1.0,
                 "circular mask" : [
                     {
                         "diameter" : 1,
-                        "invert" : "true",
+                        "invert" : True,
                         "value" : center_surround_threshold
                     }
                 ]
@@ -437,7 +414,7 @@ def build_network(rows=200, cols=200, scale=5):
             "arborized config" : {
                 "field size" : 5,
                 "stride" : 1,
-                "wrap" : "true"
+                "wrap" : True
             }
         },
         # ON/OFF -> SC
@@ -445,9 +422,9 @@ def build_network(rows=200, cols=200, scale=5):
             "from layer" : "retina_on",
             "to layer" : "sc_exc",
             "type" : "convergent",
-            "convolutional" : "true",
+            "convolutional" : True,
             "opcode" : "add",
-            "plastic" : "false",
+            "plastic" : False,
             "weight config" : {
                 "type" : "flat",
                 "weight" : sc_input_strength,
@@ -456,16 +433,16 @@ def build_network(rows=200, cols=200, scale=5):
             "arborized config" : {
                 "field size" : receptive_field,
                 "stride" : 1,
-                "wrap" : "false"
+                "wrap" : False
             }
         },
         {
             "from layer" : "retina_off",
             "to layer" : "sc_exc",
             "type" : "convergent",
-            "convolutional" : "true",
+            "convolutional" : True,
             "opcode" : "add",
-            "plastic" : "false",
+            "plastic" : False,
             "weight config" : {
                 "type" : "flat",
                 "weight" : sc_input_strength,
@@ -474,7 +451,7 @@ def build_network(rows=200, cols=200, scale=5):
             "arborized config" : {
                 "field size" : receptive_field,
                 "stride" : 1,
-                "wrap" : "false"
+                "wrap" : False
             }
         },
         # SC -> SC out
@@ -482,9 +459,9 @@ def build_network(rows=200, cols=200, scale=5):
             "from layer" : "sc_exc",
             "to layer" : "sc_out_exc",
             "type" : "convergent",
-            "convolutional" : "true",
+            "convolutional" : True,
             "opcode" : "add",
-            "plastic" : "false",
+            "plastic" : False,
             "weight config" : {
                 "type" : "flat",
                 "weight" : 0.5,
@@ -492,7 +469,7 @@ def build_network(rows=200, cols=200, scale=5):
             "arborized config" : {
                 "field size" : rows/motor_rows,
                 "stride" : cols/motor_cols,
-                "wrap" : "false",
+                "wrap" : False,
                 "offset" : 0,
                 "distance callback" : "gaussian",
                 "to spacing" : cols / motor_cols
@@ -523,12 +500,12 @@ def build_environment(rows=200, cols=200, scale=5, visualizer=False, dsst=False,
                 {
                     "structure" : "oculomotor",
                     "layer" : "photoreceptor",
-                    "params" : "input",
+                    "input" : True,
                 },
                 {
                     "structure" : "oculomotor",
                     "layer" : "sc_out_exc",
-                    "output" : "true",
+                    "output" : True,
                 }
             ]
         } if saccade else {
@@ -540,7 +517,7 @@ def build_environment(rows=200, cols=200, scale=5, visualizer=False, dsst=False,
                 {
                     "structure" : "oculomotor",
                     "layer" : "photoreceptor",
-                    "input" : "true",
+                    "input" : True,
                 }
             ]
         },
@@ -550,9 +527,9 @@ def build_environment(rows=200, cols=200, scale=5, visualizer=False, dsst=False,
 #            "border" : motor_dim/5,
 #            "std dev" : motor_dim/10,
 #            "value" : 5.0,
-#            "normalize" : "true",
+#            "normalize" : True,
 #            "peaks" : "1",
-#            "random" : "false",
+#            "random" : False,
 #            "layers" : [
 #                {
 #                    "structure" : "oculomotor",
@@ -577,9 +554,9 @@ def build_environment(rows=200, cols=200, scale=5, visualizer=False, dsst=False,
         })
         modules.append({
             "type" : "heatmap",
-            "stats" : "false",
+            "stats" : False,
             "window" : "1000",
-            "linear" : "true",
+            "linear" : True,
             "layers" : [
 #                { "structure" : "oculomotor", "layer" : "photoreceptor" },
                 { "structure" : "oculomotor", "layer" : "sc_exc" },
@@ -600,9 +577,9 @@ def build_bridge_connections():
             "to structure" : "oculomotor",
             "to layer" : "sc_exc",
             "type" : "divergent",
-            "convolutional" : "true",
+            "convolutional" : True,
             "opcode" : "add",
-            "plastic" : "false",
+            "plastic" : False,
             "weight config" : {
                 "type" : "flat",
                 "weight" : 1.0,
@@ -610,7 +587,7 @@ def build_bridge_connections():
             "arborized config" : {
                 "field size" : 5,
                 "stride" : 5,
-                "wrap" : "false"
+                "wrap" : False
             }
         },
         {
@@ -620,7 +597,7 @@ def build_bridge_connections():
             "to layer" : "sc_out_exc",
             "type" : "fully connected",
             "opcode" : "mult",
-            "plastic" : "false",
+            "plastic" : False,
             "weight config" : {
                 "type" : "flat",
                 "weight" : 0.5,
@@ -687,13 +664,13 @@ def main(visualizer=False, device=None, rate=0, iterations=1000000):
     if device is None:
         device = gpus[len(gpus)-1] if len(gpus) > 0 else get_cpu()
 
-    report = net.run(env, {"multithreaded" : "true",
+    report = net.run(env, {"multithreaded" : True,
                                "worker threads" : "4",
                                "devices" : device,
                                "iterations" : iterations,
                                "refresh rate" : rate,
-                               "verbose" : "true",
-                               "learning flag" : "false"})
+                               "verbose" : True,
+                               "learning flag" : False})
     if report is None:
         print("Engine failure.  Exiting...")
         return

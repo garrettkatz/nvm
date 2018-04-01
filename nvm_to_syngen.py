@@ -69,7 +69,7 @@ def make_syngen_network(nvmnet):
                  "layers": layer_configs}
 
     # Parameters shared by all connections
-    defaults = { "plastic" : "false" }
+    defaults = { "plastic" : False }
 
     # Build fully connected connection
     def build_full_biases(from_layer, to_layer, props):
@@ -79,6 +79,7 @@ def make_syngen_network(nvmnet):
         props["dendrite"] = build_name(from_layer.name, to_layer.name)
         props["type"] = "fully connected"
         props["opcode"] = "add"
+        props["sparse"] = False
         props["weight config"] = {
             "type" : "flat",
             "weight" : 0.0  # This will get overwritten when the ROM is flashed
@@ -90,6 +91,7 @@ def make_syngen_network(nvmnet):
         props["dendrite"] = build_name(from_layer.name, to_layer.name)
         props["type"] = "fully connected"
         props["opcode"] = "add"
+        props["sparse"] = False
         props["weight config"] = {
             "type" : "flat",
             "weight" : 0.0  # This will get overwritten when the ROM is flashed
@@ -102,6 +104,7 @@ def make_syngen_network(nvmnet):
         props["to layer"] = to_layer.name
         props["dendrite"] = build_name(from_layer.name, to_layer.name)
         props["opcode"] = "mult" #_heaviside"
+        props["sparse"] = False
         props["weight config"] = {
             "type" : "flat",
             "weight" : 1
@@ -128,6 +131,7 @@ def make_syngen_network(nvmnet):
         props["dendrite"] = "fix"
         props["type"] = "one to one"
         props["opcode"] = "add"
+        props["sparse"] = False
         props["weight config"] = {
             "type" : "flat",
             "weight" : nvmnet.w_gain
@@ -140,6 +144,7 @@ def make_syngen_network(nvmnet):
         props["to layer"] = to_layer.name
         props["dendrite"] = "gain-update"
         props["opcode"] = "sub" # dendrite has bias, attributes have heaviside
+        props["sparse"] = False
         props["weight config"] = {
             "type" : "flat",
             "weight" : 1
@@ -166,6 +171,7 @@ def make_syngen_network(nvmnet):
         props["to layer"] = to_layer.name
         props["dendrite"] = "gain-decay"
         props["opcode"] = "sub" # dendrite has bias, attributes have heaviside
+        props["sparse"] = False
         props["weight config"] = {
             "type" : "flat",
             "weight" : 1
@@ -244,7 +250,7 @@ def make_syngen_environment(nvmnet, initial_patterns={}, run_nvm=False, viz_laye
                 {
                     "structure" : "nvm",
                     "layer" : layer_name,
-                    "input" : "true",
+                    "input" : True,
                     "function" : "nvm_input",
                     "id" : i
                 } for i,layer_name in enumerate(layer_names)
@@ -256,7 +262,7 @@ def make_syngen_environment(nvmnet, initial_patterns={}, run_nvm=False, viz_laye
                 {
                     "structure" : "nvm",
                     "layer" : layer_name,
-                    "output" : "true",
+                    "output" : True,
                     "function" : "nvm_read",
                     "id" : i
                 } for i,layer_name in enumerate(layer_names)
@@ -373,6 +379,7 @@ def init_syngen_nvm(nvmnet, syngen_net):
         mat = syngen_net.get_weight_matrix(mat_name)
         for m in range(mat.size):
             mat.data[m] = w.flat[m]
+
         # biases
         b = nvmnet.biases[(to_name, from_name)]
         mat_name = build_name(from_name, to_name, "-biases")
@@ -407,12 +414,12 @@ if __name__ == "__main__":
 
     init_syngen_nvm(nvmnet, net)
 
-    print(net.run(env, {"multithreaded" : "true",
+    print(net.run(env, {"multithreaded" : True,
                             "worker threads" : 0,
                             "iterations" : 200,
                             "refresh rate" : 0,
-                            "verbose" : "true",
-                            "learning flag" : "false"}))
+                            "verbose" : True,
+                            "learning flag" : False}))
     
     # Delete the objects
     del net

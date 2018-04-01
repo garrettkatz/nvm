@@ -195,7 +195,7 @@ def nvm_synapto(weights):
                    "layers": layer_configs}]
 
     # Parameters shared by all connections
-    defaults = { "plastic" : "false" }
+    defaults = { "plastic" : False }
 
     # Builds a name for a connection or dendrite
     def build_name(from_layer, to_layer, suffix=""):
@@ -355,7 +355,7 @@ def nvm_synapto(weights):
             "to layer": "CMPH",
             "type": "one to one",
             "opcode": "mult",
-            "plastic" : "false",
+            "plastic" : False,
             "weight config" : {
                 "type" : "flat",
                 "weight" : 1
@@ -367,7 +367,7 @@ def nvm_synapto(weights):
         "to layer": "CMPO",
         "type": "fully connected",
         "opcode": "add",
-        "plastic" : "false",
+        "plastic" : False,
         "weight config" : {
             "type" : "flat",
             "weight" : W_CMPO
