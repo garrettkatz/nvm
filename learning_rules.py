@@ -5,7 +5,7 @@ def linear_solve(X, Y, actx, acty):
     Wb = np.linalg.lstsq(
         np.concatenate((X.T, np.ones((X.shape[1],1))), axis=1), # ones for bias
         acty.g(Y).T, rcond=None)[0].T
-    W, b =  W[:,:-1], W[:,[-1]]
+    W, b =  Wb[:,:-1], Wb[:,[-1]]
     return W, b
 
 def hebbian(X, Y, actx, acty):

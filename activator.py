@@ -51,3 +51,4 @@ def heaviside_activator(layer_size):
         on = 1.,
         off = 0.,
         label = "heaviside")
+

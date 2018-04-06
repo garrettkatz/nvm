@@ -1,5 +1,10 @@
 next steps:
-    omega and beta for gain should be layer activator-specific
+    memory -> cmp -> ipop
+    make layer/activator-specific:
+        omega and beta for gain
+        layer shape, size, activator
+    generalize learning rules to any number of X/Y layers
+    cts gate output
     wm read/write/sequencing
         also erase: antilearning (subtract hebbian contribution)
         memory is pointer -> device associations

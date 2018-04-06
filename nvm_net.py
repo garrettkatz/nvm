@@ -10,18 +10,24 @@ from nvm_linker import link
 
 class NVMNet:
     
-    def __init__(self, layer_shape, pad, activator, learning_rule, devices, gh_shape=(32,32)):
+    def __init__(self, layer_shape, pad, activator, learning_rule, devices, gh_shape=(32,32), m_shape=(32,32)):
 
         # set up parameters
         self.layer_size = layer_shape[0]*layer_shape[1]
         self.pad = pad
         self.learning_rule = learning_rule
 
-        # set up layers
+        # set up instruction layers
         act = activator(pad, self.layer_size)
-        layer_names = ['ip','opc','op1','op2']#,'cmph','cmpo']
-        layer_names = layer_names[:5]
+        layer_names = ['ip','opc','op1','op2']
         layers = {name: Layer(name, layer_shape, act, Coder(act)) for name in layer_names}
+
+        # set up memory layers
+        NM = m_shape[0]*m_shape[1]
+        actm = activator(pad, NM)
+        for m in ['mf','mb']: layers[m] = Layer(m, m_shape, actm, Coder(actm))
+
+        # add device layers
         layers.update(devices)
         self.devices = devices
         self.layers = layers
@@ -39,10 +45,24 @@ class NVMNet:
         layers['gh'] = Layer('gh', gh_shape, acth, Coder(acth))
         self.gate_map = make_nvm_gate_map(layers.keys())        
 
-        # setup connection matrices
-        weights, biases = flash_instruction_set(self)
+        # set up connection matrices
+        self.weights, self.biases = flash_instruction_set(self)
 
-        self.weights, self.biases = weights, biases
+        # set up memory address space
+        A = {}
+        for m in ['mf','mb']:
+            A[m] = np.concatenate(
+                [layers[m].coder.encode(str(a)) for a in range(NM)],
+                axis=1)
+        for m_to in ['mf','mb']:
+            for m_from in ['mf','mb']:
+                key = (m_to, m_from)
+                Y, X = A[m_to], A[m_from]
+                if m_from == 'mf': Y = np.roll(Y, 1, axis=1)
+                if m_from == 'mb': X = np.roll(X, 1, axis=1)
+                print("%s residuals:"%str(key))
+                self.weights[key], self.biases[key], _ = flash_mem(
+                    X, Y, actm, actm, linear_solve, verbose=True)
         
         # initialize layer states
         self.activity = {
@@ -147,8 +167,8 @@ def make_nvmnet(programs=None, devices=None):
         """}
 
     # set up activator
-    # activator, learning_rule = logistic_activator, logistic_hebbian
-    activator, learning_rule = tanh_activator, tanh_hebbian
+    # activator, learning_rule = logistic_activator, hebbian
+    activator, learning_rule = tanh_activator, hebbian
 
     # make network
     layer_shape = (16, 16)
@@ -180,7 +200,7 @@ if __name__ == '__main__':
     raw_input("continue?")
         
     show_layers = [
-        ["go", "gh","ip"] + ["op"+x for x in "c123"] + ["d0","d1","d2"],
+        ["go", "gh","ip"] + ["op"+x for x in "c12"] + ["d0","d1","d2"],
     ]
     show_tokens = True
     show_corrosion = True
