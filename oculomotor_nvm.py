@@ -193,6 +193,105 @@ def build_exc_inh_pair(
 
     return [exc, inh], connections
 
+def build_retina(name, rows, cols, center_surround_threshold):
+    photoreceptor = {
+        "name" : name + "_photoreceptor",
+        "neural model" : "relay",
+        "rows" : rows,
+        "columns" : cols,
+        "ramp" : True}
+
+    photoreceptor_inverse = {
+        "name" : name + "_photoreceptor_inverse",
+        "neural model" : "relay",
+        "rows" : rows,
+        "columns" : cols,
+        "ramp" : True,
+        "init config" : {
+            "type" : "flat",
+            "value" : 1.0
+        }}
+
+    retina_on = {
+        "name" : name + "_retina_on",
+        "neural model" : "relay",
+        "rows" : rows,
+        "columns" : cols,
+        "ramp" : True}
+
+    retina_off = {
+        "name" : name + "_retina_off",
+        "neural model" : "relay",
+        "rows" : rows,
+        "columns" : cols,
+        "ramp" : True}
+
+    connections = [
+        # Photoreceptor -> Photoreceptor Inverse
+        {
+            "from layer" : name + "_photoreceptor",
+            "to layer" : name + "_photoreceptor_inverse",
+            "type" : "one to one",
+            "opcode" : "sub",
+            "plastic" : False,
+            "weight config" : {
+                "type" : "flat",
+                "weight" : 1.0,
+            },
+        },
+        # Photoreceptor -> ON/OFF
+        {
+            "from layer" : name + "_photoreceptor",
+            "to layer" : name + "_retina_on",
+            "type" : "convergent",
+            "convolutional" : True,
+            "opcode" : "add",
+            "plastic" : False,
+            "weight config" : {
+                "type" : "flat",
+                "weight" : -1.0,
+                "circular mask" : [
+                    {
+                        "diameter" : 1,
+                        "invert" : True,
+                        "value" : center_surround_threshold
+                    }
+                ]
+            },
+            "arborized config" : {
+                "field size" : 5,
+                "stride" : 1,
+                "wrap" : True
+            }
+        },
+        {
+            "from layer" : name + "_photoreceptor_inverse",
+            "to layer" : name + "_retina_off",
+            "type" : "convergent",
+            "convolutional" : True,
+            "opcode" : "add",
+            "plastic" : False,
+            "weight config" : {
+                "type" : "flat",
+                "weight" : -1.0,
+                "circular mask" : [
+                    {
+                        "diameter" : 1,
+                        "invert" : True,
+                        "value" : center_surround_threshold
+                    }
+                ]
+            },
+            "arborized config" : {
+                "field size" : 5,
+                "stride" : 1,
+                "wrap" : True
+            }
+        }
+    ]
+
+    return [photoreceptor, photoreceptor_inverse, retina_on, retina_off], connections
+
 
 def build_network(rows=200, cols=200, scale=5):
     dim = min(rows, cols)
@@ -208,37 +307,8 @@ def build_network(rows=200, cols=200, scale=5):
     retina_structure = {"name" : "retina", "type" : "feedforward"}
 
     # Add retinal layers
-    photoreceptor = {
-        "name" : "photoreceptor",
-        "neural model" : "relay",
-        "rows" : rows,
-        "columns" : cols,
-        "ramp" : True}
-
-    photoreceptor_inverse = {
-        "name" : "photoreceptor_inverse",
-        "neural model" : "relay",
-        "rows" : rows,
-        "columns" : cols,
-        "ramp" : True,
-        "init config" : {
-            "type" : "flat",
-            "value" : 1.0
-        }}
-
-    retina_on = {
-        "name" : "retina_on",
-        "neural model" : "relay",
-        "rows" : rows,
-        "columns" : cols,
-        "ramp" : True}
-
-    retina_off = {
-        "name" : "retina_off",
-        "neural model" : "relay",
-        "rows" : rows,
-        "columns" : cols,
-        "ramp" : True}
+    p_retina_layers, p_retina_connections = build_retina("peripheral", rows, cols, 24)
+    c_retina_layers, c_retina_connections = build_retina("central", rows/5, cols/5, 24)
 
     sc_layers, sc_conns = build_exc_inh_pair(
         "sc_exc", "sc_inh",
@@ -334,79 +404,16 @@ def build_network(rows=200, cols=200, scale=5):
 
     # Add layers to structure
     sc_structure["layers"] = sc_layers + sc_out_layers + [gating_layer]
-    retina_structure["layers"] = [
-        photoreceptor, photoreceptor_inverse, retina_on, retina_off];
+    retina_structure["layers"] = p_retina_layers + c_retina_layers
 
     # Create connections
     receptive_field = 11
     sc_input_strength = 0.01
     sc_to_motor_strength = 1.0
-    center_surround_threshold = 24
     connections = [
-        # Photoreceptor -> Photoreceptor Inverse
-        {
-            "from layer" : "photoreceptor",
-            "to layer" : "photoreceptor_inverse",
-            "type" : "one to one",
-            "opcode" : "sub",
-            "plastic" : False,
-            "weight config" : {
-                "type" : "flat",
-                "weight" : 1.0,
-            },
-        },
-        # Photoreceptor -> ON/OFF
-        {
-            "from layer" : "photoreceptor",
-            "to layer" : "retina_on",
-            "type" : "convergent",
-            "convolutional" : True,
-            "opcode" : "add",
-            "plastic" : False,
-            "weight config" : {
-                "type" : "flat",
-                "weight" : -1.0,
-                "circular mask" : [
-                    {
-                        "diameter" : 1,
-                        "invert" : True,
-                        "value" : center_surround_threshold
-                    }
-                ]
-            },
-            "arborized config" : {
-                "field size" : 5,
-                "stride" : 1,
-                "wrap" : True
-            }
-        },
-        {
-            "from layer" : "photoreceptor_inverse",
-            "to layer" : "retina_off",
-            "type" : "convergent",
-            "convolutional" : True,
-            "opcode" : "add",
-            "plastic" : False,
-            "weight config" : {
-                "type" : "flat",
-                "weight" : -1.0,
-                "circular mask" : [
-                    {
-                        "diameter" : 1,
-                        "invert" : True,
-                        "value" : center_surround_threshold
-                    }
-                ]
-            },
-            "arborized config" : {
-                "field size" : 5,
-                "stride" : 1,
-                "wrap" : True
-            }
-        },
         # ON/OFF -> SC
         {
-            "from layer" : "retina_on",
+            "from layer" : "peripheral_retina_on",
             "to layer" : "sc_exc",
             "type" : "convergent",
             "convolutional" : True,
@@ -424,7 +431,7 @@ def build_network(rows=200, cols=200, scale=5):
             }
         },
         {
-            "from layer" : "retina_off",
+            "from layer" : "peripheral_retina_off",
             "to layer" : "sc_exc",
             "type" : "convergent",
             "convolutional" : True,
@@ -478,7 +485,7 @@ def build_network(rows=200, cols=200, scale=5):
 
     # Create network
     return {"structures" : [sc_structure, retina_structure],
-         "connections" : connections}
+         "connections" : connections + p_retina_connections + c_retina_connections}
 
 def build_environment(rows=200, cols=200, scale=5, visualizer=False, task="saccade"):
     dim = min(rows, cols)
@@ -494,7 +501,7 @@ def build_environment(rows=200, cols=200, scale=5, visualizer=False, task="sacca
                 "cell size" : dsst_params["cell columns"],
                 "layers" : [
                     {
-                        "layer" : "photoreceptor",
+                        "layer" : "peripheral_photoreceptor",
                         "input" : True,
                     }
                 ]
@@ -507,8 +514,13 @@ def build_environment(rows=200, cols=200, scale=5, visualizer=False, task="sacca
                 "saccade rate" : 0.5,
                 "layers" : [
                     {
-                        "layer" : "photoreceptor",
+                        "layer" : "peripheral_photoreceptor",
                         "input" : True,
+                    },
+                    {
+                        "layer" : "central_photoreceptor",
+                        "input" : True,
+                        "central" : True,
                     },
                     {
                         "layer" : "sc_out_exc",
@@ -524,7 +536,7 @@ def build_environment(rows=200, cols=200, scale=5, visualizer=False, task="sacca
                 "filename" : image_filename,
                 "layers" : [
                     {
-                        "layer" : "photoreceptor",
+                        "layer" : "peripheral_photoreceptor",
                         "input" : True,
                     }
                 ]
@@ -535,14 +547,17 @@ def build_environment(rows=200, cols=200, scale=5, visualizer=False, task="sacca
         modules.append({
             "type" : "visualizer",
             "layers" : [
-#                {"layer" : "photoreceptor" },
-                {"layer" : "retina_on" },
-                {"layer" : "retina_off" },
+#                {"layer" : "peripheral_photoreceptor" },
+#                {"layer" : "peripheral_retina_on" },
+#                {"layer" : "peripheral_retina_off" },
                 {"layer" : "sc_exc" },
                 {"layer" : "sc_inh" },
                 {"layer" : "sc_out_exc" },
                 {"layer" : "sc_out_inh" },
                 {"layer" : "gating" },
+                {"layer" : "central_photoreceptor" },
+                {"layer" : "central_retina_on" },
+                {"layer" : "central_retina_off" },
             ]
         })
         modules.append({
@@ -551,7 +566,7 @@ def build_environment(rows=200, cols=200, scale=5, visualizer=False, task="sacca
             "window" : "1000",
             "linear" : True,
             "layers" : [
-#                {"layer" : "photoreceptor" },
+#                {"layer" : "peripheral_photoreceptor" },
                 {"layer" : "sc_exc" },
                 {"layer" : "sc_inh" },
                 {"layer" : "sc_out_exc" },
