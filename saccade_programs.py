@@ -34,7 +34,7 @@ def make_fef(pad, activator, rows, columns):
     fef_coder = Coder(act)
 
     Y, X = np.mgrid[:rows,:columns] # transpose for bitmap
-    R = .05
+    R = .1
     # Cts
     center = act.off + (act.on-act.off)*np.exp(-((X-.5*columns)**2 + (Y-.5*rows)**2)/(R*dim)**2)
     left = act.off + (act.on-act.off)*np.exp(-((X-.0*columns)**2 + (Y-.5*rows)**2)/(R*dim)**2)
@@ -75,7 +75,7 @@ def make_saccade_nvm(activator_label):
     devices = {
         "tc": Layer("tc", layer_shape, act, Coder(act)),
         "fef": make_fef(pad, activator, 68, 96),
-        "sc": make_sc(pad, activator, 2, 2)}
+        "sc": make_sc(pad, activator, 5, 5)}
 
     # assemble and link programs
     nvmnet = NVMNet(layer_shape, pad, activator, learning_rule, devices, gh_shape=(32,16))

@@ -333,7 +333,7 @@ def make_syngen_environment(nvmnet, initial_patterns={}, run_nvm=False, viz_laye
             do_print = (coder.decode(h) == "ready")
             do_print = True
 
-            if do_print:
+            if do_print and len(print_layers) > 0:
                 print("Tick %d"%tick)
                 if run_nvm:
                     print("Layer tokens (syngen|py)")
