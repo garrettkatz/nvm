@@ -364,7 +364,7 @@ def build_network(rows=200, cols=200, scale=5):
         inh_tau = 1.0,
 
         exc_decay = 0.5,
-        inh_decay = 0.05,
+        inh_decay = 0.1,
 
         exc_noise_rate = 0,
         inh_noise_rate = 0,
@@ -399,7 +399,7 @@ def build_network(rows=200, cols=200, scale=5):
         "rows" : motor_rows,
         "columns" : motor_cols,
         "tau" : 1.0,
-        "decay" : 0.1,
+        "decay" : 0.15,
         "tonic" : 0.0}
 
     # Add layers to structure
@@ -409,7 +409,7 @@ def build_network(rows=200, cols=200, scale=5):
     # Create connections
     receptive_field = 11
     sc_input_strength = 0.01
-    sc_to_motor_strength = 1.0
+    sc_to_motor_strength = 0.25
     connections = [
         # ON/OFF -> SC
         {
@@ -511,7 +511,7 @@ def build_environment(rows=200, cols=200, scale=5, visualizer=False, task="sacca
         modules = [
             {
                 "type" : "saccade",
-                "saccade rate" : 0.5,
+                "saccade rate" : 0.75,
                 "layers" : [
                     {
                         "layer" : "peripheral_photoreceptor",
