@@ -35,14 +35,14 @@ def make_fef(pad, activator, rows, columns):
 
     Y, X = np.mgrid[:rows,:columns] # transpose for bitmap
     R = .1
-    # Cts
-    center = act.off + (act.on-act.off)*np.exp(-((X-.5*columns)**2 + (Y-.5*rows)**2)/(R*dim)**2)
-    left = act.off + (act.on-act.off)*np.exp(-((X-.0*columns)**2 + (Y-.5*rows)**2)/(R*dim)**2)
-    right = act.off + (act.on-act.off)*np.exp(-((X-1.*columns)**2 + (Y-.5*rows)**2)/(R*dim)**2)
-    # # Binary
-    # center = act.off + (act.on-act.off)*((X-.5*columns)**2 + (Y-.5*rows)**2 < (R*dim)**2)
-    # left = act.off + (act.on-act.off)*((X-.0*columns)**2 + (Y-.5*rows)**2 < (R*dim)**2)
-    # right = act.off + (act.on-act.off)*((X-1.*columns)**2 + (Y-.5*rows)**2 < (R*dim)**2)
+    # # Cts
+    # center = act.off + (act.on-act.off)*np.exp(-((X-.5*columns)**2 + (Y-.5*rows)**2)/(R*dim)**2)
+    # left = act.off + (act.on-act.off)*np.exp(-((X-.0*columns)**2 + (Y-.5*rows)**2)/(R*dim)**2)
+    # right = act.off + (act.on-act.off)*np.exp(-((X-1.*columns)**2 + (Y-.5*rows)**2)/(R*dim)**2)
+    # Binary
+    center = act.off + (act.on-act.off)*((X-.5*columns)**2 + (Y-.5*rows)**2 < (R*dim)**2)
+    left = act.off + (act.on-act.off)*((X-.0*columns)**2 + (Y-.5*rows)**2 < (R*dim)**2)
+    right = act.off + (act.on-act.off)*((X-1.*columns)**2 + (Y-.5*rows)**2 < (R*dim)**2)
 
     fef_coder.encode("center", center.reshape((rows*columns,1)))
     fef_coder.encode("left", left.reshape((rows*columns,1)))

@@ -2,6 +2,7 @@ from syngen import Network, Environment
 from syngen import get_gpus, get_cpu
 from syngen import set_suppress_output, set_warnings, set_debug
 from syngen import FloatArray
+from syngen import create_io_callback
 
 from os import path
 import sys
@@ -487,9 +488,35 @@ def build_network(rows=200, cols=200, scale=5):
     return {"structures" : [sc_structure, retina_structure],
          "connections" : connections + p_retina_connections + c_retina_connections}
 
-def build_environment(rows=200, cols=200, scale=5, visualizer=False, task="saccade"):
+train_dump_index = 0
+
+def build_environment(rows=200, cols=200, scale=5, visualizer=False, train_dump=False, task="saccade"):
     dim = min(rows, cols)
     motor_dim = min(rows/scale, cols/scale)
+
+    # Create training data callback
+    global train_dump_index
+    # train_dump_index = 0
+
+    training_layers = [
+        "central_retina_on",
+        "central_retina_off",
+    ]
+    def dump_training_data(ID, size, ptr):
+        global train_dump_index
+        if not train_dump: return
+
+        layer_name = training_layers[ID]
+        fname = "train_dump/%s_%03d.npy"%(
+            layer_name, train_dump_index
+        )
+        if ID == len(training_layers)-1: train_dump_index += 1
+
+        activity = np.array(FloatArray(size,ptr).to_list())
+        activity = activity.reshape((rows/3, cols/3))
+        np.save(fname, activity)
+
+    create_io_callback("dump_training_data", dump_training_data)
 
     # Create environment modules
     if task == "dsst":
@@ -526,6 +553,17 @@ def build_environment(rows=200, cols=200, scale=5, visualizer=False, task="sacca
                         "layer" : "sc_out_exc",
                         "output" : True,
                     }
+                ]
+            },
+            {
+                "type" : "callback",
+                "layers" : [
+                    {
+                        "layer" : layer_name,
+                        "output" : True,
+                        "function" : "dump_training_data",
+                        "id" : i
+                    } for i,layer_name in enumerate(training_layers)
                 ]
             }
         ]
