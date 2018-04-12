@@ -308,7 +308,7 @@ def build_network(rows=200, cols=200, scale=5):
 
     # Add retinal layers
     p_retina_layers, p_retina_connections = build_retina("peripheral", rows, cols, 24)
-    c_retina_layers, c_retina_connections = build_retina("central", rows/5, cols/5, 24)
+    c_retina_layers, c_retina_connections = build_retina("central", rows/3, cols/3, 24)
 
     sc_layers, sc_conns = build_exc_inh_pair(
         "sc_exc", "sc_inh",
