@@ -3,7 +3,10 @@ import pickle as pk
 import matplotlib.pyplot as pt
 import os, sys
 
-LABEL_FNAME = "train_dump/labels.pkl"
+TRAIN_DIR = "resources/train_dump"
+LABEL_FNAME = TRAIN_DIR+"/labels.pkl"
+PATCH_FBASE = TRAIN_DIR+"/patches"
+
 training_layers = [
     "central_retina_on",
     "central_retina_off",
@@ -11,12 +14,11 @@ training_layers = [
 global lr, labels
 lr, labels = 0, []
 
-PATCH_FBASE = "train_dump/patches"
 
 def count_examples():
     num_examples =  len([
-        name for name in os.listdir('train_dump')
-        if os.path.isfile(os.path.join('train_dump', name))])
+        name for name in os.listdir(TRAIN_DIR)
+        if os.path.isfile(os.path.join(TRAIN_DIR, name))])
     num_examples /= 2 # pair of on/off per example
     return num_examples
 
@@ -33,7 +35,7 @@ def label_training_data():
         print("Use middle button for cross, left/right buttons for gaze direction.")
 
         layer_name = training_layers[0]
-        activity = np.load("train_dump/%s_%03d.npy"%(layer_name, ne))
+        activity = np.load(TRAIN_DIR+"/%s_%03d.npy"%(layer_name, ne))
 
         def on_press(event):
             global labels, lr
@@ -75,7 +77,7 @@ def show_training_data():
         ex = label["example"]
         x, y = label["position"]
         for tl,layer_name in enumerate(training_layers):
-            activity = np.load("train_dump/%s_%03d.npy"%(layer_name, ex))
+            activity = np.load(TRAIN_DIR+"/%s_%03d.npy"%(layer_name, ex))
             pt.subplot(1,2,tl+1)
             pt.cla()
             pt.imshow(activity, cmap='gray')
@@ -94,7 +96,7 @@ def get_training_patches(rx, ry):
         ex = label["example"]
         x, y = label["position"]
         for tl,layer_name in enumerate(training_layers):
-            activity = np.load("train_dump/%s_%03d.npy"%(layer_name, ex))
+            activity = np.load(TRAIN_DIR+"/%s_%03d.npy"%(layer_name, ex))
             patch = activity[y-ry:y+ry+1,x-rx:x+rx+1]
             if patch.shape != (2*ry+1,2*rx+1): continue
             patches[layer_name][label["token"]].append(patch)
@@ -115,6 +117,6 @@ def show_training_patches():
 if __name__ == "__main__":
 
     # label_training_data()
-    # show_training_data()
-    get_training_patches(20,20)
-    show_training_patches()
+    show_training_data()
+    # get_training_patches(20,20)
+    # show_training_patches()
