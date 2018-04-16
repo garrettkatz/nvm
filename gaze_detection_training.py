@@ -290,7 +290,7 @@ def do_cnn_training(show=False):
     pt.ion()
 
     net.zero_grad()
-    for epoch in range(20):
+    for epoch in range(200):
         net_loss = 0.
         for ex in exs:
             input_pattern = X[ex][np.newaxis,:,:,:]
@@ -313,6 +313,8 @@ def do_cnn_training(show=False):
         net.zero_grad()
 
         w = net.conv.weight.data.numpy()
+        b = net.conv.bias.data.numpy()
+        np.savez("resources/train_dump/cnn_wb.npz", **{"w": w, "b": b})
         if show:
             for c in range(3):
                 for t in range(2):
