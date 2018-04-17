@@ -182,7 +182,7 @@ def build_vp_bridge_connections():
 
 def build_vp_environment(visualizer=False):
 
-    read_layers = ["conv-0","max","class"]
+    read_layers = [] #["max","class"]
     modules = [{
         "type" : "callback",
         "layers" : [
