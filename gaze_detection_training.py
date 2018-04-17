@@ -224,6 +224,12 @@ def do_central_vision_testing():
 
 def do_cnn_training(show=False):
 
+    FEATURE_TOKENS = [("cross","center"),
+        ("left eye","left"),
+        ("right eye","left"),
+        ("left eye","right"),
+        ("right eye","right")]
+
     import torch
     from torch.autograd import Variable
     import torch.nn as nn
@@ -233,26 +239,39 @@ def do_cnn_training(show=False):
         def __init__(self):
             super(Net, self).__init__()
             in_channels = 2 # 1 each for on/off retinal layers
-            out_channels = 3 # 3 tokens
+            out_channels = len(FEATURE_TOKENS) # 1 for each feature+token combo
             kernel_size = (41,41) # (height, width) of kernel
             self.conv = nn.Conv2d(in_channels, out_channels, kernel_size)
     
         def forward(self, x):
-            x = self.conv(x)
+            z = self.conv(x)
             # x, _ = torch.max(x,3)
             # x, _ = torch.max(x,2)
-            return x
+            return z
     
     net = Net()
 
-    # initialize with kernels instead of random
-    kernels = dict(**np.load(TRAIN_DIR+"/kernels.npz"))
-    w0 = np.zeros((3,2,41,41), dtype=np.float32)
-    for t, token in enumerate(TOKENS):
-        for tl, layer in enumerate(TRAINING_LAYERS):
-            w0[t,tl,:,:] = kernels["%s_%s_w"%(layer, token)]
-    net.conv.weight.data = torch.from_numpy(w0.copy())
-    net.conv.bias.data = torch.from_numpy(kernels["b"].astype(np.float32))
+    # # initial random
+    # w0 = net.conv.weight.data.numpy().copy()
+
+    # # initialize with kernels instead of random
+    # kernels = dict(**np.load(TRAIN_DIR+"/kernels.npz"))
+    # w0 = np.zeros((len(FEATURE_TOKENS),2,41,41), dtype=np.float32)
+    # b0 = np.zeros((len(FEATURE_TOKENS),), dtype=np.float32)
+    # for tl, layer in enumerate(TRAINING_LAYERS):
+    #     for t,token in enumerate(TOKENS):
+    #         for ft in range(len(FEATURE_TOKENS)):
+    #             if FEATURE_TOKENS[ft][1] == token:
+    #                 w0[ft,tl,:,:] = kernels["%s_%s_w"%(layer, token)]
+    #                 b0[ft] = kernels["b"][t]
+    # net.conv.weight.data = torch.from_numpy(w0.copy())
+    # net.conv.bias.data = torch.from_numpy(b0.copy())
+
+    # restart with saved weights
+    saved = dict(**np.load(TRAIN_DIR+"/cnn_wb.npz"))
+    w0, b = saved["w"].copy(), saved["b"]
+    net.conv.weight.data = torch.from_numpy(w0)
+    net.conv.bias.data = torch.from_numpy(b)
 
     with open(LABEL_FNAME,"r") as label_file: labels = pk.load(label_file)
     X = []
@@ -263,6 +282,7 @@ def do_cnn_training(show=False):
     for label in labels:
         ex = label["example"]
         token = label["token"]
+        feature = label["feature"]
         col,row = label["position"]
 
         if label["feature"] in ["cross", "left eye"]:
@@ -271,9 +291,9 @@ def do_cnn_training(show=False):
                 for layer_name in TRAINING_LAYERS])
             y = np.array([
                 1 if t == token else -1 for t in TOKENS])
-            z = np.zeros((len(TOKENS), rows, columns), dtype=np.float32)
+            z = np.zeros((5, rows, columns), dtype=np.float32)
 
-        t = TOKENS.index(token)
+        t = FEATURE_TOKENS.index((feature,token))
         z[t,:,:] += np.exp(-((C-(col-20.))**2 + (R-(row-20.))**2)/(21)**2)
 
         if label["feature"] in ["cross", "right eye"]:
@@ -289,9 +309,15 @@ def do_cnn_training(show=False):
     exs = range(X.shape[0])
     pt.ion()
 
+    # learning_rate = 0.00001
+    # optimizer = torch.optim.Adam(net.parameters(), lr=learning_rate)
+
+    learning_rate = 0.0001
     net.zero_grad()
-    for epoch in range(200):
+    # optimizer.zero_grad()
+    for epoch in range(2):
         net_loss = 0.
+        num_correct = 0
         for ex in exs:
             input_pattern = X[ex][np.newaxis,:,:,:]
             input_pattern = Variable(torch.from_numpy(input_pattern))
@@ -304,61 +330,279 @@ def do_cnn_training(show=False):
             net_loss += loss.data.numpy()[0]
             # print("%d,%d: loss %f, %s ~ %s"%(
             #     epoch, ex, loss.data.numpy()[0], y.data.numpy(), Y[ex]))
+
+            # FEATURE_TOKENS = [("cross","center"),
+            #     ("left eye","left"),
+            #     ("right eye","left"),
+            #     ("left eye","right"),
+            #     ("right eye","right")]
             # print(y.data.numpy())
             # print(Y[ex])
+            zz = z.data.numpy()[0]
+            y = -np.ones((3,))
+            y[np.argmax([
+                .5*(zz[1].max()+zz[2].max()), # left
+                zz[0].max(), # center
+                .5*(zz[3].max()+zz[4].max()), # right
+            ])] = 1
+            num_correct += (Y[ex] == y).all()
 
-        learning_rate = 0.0001
         for f in net.parameters():
             f.data.sub_(f.grad.data * learning_rate)
         net.zero_grad()
+        # optimizer.step()
+        # optimizer.zero_grad()
 
         w = net.conv.weight.data.numpy()
         b = net.conv.bias.data.numpy()
-        np.savez("resources/train_dump/cnn_wb.npz", **{"w": w, "b": b})
+        np.savez("resources/train_dump/cnn_wb_tmp.npz", **{"w": w, "b": b})
         if show:
-            for c in range(3):
+            for ft in range(5):
                 for t in range(2):
-                    pt.subplot(3,4,4*c+t+1)
+                    pt.subplot(5,4,4*ft+t+1)
                     pt.cla()
-                    pt.imshow(w[c,t,:,:], cmap='gray')
-            for c in range(3):
+                    pt.imshow(w[ft,t,:,:], cmap='gray')
+            for ft in range(5):
                 for t in range(2):
-                    pt.subplot(3,4,4*c+t+3)
+                    pt.subplot(5,4,4*ft+t+3)
                     pt.cla()
-                    pt.imshow(w0[c,t,:,:], cmap='gray')
+                    pt.imshow(w0[ft,t,:,:], cmap='gray')
             pt.show()
             pt.gcf().canvas.draw()
             pt.gcf().canvas.flush_events()
 
-        print("%d: %f"%(epoch, net_loss))
+        print("%d: %f, %d of %d"%(epoch, net_loss, num_correct, X.shape[0]))
+
+    np.savez("resources/train_dump/cnn_wb.npz", **{"w": w, "b": b})
             
-    ex = 10
-    input_pattern = X[ex][np.newaxis,:,:,:]
-    input_pattern = Variable(torch.from_numpy(input_pattern.astype(np.float32)))
-    # z = net.conv(input_pattern).data.numpy()
-    z = net.forward(input_pattern).data.numpy()
-    print(X[ex].shape)
-    print(z.shape)
-    w = net.conv.weight.data.numpy()
+    for ex in range(10, X.shape[0]):
+        # pt.title(labels[ex]["feature"]+","+labels[ex]["token"])
+        input_pattern = X[ex][np.newaxis,:,:,:]
+        input_pattern = Variable(torch.from_numpy(input_pattern.astype(np.float32)))
+        # z = net.conv(input_pattern).data.numpy()
+        z = net.forward(input_pattern).data.numpy()
+        print(X[ex].shape)
+        print(z.shape)
+        w = net.conv.weight.data.numpy()
+    
+        if show:
+            pt.ioff()
+            pt.subplot(5,4,1)
+            for ft in range(5):
+                pt.subplot(5,4,4*ft+1)
+                pt.cla()
+                pt.imshow(z[0,ft,:,:], cmap='gray', vmin=0, vmax=1)
+                pt.subplot(5,4,4*ft+2)
+                pt.cla()
+                pt.imshow(Z[ex,ft,:,:], cmap='gray', vmin=0, vmax=1)
+                pt.subplot(5,4,4*ft+3)
+                pt.cla()
+                pt.imshow(w[ft,0,:,:], cmap='gray')
+                pt.subplot(5,4,4*ft+4)
+                pt.cla()
+                pt.imshow(w[ft,1,:,:], cmap='gray')
+            pt.tight_layout()
+            pt.show()
 
-    if show:
-        pt.ioff()
-        for c in range(3):
-            pt.subplot(3,4,4*c+1)
-            pt.cla()
-            pt.imshow(z[0,c,:,:], cmap='gray', vmin=0, vmax=1)
-            pt.subplot(3,4,4*c+2)
-            pt.cla()
-            pt.imshow(Z[ex,c,:,:], cmap='gray', vmin=0, vmax=1)
-            pt.subplot(3,4,4*c+3)
-            pt.cla()
-            pt.imshow(w[c,0,:,:], cmap='gray')
-            pt.subplot(3,4,4*c+4)
-            pt.cla()
-            pt.imshow(w[c,1,:,:], cmap='gray')
-        pt.tight_layout()
-        pt.show()
+def do_cnn2_training(show=False):
 
+    FEATURE_TOKENS = [("cross","center"),
+        ("left eye","left"),
+        ("right eye","left"),
+        ("left eye","right"),
+        ("right eye","right")]
+
+    import torch
+    from torch.autograd import Variable
+    import torch.nn as nn
+    import torch.nn.functional as F
+    
+    class Net(nn.Module):
+        def __init__(self):
+            super(Net, self).__init__()
+            in_channels = 2 # 1 each for on/off retinal layers
+            out_channels = len(FEATURE_TOKENS) # 1 for each feature+token combo
+            kernel_size = (41,41) # (height, width) of kernel
+            self.conv = nn.Conv2d(in_channels, out_channels, kernel_size)
+            lin, lout = len(FEATURE_TOKENS), len(TOKENS)
+            self.lin = torch.nn.Linear(lin, lout)
+            self.sig = torch.nn.Sigmoid()
+    
+        def forward(self, x):
+            z = self.conv(x)
+            mx, _ = torch.max(z,3)
+            mx, _ = torch.max(mx,2)
+            y = self.sig(self.lin(mx))
+            return y
+    
+    net = Net()
+
+    # # restart with saved convolution and rough linear
+    # saved = dict(**np.load(TRAIN_DIR+"/cnn_wb.npz"))
+    # cw0, b = saved["w"].copy(), saved["b"]
+    # net.conv.weight.data = torch.from_numpy(cw0)
+    # net.conv.bias.data = torch.from_numpy(b)
+    # net.lin.weight.data = torch.from_numpy(0.01*np.array([
+    #     # center, left, left, right, right
+    #     # -> left, center, right
+    #     [0, 5, 5, 0, 0],
+    #     [10, 0, 0, 0, 0],
+    #     [0, 0, 0, 5, 5]], dtype=np.float32))
+    # net.lin.bias.data = torch.from_numpy(np.zeros(3, dtype=np.float32))
+
+    # restart with saved cnn2
+    saved = dict(**np.load(TRAIN_DIR+"/cnn2.npz"))
+    cw0, cb, lw, lb = saved["cw"].copy(), saved["cb"], saved["lw"], saved["lb"]
+    net.conv.weight.data = torch.from_numpy(cw0)
+    net.conv.bias.data = torch.from_numpy(cb)
+    net.lin.weight.data = torch.from_numpy(lw)
+    net.lin.bias.data = torch.from_numpy(lb)
+
+    with open(LABEL_FNAME,"r") as label_file: labels = pk.load(label_file)
+    X = []
+    Z = []
+    Y = []
+    rows, columns = 113-40, 160-40
+    R, C = np.mgrid[:rows,:columns] # transpose for bitmap
+    targ_toks = []
+    for label in labels:
+        ex = label["example"]
+        token = label["token"]
+        feature = label["feature"]
+        col,row = label["position"]
+
+        if label["feature"] in ["cross", "left eye"]:
+            x = np.array([
+                np.load(TRAIN_DIR+"/%s_%03d.npy"%(layer_name, ex))
+                for layer_name in TRAINING_LAYERS])
+            y = np.array([
+                .99 if t == token else 0.01 for t in TOKENS])
+            z = np.zeros((5, rows, columns), dtype=np.float32)
+
+        t = FEATURE_TOKENS.index((feature,token))
+        z[t,:,:] += np.exp(-((C-(col-20.))**2 + (R-(row-20.))**2)/(21)**2)
+
+        if label["feature"] in ["cross", "right eye"]:
+            X.append(x)
+            Y.append(y)
+            Z.append(z)
+            targ_toks.append(token)
+
+    X = np.array(X).astype(np.float32)
+    Y = np.array(Y).astype(np.float32)
+    Z = np.array(Z).astype(np.float32)
+
+    criterion = nn.MSELoss()
+    exs = range(X.shape[0])
+    pt.ion()
+
+    # learning_rate = 0.00001
+    # optimizer = torch.optim.Adam(net.parameters(), lr=learning_rate)
+
+    learning_rate = 0.025
+    net.zero_grad()
+    # optimizer.zero_grad()
+    for epoch in range(0):
+        net_loss = 0.
+        num_correct = 0
+        for ex in exs:
+            input_pattern = X[ex][np.newaxis,:,:,:]
+            input_pattern = Variable(torch.from_numpy(input_pattern))
+            z = net.conv(input_pattern)
+            y = net.forward(input_pattern)
+            # print(y.data.numpy())
+            # print(Y[ex])
+            loss = criterion(y, Variable(torch.from_numpy(Y[ex])))
+
+            loss.backward()
+            net_loss += loss.data.numpy()[0]
+
+            # FEATURE_TOKENS = [("cross","center"),
+            #     ("left eye","left"),
+            #     ("right eye","left"),
+            #     ("left eye","right"),
+            #     ("right eye","right")]
+            # print(y.data.numpy())
+            # print(Y[ex])
+            num_correct += (np.fabs(Y[ex] - y.data.numpy()) < 0.1).all()
+
+        for f in net.parameters():
+            f.data.sub_(f.grad.data * learning_rate)
+        net.zero_grad()
+        # optimizer.step()
+        # optimizer.zero_grad()
+
+        np.savez("resources/train_dump/cnn2_tmp.npz", **{
+            "cw": cw, "cb": cb, "lw": lw, "lb": lb})
+
+        if False: #show:
+            for ft in range(5):
+                for t in range(2):
+                    pt.subplot(5,4,4*ft+t+1)
+                    pt.cla()
+                    pt.imshow(cw[ft,t,:,:], cmap='gray')
+            for ft in range(5):
+                for t in range(2):
+                    pt.subplot(5,4,4*ft+t+3)
+                    pt.cla()
+                    pt.imshow(cw0[ft,t,:,:], cmap='gray')
+            pt.show()
+            pt.gcf().canvas.draw()
+            pt.gcf().canvas.flush_events()
+
+        print("%d: %f, %d of %d"%(epoch, net_loss, num_correct, X.shape[0]))
+
+    cw = net.conv.weight.data.numpy()
+    cb = net.conv.bias.data.numpy()
+    lw = net.lin.weight.data.numpy()
+    lb = net.lin.bias.data.numpy()
+    np.savez("resources/train_dump/cnn2.npz", **{
+        "cw": cw, "cb": cb, "lw": lw, "lb": lb})
+
+    print("params sans kernel")
+    print("cb")
+    print(cb)
+    print("lw")
+    print(lw)
+    print("lb")
+    print(lb)
+    for ex in range(10, X.shape[0]):
+        # pt.title(labels[ex]["feature"]+","+labels[ex]["token"])
+        input_pattern = X[ex][np.newaxis,:,:,:]
+        input_pattern = Variable(torch.from_numpy(input_pattern.astype(np.float32)))
+
+        cw = net.conv.weight.data.numpy()
+        z = net.conv(input_pattern)
+        mx, _ = torch.max(z,3)
+        mx, _ = torch.max(mx,2)
+        y = net.sig(net.lin(mx))
+
+        z = z.data.numpy()
+        mx = mx.data.numpy()
+        y = y.data.numpy()
+        print("mx")
+        print(mx)
+        print("y")
+        print(y)
+    
+        if show:
+            pt.ioff()
+            for ft in range(5):
+                pt.subplot(5,4,4*ft+1)
+                pt.cla()
+                pt.imshow(z[0,ft,:,:], cmap='gray', vmin=z.min(), vmax=z.max())
+                if ft == 0: pt.title(targ_toks[ex])
+                pt.subplot(5,4,4*ft+2)
+                pt.cla()
+                pt.imshow(Z[ex,ft,:,:], cmap='gray', vmin=0, vmax=1)
+                pt.subplot(5,4,4*ft+3)
+                pt.cla()
+                pt.imshow(cw[ft,0,:,:], cmap='gray')
+                pt.subplot(5,4,4*ft+4)
+                pt.cla()
+                pt.imshow(cw[ft,1,:,:], cmap='gray')
+            pt.tight_layout()
+            pt.show()
 
 if __name__ == "__main__":
 
@@ -368,4 +612,5 @@ if __name__ == "__main__":
     # show_training_patches()
     # do_patch_training()
     # do_central_vision_testing()
-    do_cnn_training(show=False)
+    # do_cnn_training(show=True)
+    do_cnn2_training(show=True)

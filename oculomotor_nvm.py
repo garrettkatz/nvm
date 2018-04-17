@@ -490,7 +490,7 @@ def build_network(rows=200, cols=200, scale=5):
 
 train_dump_index = 0
 
-def build_environment(rows=200, cols=200, scale=5, visualizer=False, train_dump=False, task="saccade"):
+def build_environment(rows=200, cols=200, scale=5, visualizer=False, task="saccade", train_dump=False):
     dim = min(rows, cols)
     motor_dim = min(rows/scale, cols/scale)
 
@@ -507,7 +507,7 @@ def build_environment(rows=200, cols=200, scale=5, visualizer=False, train_dump=
         if not train_dump: return
 
         layer_name = training_layers[ID]
-        fname = "train_dump/%s_%03d.npy"%(
+        fname = "resources/train_dump/%s_%03d.npy"%(
             layer_name, train_dump_index
         )
         if ID == len(training_layers)-1: train_dump_index += 1
