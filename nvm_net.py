@@ -8,9 +8,15 @@ from nvm_instruction_set import flash_instruction_set
 from nvm_assembler import assemble
 from nvm_linker import link
 
+def update_add(accumulator, summand):
+    for k, v in summand.items():
+        if k in accumulator:
+            accumulator[k] += v
+        else: accumulator[k] = v
+
 class NVMNet:
     
-    def __init__(self, layer_shape, pad, activator, learning_rule, devices, gh_shape=(32,32), m_shape=(32,32)):
+    def __init__(self, layer_shape, pad, activator, learning_rule, devices, gh_shape=(32,32), m_shape=(16,16)):
 
         # set up parameters
         self.layer_size = layer_shape[0]*layer_shape[1]
@@ -25,7 +31,7 @@ class NVMNet:
         # set up memory layers
         NM = m_shape[0]*m_shape[1]
         actm = activator(pad, NM)
-        # for m in ['mf','mb']: layers[m] = Layer(m, m_shape, actm, Coder(actm))
+        for m in ['mf','mb']: layers[m] = Layer(m, m_shape, actm, Coder(actm))
 
         # add device layers
         layers.update(devices)
@@ -48,21 +54,21 @@ class NVMNet:
         # set up connection matrices
         self.weights, self.biases = flash_instruction_set(self)
 
-        # # set up memory address space
-        # A = {}
-        # for m in ['mf','mb']:
-        #     A[m] = np.concatenate(
-        #         [layers[m].coder.encode(str(a)) for a in range(NM)],
-        #         axis=1)
-        # for m_to in ['mf','mb']:
-        #     for m_from in ['mf','mb']:
-        #         key = (m_to, m_from)
-        #         Y, X = A[m_to], A[m_from]
-        #         if m_from == 'mf': Y = np.roll(Y, 1, axis=1)
-        #         if m_from == 'mb': X = np.roll(X, 1, axis=1)
-        #         print("%s residuals:"%str(key))
-        #         self.weights[key], self.biases[key], _ = flash_mem(
-        #             X, Y, actm, actm, linear_solve, verbose=True)
+        # set up memory address space
+        A = {}
+        for m in ['mf','mb']:
+            A[m] = np.concatenate(
+                [layers[m].coder.encode(str(a)) for a in range(NM)],
+                axis=1)
+        for m_to in ['mf','mb']:
+            for m_from in ['mf','mb']:
+                key = (m_to, m_from)
+                Y, X = A[m_to], A[m_from]
+                if m_from == 'mf': Y = np.roll(Y, 1, axis=1)
+                if m_from == 'mb': X = np.roll(X, 1, axis=1)
+                print("%s residuals:"%str(key))
+                self.weights[key], self.biases[key], _ = flash_mem(
+                    X, Y, actm, actm, linear_solve, verbose=True)
         
         # initialize layer states
         self.activity = {
@@ -70,6 +76,8 @@ class NVMNet:
             for name, layer in self.layers.items()}
         self.activity['go'] = self.layers['go'].coder.encode('start')
         self.activity['gh'] = self.layers['gh'].coder.encode('start')
+        self.activity['mf'] = self.layers['mf'].coder.encode('0')
+        self.activity['mb'] = self.layers['mb'].coder.encode('0')
 
         # initialize constants
         self.constants = ["null"] #"true", "false"]
@@ -91,14 +99,14 @@ class NVMNet:
         weights, biases, diff_count = assemble(self,
             program, name, verbose=(verbose > 1))
         if verbose > 0: print("assembler diff count = %d"%diff_count)
-        self.weights.update(weights)
-        self.biases.update(biases)
+        update_add(self.weights, weights)
+        update_add(self.biases, biases)
 
     def link(self, verbose=1):
         weights, biases, diff_count = link(self, verbose=(verbose > 1))
-        self.weights.update(weights)
-        self.biases.update(biases)
         if verbose > 0: print("linker diff count = %d"%diff_count)
+        update_add(self.weights, weights)
+        update_add(self.biases, biases)
 
     def tick(self):
 

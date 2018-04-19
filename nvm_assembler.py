@@ -6,8 +6,9 @@ def assemble(nvmnet, program, name, verbose=False):
     ### Preprocess program string
 
     labels = dict() # map label to line number
-    # split up lines and remove blanks
-    lines = [line.strip() for line in program.splitlines() if len(line.strip()) > 0]
+    # split up lines and remove blanks and full line comments
+    lines = [line.strip() for line in program.splitlines()
+                if len(line.strip()) > 0 and line.strip()[0] != "#"]
     for l in range(len(lines)):
         # remove comments
         comment = lines[l].find("#")
@@ -23,10 +24,19 @@ def assemble(nvmnet, program, name, verbose=False):
         while len(lines[l]) < 3:
             lines[l].append("null")
 
+    # ### Namespace labels
+    # for line in lines:
+    #     for t,token in enumerate(line):
+    #         if token in labels: line[t] = "%s.%s"%(name, token)
+    # labels = {"%s.%s"%(name, label): line_index
+    #     for label, line_index in labels.items()}
+
     ### Encode instruction pointers and labels
+    index_width = str(int(np.ceil(np.log10(len(lines)))))
     ips = [nvmnet.layers["ip"].coder.encode(name)] # pointer to program
     for l in range(len(lines)):
-        ips.append(nvmnet.layers["ip"].coder.encode("ip %2d"%l))
+        ips.append(nvmnet.layers["ip"].coder.encode(
+            ("%s.%0"+index_width+"d") % (name,l)))
     for label, line_index in labels.items():
         ip_index = line_index + 1 # + 1 for leading program pointer
         ip_index -= 1 # but - 1 for ip -> opx step
