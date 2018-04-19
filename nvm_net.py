@@ -16,22 +16,27 @@ def update_add(accumulator, summand):
 
 class NVMNet:
     
-    def __init__(self, layer_shape, pad, activator, learning_rule, devices, gh_shape=(32,32), m_shape=(16,16)):
+    def __init__(self, layer_shape, pad, activator, learning_rule, devices, gh_shape=(32,32), m_shape=(16,16), c_shape=(16,16)):
 
         # set up parameters
         self.layer_size = layer_shape[0]*layer_shape[1]
         self.pad = pad
-        self.learning_rule = learning_rule
 
         # set up instruction layers
         act = activator(pad, self.layer_size)
         layer_names = ['ip','opc','op1','op2']
-        layers = {name: Layer(name, layer_shape, act, Coder(act)) for name in layer_names}
+        layers = {name: Layer(name, layer_shape, act, Coder(act))
+            for name in layer_names}
 
         # set up memory layers
         NM = m_shape[0]*m_shape[1]
         actm = activator(pad, NM)
         for m in ['mf','mb']: layers[m] = Layer(m, m_shape, actm, Coder(actm))
+
+        # set up comparison layers
+        NC = c_shape[0]*c_shape[1]
+        actc = activator(pad, NC)
+        for c in ['ci','co']: layers[c] = Layer(c, c_shape, actc, Coder(actc))
 
         # add device layers
         layers.update(devices)
@@ -43,7 +48,7 @@ class NVMNet:
 
         # set up gates
         NL = len(layers) + 2 # +2 for gate out/hidden
-        NG = NL**2 + NL # number of gates
+        NG = NL + NL**2 + NL**2 # number of gates (d + u + p)
         NH = gh_shape[0]*gh_shape[1] # number of hidden units
         acto = heaviside_activator(NG)
         acth = activator(pad,NH)
@@ -64,11 +69,19 @@ class NVMNet:
             for m_from in ['mf','mb']:
                 key = (m_to, m_from)
                 Y, X = A[m_to], A[m_from]
-                if m_from == 'mf': Y = np.roll(Y, 1, axis=1)
-                if m_from == 'mb': X = np.roll(X, 1, axis=1)
+                if m_from == 'mf': X = np.roll(X, 1, axis=1)
+                if m_from == 'mb': Y = np.roll(Y, 1, axis=1)
                 print("%s residuals:"%str(key))
                 self.weights[key], self.biases[key], _ = flash_mem(
+                    np.zeros((NM, NM)), np.zeros((NM, 1)),
                     X, Y, actm, actm, linear_solve, verbose=True)
+
+        # initialize connectivity between memory and devices
+        N_mf = self.layers['mf'].size
+        for device in self.devices:
+            N_d = self.devices[device].size
+            self.weights[(device, 'mf')] = np.zeros((N_d, N_mf))
+            self.biases[(device, 'mf')] = np.zeros((N_d, 1))
         
         # initialize layer states
         self.activity = {
@@ -81,6 +94,12 @@ class NVMNet:
 
         # initialize constants
         self.constants = ["null"] #"true", "false"]
+
+        # initialize learning
+        self.learning_rules = {
+            (to_layer, from_layer): learning_rule
+            for to_layer in self.layers for from_layer in self.layers}
+        self.learning_rules[('co','ci')] = learning_rule
 
     def set_pattern(self, layer_name, pattern):
         self.activity[layer_name] = pattern
@@ -110,11 +129,12 @@ class NVMNet:
 
     def tick(self):
 
-        # NVM tick
+        ### NVM tick
         current_gates = self.activity['go']
+
+        # activity
         activity_new = {name: np.zeros(pattern.shape)
             for name, pattern in self.activity.items()}
-        
         for (to_layer, from_layer) in self.weights:
             u = self.gate_map.get_gate_value(
                 (to_layer, from_layer, 'u'), current_gates)
@@ -131,7 +151,29 @@ class NVMNet:
     
         for name in activity_new:
             activity_new[name] = self.layers[name].activator.f(activity_new[name])
-        
+
+        # plasticity
+        for (to_layer, from_layer) in self.weights:
+            p = self.gate_map.get_gate_value(
+                (to_layer, from_layer, 'p'), current_gates)
+
+            # actg = self.layers["go"].activator
+            # if np.fabs(p - actg.on) < np.fabs(p - actg.off):
+            if p != 0:
+            # if True:
+
+                pair_key = (to_layer, from_layer)
+                dw, db = self.learning_rules[pair_key](
+                    self.weights[pair_key],
+                    self.biases[pair_key],
+                    self.activity[from_layer],
+                    self.activity[to_layer],
+                    self.layers[from_layer].activator,
+                    self.layers[to_layer].activator)
+    
+                self.weights[pair_key] += p*dw
+                self.biases[pair_key] += p*db
+
         self.activity = activity_new
 
     def at_start(self):
@@ -156,7 +198,7 @@ class NVMNet:
                     for name in sl])
                 s += "\n"
         if show_gates:
-            s += self.get_open_gates()
+            s += str(self.get_open_gates())
             s += "\n"
         return s
 

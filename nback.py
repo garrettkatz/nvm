@@ -16,22 +16,25 @@ from nvm_net import NVMNet
 # move hippocampus back forward +1
 # store current temporal cortex at new hippocampus position
 # prv, nxt: previous or next event in episodic memory
-# rem dev: remember contents in device dev
-# rec dev: recall contents in device dev
+# mem dev: memorize contents in device dev
+# rem dev: recall contents in device dev
 # cmp lbl dev: jump to lbl if current memory matches dev
 nback_programs = {
 "test":"""
 
     start:  mov tc A
-            jmp end
+            mem tc
+            nxt
+            mov tc B
+            prv
+            rem tc
     end:    exit
-            # rem tc
             # mov tc C
             # rec tc
             # exit
             # nxt
             # mov tc B
-            # rem tc
+            # mem tc
             # prv
             # rec tc
             # nxt
@@ -52,7 +55,7 @@ nback_programs = {
     # forw2:  nxt
     # forw1:  nxt
     #         nxt
-    #         rem tc
+    #         mem tc
     #         jmp back3
             nop
             exit
@@ -70,7 +73,7 @@ def make_nback_nvm(activator_label):
     learning_rule = hebbian
 
     # make network
-    layer_shape = (16,16)
+    layer_shape = (256,1)
     layer_size = layer_shape[0]*layer_shape[1]
     pad = 0.001
     act = activator(pad, layer_size)
@@ -86,8 +89,8 @@ def make_nback_nvm(activator_label):
     nvmnet.link(verbose=2)
 
     # initialize layers
-    # name = "test"
-    name = "nback"
+    name = "test"
+    # name = "nback"
     nvmnet.activity["ip"] = nvmnet.layers["ip"].coder.encode(name) # program pointer
     # nvmnet.activity["tc"] = nvmnet.layers["tc"].coder.encode("A") # letter
 
@@ -108,13 +111,13 @@ if __name__ == "__main__":
 
     history = []
     start_t = []
-    tc_sched = [60, 20]
+    tc_sched = [60, 50]
     for t in range(tc_sched[1]*2):
     
         ### show state and tick
-        if True:
+        # if True:
         # if t % 2 == 0 or nvmnet.at_exit():
-        # if nvmnet.at_start() or nvmnet.at_exit():
+        if nvmnet.at_start() or nvmnet.at_exit():
             if nvmnet.at_start(): start_t.append(t)
             print('t = %d'%t)
             print(nvmnet.state_string(show_layers, show_tokens, show_corrosion, show_gates))
@@ -148,5 +151,6 @@ if __name__ == "__main__":
     plt.imshow(A, cmap='gray', vmin=act.off, vmax=act.on, aspect='auto')
     plt.xticks(xt, xl)
     plt.yticks(yt, [k for sl in show_layers for k in sl])
+    plt.tight_layout()
     plt.show()
     

@@ -23,8 +23,11 @@ def link(nvmnet, tokens=[], verbose=0):
         Y = np.concatenate(map(layer.coder.encode, all_tokens), axis=1)
         if verbose > 0: print("Linking op2 -> %s"%(name))
         weights[(name, "op2")], biases[(name, "op2")], dc = flash_mem(
+            np.zeros((Y.shape[0],X.shape[0])),
+            np.zeros((Y.shape[0],1)),
             X, Y, op2.activator, layer.activator,
-            nvmnet.learning_rule, verbose=verbose)
+            nvmnet.learning_rules[(name,"op2")],
+            verbose=verbose)
         diff_count += dc
 
     # link device layers with each other for movd instruction
@@ -34,9 +37,13 @@ def link(nvmnet, tokens=[], verbose=0):
             X = np.concatenate(map(from_layer.coder.encode, all_tokens), axis=1)
             Y = np.concatenate(map(to_layer.coder.encode, all_tokens), axis=1)
             if verbose > 0: print("Linking %s -> %s"%(from_name, to_name))
-            weights[(to_name, from_name)], biases[(to_name, from_name)], dc = flash_mem(
+            pair_key = (to_name, from_name)
+            weights[pair_key], biases[pair_key], dc = flash_mem(
+                np.zeros((Y.shape[0],X.shape[0])),
+                np.zeros((Y.shape[0],1)),
                 X, Y, from_layer.activator, to_layer.activator,
-                nvmnet.learning_rule, verbose=verbose)
+                nvmnet.learning_rules[pair_key],
+                verbose=verbose)
             diff_count += dc    
 
     # link device layers to ip for jmpd instruction
@@ -45,8 +52,11 @@ def link(nvmnet, tokens=[], verbose=0):
         Y = np.concatenate(map(ip.coder.encode, all_tokens), axis=1)
         if verbose > 0: print("Linking %s -> ip"%(name))
         weights[("ip", name)], biases[("ip", name)], dc = flash_mem(
+            np.zeros((Y.shape[0],X.shape[0])),
+            np.zeros((Y.shape[0],1)),
             X, Y, layer.activator, ip.activator,
-            nvmnet.learning_rule, verbose=verbose)
+            nvmnet.learning_rules[("ip", name)],
+            verbose=verbose)
         diff_count += dc
 
     # link op1 to ip for jmpv instruction
@@ -54,7 +64,11 @@ def link(nvmnet, tokens=[], verbose=0):
     Y = np.concatenate(map(ip.coder.encode, all_tokens), axis=1)
     if verbose > 0: print("Linking op1 -> ip")
     weights[("ip", "op1")], biases[("ip", "op1")], dc = flash_mem(
-        X, Y, op1.activator, ip.activator, nvmnet.learning_rule, verbose=verbose)
+        np.zeros((Y.shape[0],X.shape[0])),
+        np.zeros((Y.shape[0],1)),
+        X, Y, op1.activator, ip.activator,
+        nvmnet.learning_rules[("ip","op1")],
+        verbose=verbose)
     diff_count += dc
         
     return weights, biases, diff_count

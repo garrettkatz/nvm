@@ -1,5 +1,5 @@
 next steps:
-    memory -> cmp -> ipop
+    cmp -> ipop
     make layer/activator-specific:
         omega and beta for gain
         layer shape, size, activator
@@ -21,7 +21,7 @@ next steps:
             mov first operand to cmp in, and do weight learning so that first operand pattern (and only that pattern) associated with true in cmp out
             mov second operand to cmp in, and let it activate cmp out.  that gives the match result.
     smarter linking (only what's necessary)
-    nback: new stimuli presented only once the network outputs match/no match decision on current stimulus
+    namespaces for clobbered human-readable labels
     different coding semantics/errors when pattern provided and token already used?
     check Z that randomly interpolates X,Y and multiple intermediate Z steps
     distinct excitatory/inhibitory populations

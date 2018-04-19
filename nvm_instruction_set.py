@@ -174,5 +174,83 @@ def flash_instruction_set(nvmnet):
             new_gates = g_start, new_hidden = h_start,
             old_gates = g, old_hidden = h)
 
+    ###### MEM
+
+    # Let op1 bias the gate layer
+    g, h = gs.add_transit(ungate = [('gh','op1','u')],
+        old_gates = g_ready, old_hidden = h_ready, opc='mem')
+    g_mem, h_mem = g.copy(), h.copy()
+    gate_hidden.coder.encode('mem', h_mem)
+
+    for device in devices:
+
+        # Open learning from mf to device in op1
+        g, h = gs.add_transit(
+            ungate = [(device, 'mf', 'p')],
+            old_gates = g_mem, old_hidden = h_mem,
+            op1 = device)
+        g_mem_dev, h_mem_dev = g.copy(), h.copy()
+        gate_hidden.coder.encode('mem_'+device, h_mem_dev)
+        gate_output.coder.encode('mem_'+device, g_mem_dev)
+
+        # then return to start state
+        gs.add_transit(
+            new_gates = g_start, new_hidden = h_start,
+            old_gates = g_mem_dev, old_hidden = h_mem_dev)
+
+    ###### REM
+
+    # Let op1 bias the gate layer
+    g, h = gs.add_transit(ungate = [('gh','op1','u')],
+        old_gates = g_ready, old_hidden = h_ready, opc='rem')
+    g_rem, h_rem = g.copy(), h.copy()
+    gate_hidden.coder.encode('rem', h_rem)
+
+    for device in devices:
+
+        # Open flow from mf to device in op1
+        g, h = gs.add_transit(
+            ungate = gflow(device, 'mf'),
+            old_gates = g_rem, old_hidden = h_rem,
+            op1 = device)
+        g_rem_dev, h_rem_dev = g.copy(), h.copy()
+        gate_hidden.coder.encode('rem_'+device, h_rem_dev)
+        gate_output.coder.encode('rem_'+device, g_rem_dev)
+
+        # then return to start state
+        gs.add_transit(
+            new_gates = g_start, new_hidden = h_start,
+            old_gates = g_rem_dev, old_hidden = h_rem_dev)
+
+    ###### NXT
+
+    # Let mf move forward, driving mb
+    g, h = gs.add_transit(
+        ungate = gflow('mf', 'mf') + gflow('mb', 'mf'),
+        old_gates = g_ready, old_hidden = h_ready, opc='nxt')
+    g_nxt, h_nxt = g.copy(), h.copy()
+    gate_hidden.coder.encode('nxt', h_nxt)
+    gate_output.coder.encode('nxt', g_nxt)
+
+    # then return to start state
+    gs.add_transit(
+        new_gates = g_start, new_hidden = h_start,
+        old_gates = g_nxt, old_hidden = h_nxt)
+
+    ###### PRV
+
+    # Let mb move backward, driving mf
+    g, h = gs.add_transit(
+        ungate = gflow('mb', 'mb') + gflow('mf', 'mb'),
+        old_gates = g_ready, old_hidden = h_ready, opc='prv')
+    g_prv, h_prv = g.copy(), h.copy()
+    gate_hidden.coder.encode('prv', h_prv)
+    gate_output.coder.encode('prv', g_prv)
+
+    # then return to start state
+    gs.add_transit(
+        new_gates = g_start, new_hidden = h_start,
+        old_gates = g_prv, old_hidden = h_prv)
+
     weights, biases, residual = gs.flash()
     return weights, biases

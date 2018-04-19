@@ -33,8 +33,9 @@ def make_nvm_gate_map(layers):
         # Add within-layer decay gate
         gate_keys.append((to_layer, to_layer, "d"))
 
-        # Add inter-layer update gates
+        # Add inter-layer update and plasticity gates
         for from_layer in layers:
             gate_keys.append((to_layer, from_layer, "u"))
+            gate_keys.append((to_layer, from_layer, "p"))
 
     return GateMap(gate_keys)
