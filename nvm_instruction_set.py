@@ -298,5 +298,61 @@ def flash_instruction_set(nvmnet):
                 new_gates = g_start, new_hidden = h_start,
                 old_gates = g, old_hidden = h)
 
+    ###### SUBV
+
+    # Push ip on stack (open learning from sf to ip)
+    g, h = gs.add_transit(
+        ungate = [('ip', 'sf', 'p')],
+        old_gates = g_ready, old_hidden = h_ready, opc='subv')
+    g_subv, h_subv = g.copy(), h.copy()
+    gate_hidden.coder.encode('sub', h_subv)
+    gate_output.coder.encode('sub', g_subv)
+
+    # Advance stack pointer
+    g, h = gs.add_transit(
+        ungate = gflow('sf', 'sf') + gflow('sb', 'sf'),
+        old_gates = g_subv, old_hidden = h_subv)
+    g_subv_nxt, h_subv_nxt = g.copy(), h.copy()
+    gate_hidden.coder.encode('sub_nxt', h_subv_nxt)
+    gate_output.coder.encode('sub_nxt', g_subv_nxt)
+
+    # Open flow from op1 to ip
+    g, h = gs.add_transit(ungate = gflow('ip','op1'),
+        old_gates = g_subv_nxt, old_hidden = h_subv_nxt)
+    g_subv_jmp, h_subv_jmp = g.copy(), h.copy()
+    gate_hidden.coder.encode('subv_jmp', h_subv_jmp)
+
+    # Stabilize ip
+    g, h = gs.stabilize(h, num_iters=3)
+
+    # then return to start state
+    gs.add_transit(
+        new_gates = g_start, new_hidden = h_start,
+        old_gates = g, old_hidden = h)
+
+    ###### RET
+
+    # Decrement stack pointer (let sb move backward, driving sf)
+    g, h = gs.add_transit(
+        ungate = gflow('sb', 'sb') + gflow('sf', 'sb'),
+        old_gates = g_ready, old_hidden = h_ready, opc='ret')
+    g_ret, h_ret = g.copy(), h.copy()
+    gate_hidden.coder.encode('ret', h_ret)
+    gate_output.coder.encode('ret', g_ret)
+
+    # Open flow from sf to ip
+    g, h = gs.add_transit(ungate = gflow('ip','sf'),
+        old_gates = g_ret, old_hidden = h_ret)
+    g_ret_jmp, h_ret_jmp = g.copy(), h.copy()
+    gate_hidden.coder.encode('ret_jmp', h_ret_jmp)
+
+    # Stabilize ip
+    g, h = gs.stabilize(h, num_iters=3)
+
+    # then return to start state
+    gs.add_transit(
+        new_gates = g_start, new_hidden = h_start,
+        old_gates = g, old_hidden = h)
+
     weights, biases, residual = gs.flash()
     return weights, biases

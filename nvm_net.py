@@ -14,9 +14,34 @@ def update_add(accumulator, summand):
             accumulator[k] += v
         else: accumulator[k] = v
 
+def address_space(forward_layer, backward_layer):
+    # set up memory address space
+    layers = {'f': forward_layer, 'b': backward_layer}
+    N = layers['f'].size
+    A = {}
+    for d in ['f','b']:
+        A[d] = np.concatenate(
+            [layers[d].coder.encode(str(a)) for a in range(N)],
+            axis=1)
+    weights, biases = {}, {}
+    for d_to in ['f','b']:
+        for d_from in ['f','b']:
+            key = (layers[d_to].name, layers[d_from].name)
+            Y, X = A[d_to], A[d_from]
+            if d_from == 'f': X = np.roll(X, 1, axis=1)
+            if d_from == 'b': Y = np.roll(Y, 1, axis=1)
+            print("%s residuals:"%str(key))
+            weights[key], biases[key], _ = flash_mem(
+                np.zeros((N, N)), np.zeros((N, 1)),
+                X, Y,
+                layers[d_from].activator,
+                layers[d_to].activator,
+                linear_solve, verbose=True)
+    return weights, biases
+
 class NVMNet:
     
-    def __init__(self, layer_shape, pad, activator, learning_rule, devices, gh_shape=(32,32), m_shape=(16,16), c_shape=(32,32)):
+    def __init__(self, layer_shape, pad, activator, learning_rule, devices, gh_shape=(32,32), m_shape=(16,16), s_shape=(8,8), c_shape=(32,32)):
 
         # set up parameters
         self.layer_size = layer_shape[0]*layer_shape[1]
@@ -28,10 +53,11 @@ class NVMNet:
         layers = {name: Layer(name, layer_shape, act, Coder(act))
             for name in layer_names}
 
-        # set up memory layers
-        NM = m_shape[0]*m_shape[1]
-        actm = activator(pad, NM)
+        # set up memory and stack layers
+        NM, NS = m_shape[0]*m_shape[1], s_shape[0]*s_shape[1]
+        actm, acts = activator(pad, NM), activator(pad, NS)
         for m in ['mf','mb']: layers[m] = Layer(m, m_shape, actm, Coder(actm))
+        for s in ['sf','sb']: layers[s] = Layer(s, s_shape, acts, Coder(acts))
 
         # set up comparison layers
         NC = c_shape[0]*c_shape[1]
@@ -62,27 +88,16 @@ class NVMNet:
 
         # set up connection matrices
         self.weights, self.biases = flash_instruction_set(self)
-
-        # set up memory address space
-        A = {}
-        for m in ['mf','mb']:
-            A[m] = np.concatenate(
-                [layers[m].coder.encode(str(a)) for a in range(NM)],
-                axis=1)
-        for m_to in ['mf','mb']:
-            for m_from in ['mf','mb']:
-                key = (m_to, m_from)
-                Y, X = A[m_to], A[m_from]
-                if m_from == 'mf': X = np.roll(X, 1, axis=1)
-                if m_from == 'mb': Y = np.roll(Y, 1, axis=1)
-                print("%s residuals:"%str(key))
-                self.weights[key], self.biases[key], _ = flash_mem(
-                    np.zeros((NM, NM)), np.zeros((NM, 1)),
-                    X, Y, actm, actm, linear_solve, verbose=True)
+        for ms in 'ms':
+            ms_weights, ms_biases = address_space(
+                layers[ms+'f'], layers[ms+'b'])
+            self.weights.update(ms_weights)
+            self.biases.update(ms_biases)
 
         # initialize fast connectivity
         connect_pairs = \
             [(device,'mf') for device in self.devices] + \
+            [('ip','sf')] + \
             [("co","ci")]
         for (to_name, from_name) in connect_pairs:
             N_to = self.layers[to_name].size
