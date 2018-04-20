@@ -10,15 +10,6 @@ from nvm_assembler import assemble
 from nvm_linker import link
 from nvm_net import NVMNet
 
-# look 3 back in hippocampus
-# compare memory with temporal cortex
-# send inferior frontal gyrus to motor cortex 
-# move hippocampus back forward +1
-# store current temporal cortex at new hippocampus position
-# prv, nxt: previous or next event in episodic memory
-# mem dev: memorize contents in device dev
-# rem dev: recall contents in device dev
-# cmp lbl dev: jump to lbl if current memory matches dev
 nback_programs = {
 "mem":"""
 
@@ -46,45 +37,46 @@ nback_programs = {
 
 "nback":"""
 
-            jmp start1
+            jmp start{n}
 
     start2: mov tc ol
             mem tc
             nxt
+            mov mc no
+            mov mc hold
     start1: mov tc ol
             mem tc
             nxt
-
             mov mc no
             mov mc hold
 
-    # repeat: mov tc ol
-    #         mem tc
-    #         jmp back1
+    repeat: mov tc ol
+            mem tc
+            jmp back{n}
 
-    # back2:  prv
-    # back1:  prv
-    #         rem tc
-    #         cmp tc ol
-    #         jie match
+    back2:  prv
+    back1:  prv
+            rem tc
+            cmp tc ol
+            jie match
 
-    #         mov mc no
-    #         jmp reset
-    # match:  mov mc yes
-    # hold:   mov mc hold
-    #         jmp forw1
+            mov mc no
+            jmp hold
+    match:  mov mc yes
+    hold:   mov mc hold
+            jmp forw{n}
             
-    # forw2:  nxt
-    # forw1:  nxt
-    #         nxt
-    #         jmp repeat
+    forw2:  nxt
+    forw1:  nxt
+            nxt
+            jmp repeat
 
             exit
     
-"""
+""".format(n=1)
 }
 
-def make_nback_nvm(activator_label):
+def make_nback_nvm(activator_label, tokens=[]):
 
     # set up activator
     if activator_label == "logistic":
@@ -94,7 +86,7 @@ def make_nback_nvm(activator_label):
     learning_rule = hebbian
 
     # make network
-    layer_shape = (1200,1)
+    layer_shape = (1500,1)
     layer_size = layer_shape[0]*layer_shape[1]
     pad = 0.0001
     act = activator(pad, layer_size)
@@ -108,15 +100,18 @@ def make_nback_nvm(activator_label):
     nvmnet = NVMNet(layer_shape, pad, activator, learning_rule, devices, gh_shape=(32,16))
     for name, program in nback_programs.items():
         nvmnet.assemble(program, name, verbose=1)
-    nvmnet.link(verbose=2)
+    diff_count = nvmnet.link(verbose=2, tokens=tokens)
 
-    return nvmnet
+    return nvmnet, diff_count
 
 if __name__ == "__main__":
     
-    nvmnet = make_nback_nvm("logistic")
+    letters = np.array(list('abcd'))
+    diff_count = 10
+    while diff_count > 5:
+        nvmnet, diff_count = make_nback_nvm("logistic", tokens=letters)
     # nvmnet = make_nback_nvm("tanh")
-    raw_input("continue?")
+    # raw_input("continue?")
     
     show_layers = [
         ["go", "gh","ip"] + ["op"+x for x in "c12"] +\
@@ -124,12 +119,11 @@ if __name__ == "__main__":
         nvmnet.devices.keys(),
     ]
     show_tokens = True
-    show_corrosion = True
-    show_gates = True
+    show_corrosion = False
+    show_gates = False
 
-    letters = np.array(list('abcd'))
     prompts = letters[np.random.randint(letters.size,size=10)]
-    prompts = ['a','a','b']
+    prompts = ['a','a','b','a','a']
     prompt_index = 0
     # print(prompts)
     # raw_input("continue?")
@@ -143,7 +137,7 @@ if __name__ == "__main__":
     start_t = []
     responded = False
     responses = []
-    for t in range(30):
+    for t in range(600):
     
         response = nvmnet.layers['mc'].coder.decode(nvmnet.activity['mc'])
         if response == 'hold': responded = False
@@ -152,12 +146,13 @@ if __name__ == "__main__":
             responses.append(response)
             prompt_index += 1
             if prompt_index >= len(prompts): break
-            nvmnet.layers['ol'].coder.encode(prompts[prompt_index])            
-    
+            p = nvmnet.layers['ol'].coder.encode(prompts[prompt_index])
+            nvmnet.activity['ol'] = p
+
         ### show state and tick
         # if True:
-        if t % 2 == 0 or nvmnet.at_exit():
-        # if nvmnet.at_start() or nvmnet.at_exit():
+        # if t % 2 == 0 or nvmnet.at_exit():
+        if nvmnet.at_start() or nvmnet.at_exit():
             if nvmnet.at_start(): start_t.append(t)
             print('t = %d'%t)
             print(nvmnet.state_string(show_layers, show_tokens, show_corrosion, show_gates))
@@ -167,7 +162,11 @@ if __name__ == "__main__":
         nvmnet.tick()
 
         history.append(dict(nvmnet.activity))
-        
+
+    print('******** prompts, responses *********')
+    print(prompts)
+    print(responses)
+    
     ### raster plot
     A = np.zeros((sum([
         nvmnet.layers[name].size for sl in show_layers for name in sl]),

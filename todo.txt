@@ -1,25 +1,18 @@
 next steps:
-    cmp -> ipop
+    ipop
+    auto-associative devices for better token stability
+    overall diffcounts
     make layer/activator-specific:
         omega and beta for gain
         layer shape, size, activator
     generalize learning rules to any number of X/Y layers
     cts gate output
-    wm read/write/sequencing
-        also erase: antilearning (subtract hebbian contribution)
-        memory is pointer -> device associations
+    wm decay/erase: antilearning (subtract hebbian contribution)
     dynamics move through htn finite state machine?
-    get away without op layers, only ip?
     talk to greg about:
         only one input module per layer?
         in input callback I need to explicitly set 0 after first tick
         for tc I needed to overcompensate to cancel out previous activity
-    new comparison approach:
-        two layers with plastic associative weights: cmp in -> cmp out
-        each cmp operation:
-            reset weights so that all cmp in patterns produce false in cmp out
-            mov first operand to cmp in, and do weight learning so that first operand pattern (and only that pattern) associated with true in cmp out
-            mov second operand to cmp in, and let it activate cmp out.  that gives the match result.
     smarter linking (only what's necessary)
     namespaces for clobbered human-readable labels
     different coding semantics/errors when pattern provided and token already used?
@@ -30,9 +23,8 @@ next steps:
     axons can only inhibit within region
     expose gating, user-oriented library for building instructions
     base gate sequencer?
-    compare? if so, activator-agnostic
     study more carefully:
-        increasing hidden layer improves stability?
+        increasing hidden gate layer improves stability?
         smaller pad improves stability?
 
 empirical experiments:
@@ -43,11 +35,6 @@ memory read/write and n-back program
 call/return instructions
 more robustness to noise?
 
-first lram infinity run!!! needed 2048 n_layer (will barely fit on outpost) and worked with fewer stability iterations.  and rare; same code with different randomness usually fails.  doesn't always fail at same place.  at least one run had a successful iteration before failing.
-
-problems with local learning:
-    even with 0 sign changes in one-step test, residual errors build up.  was able to recover desired behavior with "temp memory test" branch inside tick(). (one of the last commits on monday feb 12)
-
 rank problems with to,from:
     tried a little 2x2 on paper: to1, to2, fr1, fr2.
     [h  h  h  h
@@ -55,18 +42,6 @@ rank problems with to,from:
      f1 f2 f1 f2]
     so actually low rank.
 lork->lork (matrank_scratch.py) beats problem for load, but set+load simultaneous has problem.
-flash_rom resolves issue with lork->lork fix applied to *all* transits at once, not one instruction at a time.
-
-flash_rom had issue with simultaneous set+load, but for first time, bigger hidden layer actually did fix.  work out mathematical requirements on layer sizes.
-
-still need to reconcile lork-lork solution with nearly fixed points near +/- pad
-
-lp and learn_seqs one step further
-    ensure all openings *and blockages* for every k-1 to k to k+1
-    for v^x and v^y, if just any one i^delta in v^y reverts to v^x, the resulting corner must be blocked by the asymptotes that become openings at v^y
-
-show weight matrices in viz
-handle activity gating outside the transition function?
 
 competition idea: delta w_ij proportional to sum_t x_i^t W_ij^t x_j^t over recent t.  If this number is large, x_j is in agreement with others about the affect on x_i.  If it is small, x_j is in disagreement, competing.  So "more important", i.e. it's absence could be missed in the borderline cases.  however, don't make *too* large, or else x_j could overrule others when it shouldn't.
 systematic comparison of learn rules, local and global

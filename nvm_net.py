@@ -129,11 +129,13 @@ class NVMNet:
         update_add(self.weights, weights)
         update_add(self.biases, biases)
 
-    def link(self, verbose=1):
-        weights, biases, diff_count = link(self, verbose=(verbose > 1))
+    def link(self, verbose=1, tokens=[]):
+        weights, biases, diff_count = link(
+            self, verbose=(verbose > 1), tokens=tokens)
         if verbose > 0: print("linker diff count = %d"%diff_count)
         update_add(self.weights, weights)
         update_add(self.biases, biases)
+        return diff_count
 
     def load(self, program_name, activity):
         # set program pointer
