@@ -46,6 +46,20 @@ def link(nvmnet, tokens=[], verbose=0):
                 verbose=verbose)
             diff_count += dc    
 
+    # link device layers to ci for cmp instruction
+    ci = nvmnet.layers["ci"]
+    for name, layer in nvmnet.devices.items():
+        X = np.concatenate(map(layer.coder.encode, all_tokens), axis=1)
+        Y = np.concatenate(map(ci.coder.encode, all_tokens), axis=1)
+        if verbose > 0: print("Linking %s -> ci"%(name))
+        weights[("ci", name)], biases[("ci", name)], dc = flash_mem(
+            np.zeros((Y.shape[0],X.shape[0])),
+            np.zeros((Y.shape[0],1)),
+            X, Y, layer.activator, ci.activator,
+            nvmnet.learning_rules[("ci", name)],
+            verbose=verbose)
+        diff_count += dc
+
     # link device layers to ip for jmpd instruction
     for name, layer in nvmnet.devices.items():
         X = np.concatenate(map(layer.coder.encode, all_tokens), axis=1)

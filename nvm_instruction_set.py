@@ -252,5 +252,61 @@ def flash_instruction_set(nvmnet):
         new_gates = g_start, new_hidden = h_start,
         old_gates = g_prv, old_hidden = h_prv)
 
+    ###### CMP
+
+    # Let op1 bias the gate layer
+    g, h = gs.add_transit(
+        ungate = [('gh','op1','u')],
+        old_gates = g_ready, old_hidden = h_ready, opc='cmp')
+    g_cmp, h_cmp = g.copy(), h.copy()
+    gate_hidden.coder.encode('cmp', h_cmp)
+    gate_output.coder.encode('cmp', g_cmp)    
+
+    for cmp_a_name, cmp_a_device in devices.items():
+        # Open flow from device A to ci
+        g, h = gs.add_transit(
+            ungate = gflow("ci", cmp_a_name),
+            old_gates = g_cmp, old_hidden = h_cmp,
+            op1 = cmp_a_name)
+        gate_hidden.coder.encode('cmp_'+cmp_a_name+"_ci", h)
+        gate_output.coder.encode('cmp_'+cmp_a_name+"_ci", g)
+
+        # Ungate dipole learning from ci to co
+        g, h = gs.add_transit(
+            ungate = [("co","ci","p")],
+            old_gates = g, old_hidden = h)
+        gate_hidden.coder.encode('cmp_'+cmp_a_name+'_di', h)
+        gate_output.coder.encode('cmp_di', g)
+        
+        # Let op2 bias the gate layer
+        g, h = gs.add_transit(
+            ungate = [('gh','op2','u')],
+            old_gates = g, old_hidden = h)
+        g_cmp2, h_cmp2 = g.copy(), h.copy()
+        gate_hidden.coder.encode('cmp2_'+cmp_a_name, h_cmp2)
+        gate_output.coder.encode('cmp2', g_cmp2)
+    
+        for cmp_b_name, cmp_b_device in devices.items():
+
+            # Open flow from device B to ci
+            g, h = gs.add_transit(
+                ungate = gflow("ci", cmp_b_name),
+                old_gates = g_cmp2, old_hidden = h_cmp2,
+                op2 = cmp_b_name)
+            gate_hidden.coder.encode('cmp_'+cmp_a_name+'_'+cmp_b_name+'_ci', h)
+            gate_output.coder.encode('cmp_'+cmp_b_name+'_ci', g)
+
+            # Open flow from ci to co
+            g, h = gs.add_transit(
+                ungate = gflow("co","ci"),
+                old_gates = g, old_hidden = h)
+            gate_hidden.coder.encode('cmp_'+cmp_a_name+'_'+cmp_b_name+'_co', h)
+            gate_output.coder.encode('cmp_co', g)
+
+            # co contains result, return to start state
+            gs.add_transit(
+                new_gates = g_start, new_hidden = h_start,
+                old_gates = g, old_hidden = h)
+
     weights, biases, residual = gs.flash()
     return weights, biases

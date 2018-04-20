@@ -31,11 +31,14 @@ def tanh_activator(pad, layer_size):
         label = "tanh")
 
 def logistic_activator(pad, layer_size):
+    def make_pattern():
+        r = np.random.randn(layer_size,1) > 0
+        return (1. - pad)*r + (0. + pad)*(~r)
     return Activator(
         f = lambda v: .5*(np.tanh(v)+1),
         g = lambda v: np.arctanh(2*v-1),
         e = lambda a, b: ((a > .5) == (b > .5)),
-        make_pattern = lambda : .5*((1.-pad*2)*np.sign(np.random.randn(layer_size,1)) + 1.),
+        make_pattern = make_pattern,
         hash_pattern = lambda p: (p > .5).tobytes(),
         on = 1. - pad,
         off = 0. + pad,

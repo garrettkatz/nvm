@@ -20,7 +20,7 @@ from nvm_net import NVMNet
 # rem dev: recall contents in device dev
 # cmp lbl dev: jump to lbl if current memory matches dev
 nback_programs = {
-"test":"""
+"mem":"""
 
     start:  mov tc A
             mem tc
@@ -29,19 +29,17 @@ nback_programs = {
             prv
             rem tc
     end:    exit
-            # mov tc C
-            # rec tc
-            # exit
-            # nxt
-            # mov tc B
-            # mem tc
-            # prv
-            # rec tc
-            # nxt
-            # rec tc
-            # exit
+""",
+
+"cmp":"""
+
+    start:  mov tc A
+            mov mc A
+            cmp tc mc
+    end:    exit
 
 """,
+
 "nback":"""
 
     # back3:  prv
@@ -89,7 +87,8 @@ def make_nback_nvm(activator_label):
     nvmnet.link(verbose=2)
 
     # initialize layers
-    name = "test"
+    # name = "mem"
+    name = "cmp"
     # name = "nback"
     nvmnet.activity["ip"] = nvmnet.layers["ip"].coder.encode(name) # program pointer
     # nvmnet.activity["tc"] = nvmnet.layers["tc"].coder.encode("A") # letter
@@ -99,25 +98,27 @@ def make_nback_nvm(activator_label):
 if __name__ == "__main__":
     
     nvmnet = make_nback_nvm("logistic")
+    # nvmnet = make_nback_nvm("tanh")
     raw_input("continue?")
     
     show_layers = [
-        ["go", "gh","ip"] + ["op"+x for x in "c12"] + ["mf","mb"] \
+        ["go", "gh","ip"] + ["op"+x for x in "c12"] \
+        + ["mf","mb"] + ["co","ci"] \
         + nvmnet.devices.keys(),
     ]
     show_tokens = True
     show_corrosion = True
-    show_gates = False
+    show_gates = True
 
     history = []
     start_t = []
     tc_sched = [60, 50]
-    for t in range(tc_sched[1]*2):
+    for t in range(40): #range(tc_sched[1]*2):
     
         ### show state and tick
         # if True:
-        # if t % 2 == 0 or nvmnet.at_exit():
-        if nvmnet.at_start() or nvmnet.at_exit():
+        if t % 2 == 0 or nvmnet.at_exit():
+        # if nvmnet.at_start() or nvmnet.at_exit():
             if nvmnet.at_start(): start_t.append(t)
             print('t = %d'%t)
             print(nvmnet.state_string(show_layers, show_tokens, show_corrosion, show_gates))

@@ -37,7 +37,11 @@ class NVMNet:
         NC = c_shape[0]*c_shape[1]
         actc = activator(pad, NC)
         for c in ['ci','co']: layers[c] = Layer(c, c_shape, actc, Coder(actc))
-
+        co_true = layers['co'].coder.encode('true')
+        layers['co'].coder.encode('false', np.array([
+            [actc.on if tf == actc.off else actc.off]
+            for tf in co_true.flatten()]))
+        
         # add device layers
         layers.update(devices)
         self.devices = devices
@@ -76,13 +80,16 @@ class NVMNet:
                     np.zeros((NM, NM)), np.zeros((NM, 1)),
                     X, Y, actm, actm, linear_solve, verbose=True)
 
-        # initialize connectivity between memory and devices
-        N_mf = self.layers['mf'].size
-        for device in self.devices:
-            N_d = self.devices[device].size
-            self.weights[(device, 'mf')] = np.zeros((N_d, N_mf))
-            self.biases[(device, 'mf')] = np.zeros((N_d, 1))
-        
+        # initialize fast connectivity
+        connect_pairs = \
+            [(device,'mf') for device in self.devices] + \
+            [("co","ci")]
+        for (to_name, from_name) in connect_pairs:
+            N_to = self.layers[to_name].size
+            N_from = self.layers[from_name].size
+            self.weights[(to_name, from_name)] = np.zeros((N_to, N_from))
+            self.biases[(to_name, from_name)] = np.zeros((N_to, 1))
+
         # initialize layer states
         self.activity = {
             name: layer.activator.off * np.ones((layer.size,1))
@@ -99,7 +106,8 @@ class NVMNet:
         self.learning_rules = {
             (to_layer, from_layer): learning_rule
             for to_layer in self.layers for from_layer in self.layers}
-        self.learning_rules[('co','ci')] = learning_rule
+        self.learning_rules[('co','ci')] = lambda w, b, x, y, ax, ay: \
+            dipole(w, b, x, co_true, ax, ay)
 
     def set_pattern(self, layer_name, pattern):
         self.activity[layer_name] = pattern
@@ -170,7 +178,7 @@ class NVMNet:
                     self.activity[to_layer],
                     self.layers[from_layer].activator,
                     self.layers[to_layer].activator)
-    
+
                 self.weights[pair_key] += p*dw
                 self.biases[pair_key] += p*db
 
@@ -217,8 +225,8 @@ def make_nvmnet(programs=None, devices=None):
         """}
 
     # set up activator
-    # activator, learning_rule = logistic_activator, hebbian
-    activator, learning_rule = tanh_activator, hebbian
+    activator, learning_rule = logistic_activator, hebbian
+    # activator, learning_rule = tanh_activator, hebbian
 
     # make network
     layer_shape = (16, 16)
