@@ -48,6 +48,7 @@ def flash_mem(w, b, X, Y, actx, acty, learning_rule, verbose=False):
     _Y = acty.f(w.dot(X) + b)
     diff_count = (np.ones(Y.shape) - acty.e(Y, _Y)).sum()
 
+    # if verbose and diff_count > 0:
     if verbose:
         print("Flash residual max: %f"%np.fabs(Y - _Y).max())
         print("Flash residual mad: %f"%np.fabs(Y - _Y).mean())

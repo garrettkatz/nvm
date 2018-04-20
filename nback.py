@@ -34,28 +34,51 @@ nback_programs = {
 "cmp":"""
 
     start:  mov tc A
-            mov mc A
+            mov mc B
             cmp tc mc
+            jie eq
+            mov mc no
+            jmp end
+    eq:     mov mc yes
     end:    exit
 
 """,
 
 "nback":"""
 
-    # back3:  prv
+            jmp start1
+
+    start2: mov tc ol
+            mem tc
+            nxt
+    start1: mov tc ol
+            mem tc
+            nxt
+
+            mov mc no
+            mov mc hold
+
+    # repeat: mov tc ol
+    #         mem tc
+    #         jmp back1
+
     # back2:  prv
     # back1:  prv
-    #         cmp match tc
+    #         rem tc
+    #         cmp tc ol
+    #         jie match
+
     #         mov mc no
     #         jmp reset
     # match:  mov mc yes
-    # forw3:  nxt
+    # hold:   mov mc hold
+    #         jmp forw1
+            
     # forw2:  nxt
     # forw1:  nxt
     #         nxt
-    #         mem tc
-    #         jmp back3
-            nop
+    #         jmp repeat
+
             exit
     
 """
@@ -71,27 +94,21 @@ def make_nback_nvm(activator_label):
     learning_rule = hebbian
 
     # make network
-    layer_shape = (256,1)
+    layer_shape = (1200,1)
     layer_size = layer_shape[0]*layer_shape[1]
-    pad = 0.001
+    pad = 0.0001
     act = activator(pad, layer_size)
     
     devices = {
-        "tc": Layer("tc", layer_shape, act, Coder(act)),
-        "mc": Layer("mc", layer_shape, act, Coder(act)),}
+        "ol": Layer("ol", layer_shape, act, Coder(act)), # occipital lobe
+        "tc": Layer("tc", layer_shape, act, Coder(act)), # temporal cortex
+        "mc": Layer("mc", layer_shape, act, Coder(act)),} # motor cortex
 
     # assemble and link programs
     nvmnet = NVMNet(layer_shape, pad, activator, learning_rule, devices, gh_shape=(32,16))
     for name, program in nback_programs.items():
         nvmnet.assemble(program, name, verbose=1)
     nvmnet.link(verbose=2)
-
-    # initialize layers
-    # name = "mem"
-    name = "cmp"
-    # name = "nback"
-    nvmnet.activity["ip"] = nvmnet.layers["ip"].coder.encode(name) # program pointer
-    # nvmnet.activity["tc"] = nvmnet.layers["tc"].coder.encode("A") # letter
 
     return nvmnet
 
@@ -102,18 +119,40 @@ if __name__ == "__main__":
     raw_input("continue?")
     
     show_layers = [
-        ["go", "gh","ip"] + ["op"+x for x in "c12"] \
-        + ["mf","mb"] + ["co","ci"] \
-        + nvmnet.devices.keys(),
+        ["go", "gh","ip"] + ["op"+x for x in "c12"] +\
+        ["mf","mb"] + ["co","ci"] +\
+        nvmnet.devices.keys(),
     ]
     show_tokens = True
     show_corrosion = True
     show_gates = True
 
+    letters = np.array(list('abcd'))
+    prompts = letters[np.random.randint(letters.size,size=10)]
+    prompts = ['a','a','b']
+    prompt_index = 0
+    # print(prompts)
+    # raw_input("continue?")
+
+    nvmnet.load("nback", {
+        "mc": "hold",
+        "ol": prompts[0],
+    })
+
     history = []
     start_t = []
-    tc_sched = [60, 50]
-    for t in range(40): #range(tc_sched[1]*2):
+    responded = False
+    responses = []
+    for t in range(30):
+    
+        response = nvmnet.layers['mc'].coder.decode(nvmnet.activity['mc'])
+        if response == 'hold': responded = False
+        elif not responded:
+            responded = True
+            responses.append(response)
+            prompt_index += 1
+            if prompt_index >= len(prompts): break
+            nvmnet.layers['ol'].coder.encode(prompts[prompt_index])            
     
         ### show state and tick
         # if True:

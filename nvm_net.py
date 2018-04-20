@@ -16,7 +16,7 @@ def update_add(accumulator, summand):
 
 class NVMNet:
     
-    def __init__(self, layer_shape, pad, activator, learning_rule, devices, gh_shape=(32,32), m_shape=(16,16), c_shape=(16,16)):
+    def __init__(self, layer_shape, pad, activator, learning_rule, devices, gh_shape=(32,32), m_shape=(16,16), c_shape=(32,32)):
 
         # set up parameters
         self.layer_size = layer_shape[0]*layer_shape[1]
@@ -134,6 +134,13 @@ class NVMNet:
         if verbose > 0: print("linker diff count = %d"%diff_count)
         update_add(self.weights, weights)
         update_add(self.biases, biases)
+
+    def load(self, program_name, activity):
+        # set program pointer
+        self.activity["ip"] = self.layers["ip"].coder.encode(program_name)
+        # set initial activities
+        for layer, token in activity.items():
+            self.activity[layer] = self.layers[layer].coder.encode(token)
 
     def tick(self):
 

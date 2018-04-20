@@ -90,45 +90,35 @@ def flash_instruction_set(nvmnet):
                 new_gates = g_start, new_hidden = h_start,
                 old_gates = g, old_hidden = h)
 
-    ###### JIF
+    ###### JIE
 
-    # Let op1 bias the gate layer
-    g, h = gs.add_transit(ungate = [('gh','op1','u')],
-        old_gates = g_ready, old_hidden = h_ready, opc='jif')
-    g_jif, h_jif = g.copy(), h.copy()
-    gate_hidden.coder.encode('jif', h_jif)
+    # Let co bias the gate layer
+    g, h = gs.add_transit(ungate = [('gh','co','u')],
+        old_gates = g_ready, old_hidden = h_ready, opc='jie')
+    g_jie, h_jie = g.copy(), h.copy()
+    gate_hidden.coder.encode('jie', h_jie)
+    gate_output.coder.encode('jie', g_jie)
 
-    for device in devices:
+    # If co contains false, just return to start state
+    gs.add_transit(
+        new_gates = g_start, new_hidden = h_start,
+        old_gates = g_jie, old_hidden = h_jie,
+        co = 'false')
 
-        # Let device named by op1 bias the gate layer
-        g, h = gs.add_transit(ungate = [('gh',device,'u')],
-            old_gates = g_jif, old_hidden = h_jif, op1=device)
-        g_jd, h_jd = g.copy(), h.copy()
-        gate_hidden.coder.encode('jif_'+device, h_jd)
-        gate_output.coder.encode('jif_'+device, g_jd)
+    # If co contains true, open flow from op1 to ip
+    g, h = gs.add_transit(
+        ungate = gflow('ip', 'op1'),
+        old_gates = g_jie, old_hidden = h_jie,
+        co = 'true')
+    gate_hidden.coder.encode('jie_true', h)
 
-        # If device contains false, just return to start state
-        gs.add_transit(
-            new_gates = g_start, new_hidden = h_start,
-            old_gates = g_jd, old_hidden = h_jd,
-            **{device: 'false'}) # kwarg is device, not 'device'
+    # Stabilize ip
+    g, h = gs.stabilize(h, num_iters=5)
 
-        # If device contains true, open flow from op2 to ip
-        g, h = gs.add_transit(
-            ungate = gflow('ip', 'op2'),
-            old_gates = g_jd, old_hidden = h_jd,
-            **{device: 'true'})
-        g_jt, h_jt = g.copy(), h.copy()
-        gate_hidden.coder.encode('jif_true', h_jt)
-        gate_output.coder.encode('jif_true', g_jt)
-
-        # Stabilize ip
-        g, h = gs.stabilize(h, num_iters=5)
-
-        # then return to start state
-        gs.add_transit(
-            new_gates = g_start, new_hidden = h_start,
-            old_gates = g, old_hidden = h)
+    # then return to start state
+    gs.add_transit(
+        new_gates = g_start, new_hidden = h_start,
+        old_gates = g, old_hidden = h)
 
     ###### JMPV
 
