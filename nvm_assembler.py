@@ -47,10 +47,10 @@ def assemble(nvmnet, program, name, verbose=False):
     encodings = {"op"+x:list() for x in "c12"}
     for l in range(len(lines)):
         # replace generic instructions with value/device distinctions
-        if lines[l][0] == "mov":
+        if lines[l][0] in ["mov", "cmp"]:
             if lines[l][2] in nvmnet.devices: lines[l][0] += "d"
             else: lines[l][0] += "v"
-        if lines[l][0] == "jmp":
+        if lines[l][0] in ["jmp","sub"]:
             if lines[l][1] in nvmnet.devices: lines[l][0] += "d"
             else: lines[l][0] += "v"
         # encode ops

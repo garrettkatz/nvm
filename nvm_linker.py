@@ -60,7 +60,7 @@ def link(nvmnet, tokens=[], verbose=0):
             verbose=verbose)
         diff_count += dc
 
-    # link device layers to ip for jmpd instruction
+    # link device layers to ip for jmpd, subd instructions
     for name, layer in nvmnet.devices.items():
         X = np.concatenate(map(layer.coder.encode, all_tokens), axis=1)
         Y = np.concatenate(map(ip.coder.encode, all_tokens), axis=1)
@@ -73,7 +73,7 @@ def link(nvmnet, tokens=[], verbose=0):
             verbose=verbose)
         diff_count += dc
 
-    # link op1 to ip for jmpv instruction
+    # link op1 to ip for jmpv, subv instructions
     X = np.concatenate(map(op1.coder.encode, all_tokens), axis=1)
     Y = np.concatenate(map(ip.coder.encode, all_tokens), axis=1)
     if verbose > 0: print("Linking op1 -> ip")
@@ -84,7 +84,7 @@ def link(nvmnet, tokens=[], verbose=0):
         nvmnet.learning_rules[("ip","op1")],
         verbose=verbose)
     diff_count += dc
-        
+
     return weights, biases, diff_count
 
 if __name__ == '__main__':

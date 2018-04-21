@@ -242,61 +242,106 @@ def flash_instruction_set(nvmnet):
         new_gates = g_start, new_hidden = h_start,
         old_gates = g_prv, old_hidden = h_prv)
 
-    ###### CMP
+    ###### CMPD
 
     # Let op1 bias the gate layer
     g, h = gs.add_transit(
         ungate = [('gh','op1','u')],
-        old_gates = g_ready, old_hidden = h_ready, opc='cmp')
-    g_cmp, h_cmp = g.copy(), h.copy()
-    gate_hidden.coder.encode('cmp', h_cmp)
-    gate_output.coder.encode('cmp', g_cmp)    
+        old_gates = g_ready, old_hidden = h_ready, opc='cmpd')
+    g_cmpd, h_cmpd = g.copy(), h.copy()
+    gate_hidden.coder.encode('cmpd', h_cmpd)
+    gate_output.coder.encode('cmpd', g_cmpd)    
 
-    for cmp_a_name, cmp_a_device in devices.items():
+    for cmpd_a_name, cmpd_a_device in devices.items():
         # Open flow from device A to ci
         g, h = gs.add_transit(
-            ungate = gflow("ci", cmp_a_name),
-            old_gates = g_cmp, old_hidden = h_cmp,
-            op1 = cmp_a_name)
-        gate_hidden.coder.encode('cmp_'+cmp_a_name+"_ci", h)
-        gate_output.coder.encode('cmp_'+cmp_a_name+"_ci", g)
+            ungate = gflow("ci", cmpd_a_name),
+            old_gates = g_cmpd, old_hidden = h_cmpd,
+            op1 = cmpd_a_name)
+        gate_hidden.coder.encode('cmpd_'+cmpd_a_name+'_ci', h)
+        gate_output.coder.encode('ci<'+cmpd_a_name, g)
 
         # Ungate dipole learning from ci to co
         g, h = gs.add_transit(
             ungate = [("co","ci","p")],
             old_gates = g, old_hidden = h)
-        gate_hidden.coder.encode('cmp_'+cmp_a_name+'_di', h)
-        gate_output.coder.encode('cmp_di', g)
+        gate_hidden.coder.encode('cmpd_'+cmpd_a_name+'_di', h)
+        gate_output.coder.encode('cmpd_di', g)
         
         # Let op2 bias the gate layer
         g, h = gs.add_transit(
             ungate = [('gh','op2','u')],
             old_gates = g, old_hidden = h)
-        g_cmp2, h_cmp2 = g.copy(), h.copy()
-        gate_hidden.coder.encode('cmp2_'+cmp_a_name, h_cmp2)
-        gate_output.coder.encode('cmp2', g_cmp2)
+        g_cmpd2, h_cmpd2 = g.copy(), h.copy()
+        gate_hidden.coder.encode('cmpd2_'+cmpd_a_name, h_cmpd2)
+        gate_output.coder.encode('cmpd2', g_cmpd2)
     
-        for cmp_b_name, cmp_b_device in devices.items():
+        for cmpd_b_name, cmpd_b_device in devices.items():
 
             # Open flow from device B to ci
             g, h = gs.add_transit(
-                ungate = gflow("ci", cmp_b_name),
-                old_gates = g_cmp2, old_hidden = h_cmp2,
-                op2 = cmp_b_name)
-            gate_hidden.coder.encode('cmp_'+cmp_a_name+'_'+cmp_b_name+'_ci', h)
-            gate_output.coder.encode('cmp_'+cmp_b_name+'_ci', g)
+                ungate = gflow("ci", cmpd_b_name),
+                old_gates = g_cmpd2, old_hidden = h_cmpd2,
+                op2 = cmpd_b_name)
+            gate_hidden.coder.encode('cmpd_'+cmpd_a_name+'_'+cmpd_b_name+'_ci', h)
+            gate_output.coder.encode('ci<'+cmpd_b_name, g)
 
             # Open flow from ci to co
             g, h = gs.add_transit(
                 ungate = gflow("co","ci"),
                 old_gates = g, old_hidden = h)
-            gate_hidden.coder.encode('cmp_'+cmp_a_name+'_'+cmp_b_name+'_co', h)
-            gate_output.coder.encode('cmp_co', g)
+            gate_hidden.coder.encode('cmpd_'+cmpd_a_name+'_'+cmpd_b_name+'_co', h)
+            gate_output.coder.encode('co<ci', g)
 
             # co contains result, return to start state
             gs.add_transit(
                 new_gates = g_start, new_hidden = h_start,
                 old_gates = g, old_hidden = h)
+
+    ###### CMPV
+
+    # Let op1 bias the gate layer
+    g, h = gs.add_transit(
+        ungate = [('gh','op1','u')],
+        old_gates = g_ready, old_hidden = h_ready, opc='cmpv')
+    g_cmpv, h_cmpv = g.copy(), h.copy()
+    gate_hidden.coder.encode('cmpv', h_cmpv)
+    gate_output.coder.encode('cmpv', g_cmpv)    
+
+    for cmpv_a_name, cmpv_a_device in devices.items():
+        # Open flow from device A to ci
+        g, h = gs.add_transit(
+            ungate = gflow("ci", cmpv_a_name),
+            old_gates = g_cmpv, old_hidden = h_cmpv,
+            op1 = cmpv_a_name)
+        gate_hidden.coder.encode('cmpv_'+cmpv_a_name+"_ci", h)
+        gate_output.coder.encode('cmpv_'+cmpv_a_name+"_ci", g)
+
+        # Ungate dipole learning from ci to co
+        g, h = gs.add_transit(
+            ungate = [("co","ci","p")],
+            old_gates = g, old_hidden = h)
+        gate_hidden.coder.encode('cmpv_'+cmpv_a_name+'_di', h)
+        gate_output.coder.encode('cmpv_di', g)
+        
+        # Open flow from op2 to ci
+        g, h = gs.add_transit(
+            ungate = gflow("ci", "op2"),
+            old_gates = g, old_hidden = h)
+        gate_hidden.coder.encode('cmpv_'+cmpv_a_name+'_ci', h)
+        gate_output.coder.encode('ci<op2', g)
+
+        # Open flow from ci to co
+        g, h = gs.add_transit(
+            ungate = gflow("co","ci"),
+            old_gates = g, old_hidden = h)
+        gate_hidden.coder.encode('cmpv_'+cmpv_a_name+'_co', h)
+        gate_output.coder.encode('co<ci', g)
+
+        # co contains result, return to start state
+        gs.add_transit(
+            new_gates = g_start, new_hidden = h_start,
+            old_gates = g, old_hidden = h)
 
     ###### SUBV
 
@@ -305,16 +350,16 @@ def flash_instruction_set(nvmnet):
         ungate = [('ip', 'sf', 'p')],
         old_gates = g_ready, old_hidden = h_ready, opc='subv')
     g_subv, h_subv = g.copy(), h.copy()
-    gate_hidden.coder.encode('sub', h_subv)
-    gate_output.coder.encode('sub', g_subv)
+    gate_hidden.coder.encode('subv', h_subv)
+    gate_output.coder.encode('subv', g_subv)
 
     # Advance stack pointer
     g, h = gs.add_transit(
         ungate = gflow('sf', 'sf') + gflow('sb', 'sf'),
         old_gates = g_subv, old_hidden = h_subv)
     g_subv_nxt, h_subv_nxt = g.copy(), h.copy()
-    gate_hidden.coder.encode('sub_nxt', h_subv_nxt)
-    gate_output.coder.encode('sub_nxt', g_subv_nxt)
+    gate_hidden.coder.encode('subv_nxt', h_subv_nxt)
+    gate_output.coder.encode('subv_nxt', g_subv_nxt)
 
     # Open flow from op1 to ip
     g, h = gs.add_transit(ungate = gflow('ip','op1'),
@@ -329,6 +374,48 @@ def flash_instruction_set(nvmnet):
     gs.add_transit(
         new_gates = g_start, new_hidden = h_start,
         old_gates = g, old_hidden = h)
+
+    ###### SUBD
+
+    # Push ip on stack (open learning from sf to ip)
+    g, h = gs.add_transit(
+        ungate = [('ip', 'sf', 'p')],
+        old_gates = g_ready, old_hidden = h_ready, opc='subd')
+    g_subd, h_subd = g.copy(), h.copy()
+    gate_hidden.coder.encode('subd', h_subd)
+    gate_output.coder.encode('subd', g_subd)
+
+    # Advance stack pointer
+    g, h = gs.add_transit(
+        ungate = gflow('sf', 'sf') + gflow('sb', 'sf'),
+        old_gates = g_subd, old_hidden = h_subd)
+    g_subd_nxt, h_subd_nxt = g.copy(), h.copy()
+    gate_hidden.coder.encode('subd_nxt', h_subd_nxt)
+    gate_output.coder.encode('subd_nxt', g_subd_nxt)
+
+    # Let op1 bias the gate layer
+    g, h = gs.add_transit(
+        ungate = [('gh','op1','u')],
+        old_gates = g_subd_nxt, old_hidden = h_subd_nxt)
+    g_subd_op1, h_subd_op1 = g.copy(), h.copy()
+    gate_hidden.coder.encode('subd_op1', h_subd_op1)
+    gate_output.coder.encode('gh+op1', g_subd_op1)    
+
+    for subd_name, subd_device in devices.items():
+        # Open flow from device to ip
+        g, h = gs.add_transit(ungate = gflow('ip', subd_name),
+            old_gates = g_subd_op1, old_hidden = h_subd_op1,
+            op1 = subd_name)
+        g_subd_jmp, h_subd_jmp = g.copy(), h.copy()
+        gate_hidden.coder.encode('subd_' + subd_name + '_jmp', h_subd_jmp)
+    
+        # Stabilize ip
+        g, h = gs.stabilize(h, num_iters=3)
+    
+        # then return to start state
+        gs.add_transit(
+            new_gates = g_start, new_hidden = h_start,
+            old_gates = g, old_hidden = h)
 
     ###### RET
 

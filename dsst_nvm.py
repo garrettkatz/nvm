@@ -11,28 +11,31 @@ from nvm_linker import link
 from nvm_net import NVMNet
 
 dsst_programs = {
-"subv":"""
+"sub":"""
 
-    start:  subv test
+    start:  sub test
             mov tc A
             jmp end
     test:   mov tc B
             ret
     end:    exit
 """,
-"ref":"""
+# "dsst":"""
 
-    start:  ref mc
-            mov tc A
-            mem tc
-            nxt
-            mov tc B
-            mem tc
-            drf mc
-            rem tc # should be A
-            exit
+#     # do one saccade (move and then hold)
+#     # intended direction should be in premotor
+#     sacc:   mov mc pm
+#             mov mc hold
+#             ret
 
-"""
+#     # move to end of dsst area
+#     # intended direction should be in premotor
+#     tend:   cmp tc bound
+#             jie back
+#             mov mc left
+#             mov mc hold
+
+# """
 }
 
 def make_dsst_nvm(activator_label, tokens=[]):
@@ -74,17 +77,14 @@ if __name__ == "__main__":
     
     show_layers = [
         ["go", "gh","ip"] + ["op"+x for x in "c12"] +\
-        ["mf","mb"] + ["co","ci"] +\
+        ["mf","mb"] + ["sf","sb"] + ["co","ci"] +\
         nvmnet.devices.keys(),
     ]
     show_tokens = True
-    show_corrosion = False
+    show_corrosion = True
     show_gates = False
 
-    nvmnet.load("subv", {
-        # "mc": "hold",
-        # "ol": prompts[0],
-    })
+    nvmnet.load("sub", {})
 
     history = []
     start_t = []
@@ -92,8 +92,8 @@ if __name__ == "__main__":
     
         ### show state and tick
         # if True:
-        # if t % 2 == 0 or nvmnet.at_exit():
-        if nvmnet.at_start() or nvmnet.at_exit():
+        if t % 2 == 0 or nvmnet.at_exit():
+        # if nvmnet.at_start() or nvmnet.at_exit():
             if nvmnet.at_start(): start_t.append(t)
             print('t = %d'%t)
             print(nvmnet.state_string(show_layers, show_tokens, show_corrosion, show_gates))

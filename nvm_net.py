@@ -98,7 +98,7 @@ class NVMNet:
         connect_pairs = \
             [(device,'mf') for device in self.devices] + \
             [('ip','sf')] + \
-            [("co","ci")]
+            [('co','ci')]
         for (to_name, from_name) in connect_pairs:
             N_to = self.layers[to_name].size
             N_from = self.layers[from_name].size
@@ -111,8 +111,9 @@ class NVMNet:
             for name, layer in self.layers.items()}
         self.activity['go'] = self.layers['go'].coder.encode('start')
         self.activity['gh'] = self.layers['gh'].coder.encode('start')
-        self.activity['mf'] = self.layers['mf'].coder.encode('0')
-        self.activity['mb'] = self.layers['mb'].coder.encode('0')
+        for ms in 'ms':
+            self.activity[ms+'f'] = self.layers[ms+'f'].coder.encode('0')
+            self.activity[ms+'b'] = self.layers[ms+'b'].coder.encode('0')
 
         # initialize constants
         self.constants = ["null"] #"true", "false"]

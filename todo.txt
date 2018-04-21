@@ -1,6 +1,10 @@
 next steps:
     ref/drf
     ipop
+    instruction pitfalls:
+        unlinked tokens in nvm_linker
+        missing internal connectivity in nvm_net
+        uninitialized internal layers in nvm_net
     auto-associative devices for better token stability
     overall diffcounts
     make layer/activator-specific:
