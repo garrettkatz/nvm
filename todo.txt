@@ -5,6 +5,11 @@ next steps:
         unlinked tokens in nvm_linker
         missing internal connectivity in nvm_net
         uninitialized internal layers in nvm_net
+    raise more during assembly
+        sub to label that doesn't exist
+    deal with unlearning better
+        current stack trick won't work for mf->device if past association isn't active
+        unlearning only needs input layer (use W*input in place of output)
     auto-associative devices for better token stability
     overall diffcounts
     make layer/activator-specific:

@@ -86,7 +86,7 @@ def make_nback_nvm(activator_label, tokens=[]):
     learning_rule = hebbian
 
     # make network
-    layer_shape = (1500,1)
+    layer_shape = (1200,1)
     layer_size = layer_shape[0]*layer_shape[1]
     pad = 0.0001
     act = activator(pad, layer_size)
@@ -97,7 +97,8 @@ def make_nback_nvm(activator_label, tokens=[]):
         "mc": Layer("mc", layer_shape, act, Coder(act)),} # motor cortex
 
     # assemble and link programs
-    nvmnet = NVMNet(layer_shape, pad, activator, learning_rule, devices, gh_shape=(32,16))
+    shapes = {"gh":(32,16)}
+    nvmnet = NVMNet(layer_shape, pad, activator, learning_rule, devices, shapes=shapes)
     for name, program in nback_programs.items():
         nvmnet.assemble(program, name, verbose=1)
     diff_count = nvmnet.link(verbose=2, tokens=tokens)
@@ -110,6 +111,7 @@ if __name__ == "__main__":
     diff_count = 10
     while diff_count > 5:
         nvmnet, diff_count = make_nback_nvm("logistic", tokens=letters)
+        break
     # nvmnet = make_nback_nvm("tanh")
     # raw_input("continue?")
     

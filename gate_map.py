@@ -36,6 +36,7 @@ def make_nvm_gate_map(layers):
         # Add inter-layer update and plasticity gates
         for from_layer in layers:
             gate_keys.append((to_layer, from_layer, "u"))
-            gate_keys.append((to_layer, from_layer, "p"))
+            gate_keys.append((to_layer, from_layer, "l"))
+            gate_keys.append((to_layer, from_layer, "f"))
 
     return GateMap(gate_keys)

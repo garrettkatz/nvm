@@ -78,7 +78,8 @@ def make_saccade_nvm(activator_label):
         "sc": make_sc(pad, activator, 5, 5)}
 
     # assemble and link programs
-    nvmnet = NVMNet(layer_shape, pad, activator, learning_rule, devices, gh_shape=(32,16))
+    shapes = {"gh": (32,16)}
+    nvmnet = NVMNet(layer_shape, pad, activator, learning_rule, devices, shapes=shapes)
     for name, program in aas_program.items():
         nvmnet.assemble(program, name, verbose=1)
     nvmnet.link(verbose=2)

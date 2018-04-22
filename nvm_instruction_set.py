@@ -176,7 +176,7 @@ def flash_instruction_set(nvmnet):
 
         # Open learning from mf to device in op1
         g, h = gs.add_transit(
-            ungate = [(device, 'mf', 'p')],
+            ungate = [(device, 'mf', 'l')],
             old_gates = g_mem, old_hidden = h_mem,
             op1 = device)
         g_mem_dev, h_mem_dev = g.copy(), h.copy()
@@ -263,7 +263,7 @@ def flash_instruction_set(nvmnet):
 
         # Ungate dipole learning from ci to co
         g, h = gs.add_transit(
-            ungate = [("co","ci","p")],
+            ungate = [("co","ci","l")],
             old_gates = g, old_hidden = h)
         gate_hidden.coder.encode('cmpd_'+cmpd_a_name+'_di', h)
         gate_output.coder.encode('cmpd_di', g)
@@ -319,7 +319,7 @@ def flash_instruction_set(nvmnet):
 
         # Ungate dipole learning from ci to co
         g, h = gs.add_transit(
-            ungate = [("co","ci","p")],
+            ungate = [("co","ci","l")],
             old_gates = g, old_hidden = h)
         gate_hidden.coder.encode('cmpv_'+cmpv_a_name+'_di', h)
         gate_output.coder.encode('cmpv_di', g)
@@ -347,7 +347,7 @@ def flash_instruction_set(nvmnet):
 
     # Push ip on stack (open learning from sf to ip)
     g, h = gs.add_transit(
-        ungate = [('ip', 'sf', 'p')],
+        ungate = [('ip', 'sf', 'l')],
         old_gates = g_ready, old_hidden = h_ready, opc='subv')
     g_subv, h_subv = g.copy(), h.copy()
     gate_hidden.coder.encode('subv', h_subv)
@@ -379,7 +379,7 @@ def flash_instruction_set(nvmnet):
 
     # Push ip on stack (open learning from sf to ip)
     g, h = gs.add_transit(
-        ungate = [('ip', 'sf', 'p')],
+        ungate = [('ip', 'sf', 'l')],
         old_gates = g_ready, old_hidden = h_ready, opc='subd')
     g_subd, h_subd = g.copy(), h.copy()
     gate_hidden.coder.encode('subd', h_subd)
@@ -433,8 +433,16 @@ def flash_instruction_set(nvmnet):
     g_ret_jmp, h_ret_jmp = g.copy(), h.copy()
     gate_hidden.coder.encode('ret_jmp', h_ret_jmp)
 
-    # Stabilize ip
-    g, h = gs.stabilize(h, num_iters=3)
+    # # Stabilize ip
+    # g, h = gs.stabilize(h, num_iters=3)
+
+    # Clean stack (unlearn to avoid future interference)
+    g, h = gs.add_transit(
+        ungate = [("ip","sf","f")],
+        old_gates = g, old_hidden = h)
+    g_ret_unl, h_ret_unl = g.copy(), h.copy()
+    gate_hidden.coder.encode('ret_unl', h_ret_unl)
+    gate_output.coder.encode('ip!sf', g_ret_unl)
 
     # then return to start state
     gs.add_transit(

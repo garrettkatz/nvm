@@ -41,7 +41,12 @@ def address_space(forward_layer, backward_layer):
 
 class NVMNet:
     
-    def __init__(self, layer_shape, pad, activator, learning_rule, devices, gh_shape=(32,32), m_shape=(16,16), s_shape=(8,8), c_shape=(32,32)):
+    def __init__(self, layer_shape, pad, activator, learning_rule, devices, shapes={}):
+        # layer_shape is default, shapes[layer_name] are overrides
+        if 'gh' not in shapes: shapes['m'] = (32,32)
+        if 'm' not in shapes: shapes['m'] = (16,16)
+        if 's' not in shapes: shapes['s'] = (8,8)
+        if 'c' not in shapes: shapes['c'] = (32,32)
 
         # set up parameters
         self.layer_size = layer_shape[0]*layer_shape[1]
@@ -50,19 +55,19 @@ class NVMNet:
         # set up instruction layers
         act = activator(pad, self.layer_size)
         layer_names = ['ip','opc','op1','op2']
-        layers = {name: Layer(name, layer_shape, act, Coder(act))
+        layers = {name: Layer(name, shapes.get(name, layer_shape), act, Coder(act))
             for name in layer_names}
 
         # set up memory and stack layers
-        NM, NS = m_shape[0]*m_shape[1], s_shape[0]*s_shape[1]
+        NM, NS = shapes['m'][0]*shapes['m'][1], shapes['s'][0]*shapes['s'][1]
         actm, acts = activator(pad, NM), activator(pad, NS)
-        for m in ['mf','mb']: layers[m] = Layer(m, m_shape, actm, Coder(actm))
-        for s in ['sf','sb']: layers[s] = Layer(s, s_shape, acts, Coder(acts))
+        for m in ['mf','mb']: layers[m] = Layer(m, shapes['m'], actm, Coder(actm))
+        for s in ['sf','sb']: layers[s] = Layer(s, shapes['s'], acts, Coder(acts))
 
         # set up comparison layers
-        NC = c_shape[0]*c_shape[1]
+        NC = shapes['c'][0]*shapes['c'][1]
         actc = activator(pad, NC)
-        for c in ['ci','co']: layers[c] = Layer(c, c_shape, actc, Coder(actc))
+        for c in ['ci','co']: layers[c] = Layer(c, shapes['c'], actc, Coder(actc))
         co_true = layers['co'].coder.encode('true')
         layers['co'].coder.encode('false', np.array([
             [actc.on if tf == actc.off else actc.off]
@@ -78,12 +83,12 @@ class NVMNet:
 
         # set up gates
         NL = len(layers) + 2 # +2 for gate out/hidden
-        NG = NL + NL**2 + NL**2 # number of gates (d + u + p)
-        NH = gh_shape[0]*gh_shape[1] # number of hidden units
+        NG = NL + 3*NL**2 # number of gates (d + u + l + f)
+        NH = shapes['gh'][0]*shapes['gh'][1] # number of hidden units
         acto = heaviside_activator(NG)
         acth = activator(pad,NH)
         layers['go'] = Layer('go', (1,NG), acto, Coder(acto))
-        layers['gh'] = Layer('gh', gh_shape, acth, Coder(acth))
+        layers['gh'] = Layer('gh', shapes['gh'], acth, Coder(acth))
         self.gate_map = make_nvm_gate_map(layers.keys())        
 
         # set up connection matrices
@@ -187,12 +192,14 @@ class NVMNet:
 
         # plasticity
         for (to_layer, from_layer) in self.weights:
-            p = self.gate_map.get_gate_value(
-                (to_layer, from_layer, 'p'), current_gates)
+            l = self.gate_map.get_gate_value(
+                (to_layer, from_layer, 'l'), current_gates)
+            f = self.gate_map.get_gate_value(
+                (to_layer, from_layer, 'f'), current_gates)
 
             # actg = self.layers["go"].activator
-            # if np.fabs(p - actg.on) < np.fabs(p - actg.off):
-            if p != 0:
+            # if np.fabs(l - actg.on) < np.fabs(l - actg.off):
+            if l != 0 or f != 0:
             # if True:
 
                 pair_key = (to_layer, from_layer)
@@ -204,8 +211,12 @@ class NVMNet:
                     self.layers[from_layer].activator,
                     self.layers[to_layer].activator)
 
-                self.weights[pair_key] += p*dw
-                self.biases[pair_key] += p*db
+                if l != 0:
+                    self.weights[pair_key] += l*dw
+                    self.biases[pair_key] += l*db
+                if f != 0:
+                    self.weights[pair_key] -= f*dw
+                    self.biases[pair_key] -= f*db
 
         self.activity = activity_new
 
