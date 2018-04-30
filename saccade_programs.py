@@ -15,7 +15,10 @@ aas_program = {"aas":"""
 loop:   mov fef center
         mov sc on
         mov sc off
-wait:   jmp tc
+wait:   cmp tc cross
+        jie cross
+        jmp wait
+cross:  jmp tc
 left:   mov fef right
         jmp look
 right:  mov fef left
@@ -86,7 +89,7 @@ def make_saccade_nvm(activator_label):
 
     # initialize layers
     nvmnet.activity["ip"] = nvmnet.layers["ip"].coder.encode(name) # program pointer
-    nvmnet.activity["tc"] = nvmnet.layers["tc"].coder.encode("wait") # waiting for face
+    nvmnet.activity["tc"] = nvmnet.layers["tc"].coder.encode("cross") # waiting for face
 
     return nvmnet
 
@@ -113,7 +116,7 @@ if __name__ == "__main__":
             if t % tc_sched[2] == tc_sched[0]:
                 tok = ["left","right"][np.random.randint(2)]
             if t % tc_sched[2] == tc_sched[1]:
-                tok = "wait"
+                tok = "cross"
             nvmnet.activity["tc"] = nvmnet.layers["tc"].coder.encode(tok) # maybe face appears
 
         ### show state and tick

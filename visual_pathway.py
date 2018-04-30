@@ -245,7 +245,7 @@ def init_vpnet(net, nvmnet):
     mat = net.get_weight_matrix(mat_name)
     tc = nvmnet.layers["tc"]
     w = np.concatenate([
-        tc.coder.encode(tok) for tok in ["left","wait","right"]
+        tc.coder.encode(tok) for tok in ["left","cross","right"]
         ], axis=1)
     w = tc.activator.g(w) * 10 # wipe out previous
     for m in range(mat.size):
