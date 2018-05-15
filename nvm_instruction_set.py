@@ -174,9 +174,10 @@ def flash_instruction_set(nvmnet):
 
     for device in devices:
 
-        # Open learning from mf to device in op1
+        # Open plasticity from mf to device in op1
         g, h = gs.add_transit(
-            ungate = [(device, 'mf', 'l')],
+            ungate = [(device, 'mf', 'l'), (device, 'mf', 'f')],
+            # ungate = [(device, 'mf', 'l')],
             old_gates = g_mem, old_hidden = h_mem,
             op1 = device)
         g_mem_dev, h_mem_dev = g.copy(), h.copy()

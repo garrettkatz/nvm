@@ -10,12 +10,20 @@ next steps:
     deal with unlearning better
         current stack trick won't work for mf->device if past association isn't active
         unlearning only needs input layer (use W*input in place of output)
+        biorealism: read schiess2016biobackprop and refs (backprop within dendritic tree but not across synapses)
     auto-associative devices for better token stability
+        and remove decay gate, instead letting auto-update stay on usually
     overall diffcounts
     make layer/activator-specific:
         omega and beta for gain
         layer shape, size, activator
     generalize learning rules to any number of X/Y layers
+    more biorealistic gating
+        multiplicative gating is possible: mehaffy2005mult, salinas2001modulation, shepherd1985spines, koch1983nonlin
+        dendritic vs somatic inhibition is multiplicative vs additive
+        although, to be fair, dendritic inhibition was apical (right before entering soma, not at subsets of dendritic tree leaves)
+        modulation is "divisive": higher inhibition *divides* the firing rate.  high gate output should = high inhibition.
+        also intertwined with dendritic backpropagation.
     cts gate output
     wm decay/erase: antilearning (subtract hebbian contribution)
     dynamics move through htn finite state machine?

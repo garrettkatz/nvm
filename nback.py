@@ -19,6 +19,12 @@ nback_programs = {
             mov tc B
             prv
             rem tc
+    overw:  mov tc C
+            mem tc
+            nxt
+            mov tc B
+            prv
+            rem tc
     end:    exit
 """,
 
@@ -110,7 +116,8 @@ if __name__ == "__main__":
     letters = np.array(list('abcd'))
     diff_count = 10
     while diff_count > 5:
-        nvmnet, diff_count = make_nback_nvm("logistic", tokens=letters)
+        # nvmnet, diff_count = make_nback_nvm("logistic", tokens=letters)
+        nvmnet, diff_count = make_nback_nvm("tanh", tokens=letters)
         break
     # nvmnet = make_nback_nvm("tanh")
     # raw_input("continue?")
@@ -130,10 +137,11 @@ if __name__ == "__main__":
     # print(prompts)
     # raw_input("continue?")
 
-    nvmnet.load("nback", {
-        "mc": "hold",
-        "ol": prompts[0],
-    })
+    # nvmnet.load("nback", {
+    #     "mc": "hold",
+    #     "ol": prompts[0],
+    # })
+    nvmnet.load("mem", {})
 
     history = []
     start_t = []

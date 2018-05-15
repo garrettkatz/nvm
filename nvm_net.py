@@ -43,7 +43,7 @@ class NVMNet:
     
     def __init__(self, layer_shape, pad, activator, learning_rule, devices, shapes={}):
         # layer_shape is default, shapes[layer_name] are overrides
-        if 'gh' not in shapes: shapes['m'] = (32,32)
+        if 'gh' not in shapes: shapes['gh'] = (32,32)
         if 'm' not in shapes: shapes['m'] = (16,16)
         if 's' not in shapes: shapes['s'] = (8,8)
         if 'c' not in shapes: shapes['c'] = (32,32)
@@ -196,13 +196,30 @@ class NVMNet:
                 (to_layer, from_layer, 'l'), current_gates)
             f = self.gate_map.get_gate_value(
                 (to_layer, from_layer, 'f'), current_gates)
+            pair_key = (to_layer, from_layer)
 
             # actg = self.layers["go"].activator
             # if np.fabs(l - actg.on) < np.fabs(l - actg.off):
-            if l != 0 or f != 0:
             # if True:
+            if f != 0: # forget before learning since uses previous weights
 
-                pair_key = (to_layer, from_layer)
+                old_to = self.layers[to_layer].activator.f(
+                    self.weights[pair_key].dot(self.activity[from_layer]) +
+                    self.biases[pair_key])
+
+                dw, db = self.learning_rules[pair_key](
+                    self.weights[pair_key],
+                    self.biases[pair_key],
+                    self.activity[from_layer],
+                    old_to,
+                    self.layers[from_layer].activator,
+                    self.layers[to_layer].activator)
+
+                self.weights[pair_key] -= f*dw
+                self.biases[pair_key] -= f*db
+
+            if l != 0:
+
                 dw, db = self.learning_rules[pair_key](
                     self.weights[pair_key],
                     self.biases[pair_key],
@@ -211,12 +228,8 @@ class NVMNet:
                     self.layers[from_layer].activator,
                     self.layers[to_layer].activator)
 
-                if l != 0:
-                    self.weights[pair_key] += l*dw
-                    self.biases[pair_key] += l*db
-                if f != 0:
-                    self.weights[pair_key] -= f*dw
-                    self.biases[pair_key] -= f*db
+                self.weights[pair_key] += l*dw
+                self.biases[pair_key] += l*db
 
         self.activity = activity_new
 
