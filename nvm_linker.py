@@ -6,7 +6,7 @@ def link(nvmnet, tokens=[], verbose=0):
 
     weights, biases, diff_count = {}, {}, 0
 
-    # include any constants and value/label tokens from op2
+    # list all tokens
     ip = nvmnet.layers["ip"]
     op1 = nvmnet.layers["op1"]
     op2 = nvmnet.layers["op2"]
@@ -14,6 +14,7 @@ def link(nvmnet, tokens=[], verbose=0):
     all_tokens.update(tokens)
     all_tokens.update(ip.coder.list_tokens())
     all_tokens.update(op1.coder.list_tokens())
+    all_tokens.update(op2.coder.list_tokens())
     all_tokens.update(op2.coder.list_tokens())
     all_tokens.update(nvmnet.constants)
 

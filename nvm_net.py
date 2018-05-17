@@ -102,6 +102,7 @@ class NVMNet:
         # initialize fast connectivity
         connect_pairs = \
             [(device,'mf') for device in self.devices] + \
+            [('mf',device) for device in self.devices] + \
             [('ip','sf')] + \
             [('co','ci')]
         for (to_name, from_name) in connect_pairs:

@@ -1,5 +1,4 @@
 next steps:
-    ref/drf
     ipop
     instruction pitfalls:
         unlinked tokens in nvm_linker
@@ -7,10 +6,8 @@ next steps:
         uninitialized internal layers in nvm_net
     raise more during assembly
         sub to label that doesn't exist
-    deal with unlearning better
-        current stack trick won't work for mf->device if past association isn't active
-        unlearning only needs input layer (use W*input in place of output)
-        biorealism: read schiess2016biobackprop and refs (backprop within dendritic tree but not across synapses)
+    biorealism for new unlearning:
+        read schiess2016biobackprop and refs (backprop within dendritic tree but not across synapses)
     auto-associative devices for better token stability
         and remove decay gate, instead letting auto-update stay on usually
     overall diffcounts
@@ -25,7 +22,6 @@ next steps:
         modulation is "divisive": higher inhibition *divides* the firing rate.  high gate output should = high inhibition.
         also intertwined with dendritic backpropagation.
     cts gate output
-    wm decay/erase: antilearning (subtract hebbian contribution)
     dynamics move through htn finite state machine?
     talk to greg about:
         only one input module per layer?

@@ -450,5 +450,54 @@ def flash_instruction_set(nvmnet):
         new_gates = g_start, new_hidden = h_start,
         old_gates = g, old_hidden = h)
 
+    ####### REF
+
+    # Let op1 bias the gate layer
+    g, h = gs.add_transit(ungate = [('gh','op1','u')],
+        old_gates = g_ready, old_hidden = h_ready, opc='ref')
+    g_ref, h_ref = g.copy(), h.copy()
+    gate_hidden.coder.encode('ref', h_ref)
+
+    for device in devices:
+
+        # Open plasticity from device in op1 to mf
+        g, h = gs.add_transit(
+            ungate = [('mf', device, 'l'), ('mf', device, 'f')],
+            # ungate = [('mf', device, 'l')],
+            old_gates = g_ref, old_hidden = h_ref,
+            op1 = device)
+        g_ref_dev, h_ref_dev = g.copy(), h.copy()
+        gate_hidden.coder.encode('ref_'+device, h_ref_dev)
+        gate_output.coder.encode('ref_'+device, g_ref_dev)
+
+        # then return to start state
+        gs.add_transit(
+            new_gates = g_start, new_hidden = h_start,
+            old_gates = g_ref_dev, old_hidden = h_ref_dev)
+
+    ####### DRF
+    
+    # Let op1 bias the gate layer
+    g, h = gs.add_transit(
+        ungate = [('gh','op1','u')],
+        old_gates = g_ready, old_hidden = h_ready, opc='drf')
+    g_drf, h_drf = g.copy(), h.copy()
+    gate_hidden.coder.encode('drf', h_drf)
+    gate_output.coder.encode('drf', g_drf)
+
+    for drf_name, drf_device in devices.items():
+        # Open flow from device to mf
+        g, h = gs.add_transit(
+            ungate = gflow("mf", drf_name),
+            old_gates = g_drf, old_hidden = h_drf,
+            op1 = drf_name)
+        gate_hidden.coder.encode('drf_'+drf_name, h)
+        gate_output.coder.encode("mf<" + drf_name, g)
+
+        # return to start state
+        gs.add_transit(
+            new_gates = g_start, new_hidden = h_start,
+            old_gates = g, old_hidden = h)
+
     weights, biases, residual = gs.flash()
     return weights, biases
