@@ -1,4 +1,5 @@
 import numpy as np
+import itertools as it
 
 class Coder:
     """
@@ -33,14 +34,13 @@ class Coder:
             self.encodings[token] = pattern
             self.decodings[self.activator.hash_pattern(pattern)] = token
         return self.encodings[token]
-        
+
     def decode(self, pattern):
         """
         Decode a pattern into a token.
         If no token has been encoded as the pattern, the default is "?"
         """
         return self.decodings.get(self.activator.hash_pattern(pattern), "?")
-
 
 if __name__ == "__main__":
     

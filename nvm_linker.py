@@ -15,7 +15,6 @@ def link(nvmnet, tokens=[], verbose=0):
     all_tokens.update(ip.coder.list_tokens())
     all_tokens.update(op1.coder.list_tokens())
     all_tokens.update(op2.coder.list_tokens())
-    all_tokens.update(op2.coder.list_tokens())
     all_tokens.update(nvmnet.constants)
 
     # link op2 layer with device layers for movv instruction

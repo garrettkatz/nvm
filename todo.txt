@@ -13,8 +13,6 @@ next steps:
     overall diffcounts
     make layer/activator-specific:
         omega and beta for gain
-        layer shape, size, activator
-    generalize learning rules to any number of X/Y layers
     more biorealistic gating
         multiplicative gating is possible: mehaffy2005mult, salinas2001modulation, shepherd1985spines, koch1983nonlin
         dendritic vs somatic inhibition is multiplicative vs additive
