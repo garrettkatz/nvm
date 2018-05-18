@@ -1,14 +1,12 @@
 import numpy as np
 from learning_rules import *
 
-def assemble(nvmnet, program, name, verbose=False):
-
-    ### Preprocess program string
+def preprocess(program, register_names):
 
     labels = dict() # map label to line number
     # split up lines and remove blanks and full line comments
     lines = [line.strip() for line in program.splitlines()
-                if len(line.strip()) > 0 and line.strip()[0] != "#"]
+        if len(line.strip()) > 0 and line.strip()[0] != "#"]
     for l in range(len(lines)):
         # remove comments
         comment = lines[l].find("#")
@@ -23,6 +21,20 @@ def assemble(nvmnet, program, name, verbose=False):
         # pad with nulls
         while len(lines[l]) < 3:
             lines[l].append("null")
+        # replace generic instructions with value/device distinctions
+        if lines[l][0] in ["mov", "cmp"]:
+            if lines[l][2] in register_names: lines[l][0] += "d"
+            else: lines[l][0] += "v"
+        if lines[l][0] in ["jmp","sub"]:
+            if lines[l][1] in register_names: lines[l][0] += "d"
+            else: lines[l][0] += "v"
+
+    return lines, labels
+
+def assemble(nvmnet, program, name, verbose=False):
+
+    ### Preprocess program string
+    lines, labels = preprocess(program, nvmnet.devices.keys())
 
     # ### Namespace labels
     # for line in lines:
@@ -46,13 +58,6 @@ def assemble(nvmnet, program, name, verbose=False):
     ### Encode tokens in op layers
     encodings = {"op"+x:list() for x in "c12"}
     for l in range(len(lines)):
-        # replace generic instructions with value/device distinctions
-        if lines[l][0] in ["mov", "cmp"]:
-            if lines[l][2] in nvmnet.devices: lines[l][0] += "d"
-            else: lines[l][0] += "v"
-        if lines[l][0] in ["jmp","sub"]:
-            if lines[l][1] in nvmnet.devices: lines[l][0] += "d"
-            else: lines[l][0] += "v"
         # encode ops
         for o,x in enumerate("c12"):
             pattern = nvmnet.layers["op"+x].coder.encode(lines[l][o])
