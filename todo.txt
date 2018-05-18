@@ -1,5 +1,11 @@
 next steps:
-    ipop
+    2.0:
+        ipop
+        no decay (auto-assoc) or forget (within learn)
+        cts gates, slower smoother hidden
+        single address space with instruction, stack, heap pointers
+        orthogonal encodings before assembly
+        namespaced labels, but program name is not ip
     instruction pitfalls:
         unlinked tokens in nvm_linker
         missing internal connectivity in nvm_net
@@ -42,10 +48,6 @@ next steps:
 empirical experiments:
     how size of N_HGATES (and N_LAYER?) affects stability in long loops
     noise injection
-
-memory read/write and n-back program
-call/return instructions
-more robustness to noise?
 
 rank problems with to,from:
     tried a little 2x2 on paper: to1, to2, fr1, fr2.

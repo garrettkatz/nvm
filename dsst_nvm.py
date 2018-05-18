@@ -10,6 +10,8 @@ from nvm_assembler import assemble
 from nvm_linker import link
 from nvm_net import NVMNet
 
+np.seterr(all='raise')
+
 dsst_programs = {
 # "sub":"""
 
@@ -188,7 +190,7 @@ def make_dsst_nvm(activator_label, tokens=[]):
     nvmnet = NVMNet(layer_shape, pad, activator, learning_rule, devices, shapes=shapes)
     for name, program in dsst_programs.items():
         nvmnet.assemble(program, name, verbose=1)
-    diff_count = nvmnet.link(verbose=2, tokens=tokens)
+    diff_count = nvmnet.link(verbose=2, tokens=tokens, orthogonal=True)
 
     return nvmnet, diff_count
 

@@ -1,7 +1,8 @@
 import numpy as np
 from learning_rules import *
+from orthogonal_patterns import hadamard, randomize_hadamard
 
-def link(nvmnet, tokens=[], verbose=0):
+def link(nvmnet, tokens=[], verbose=0, orthogonal=False):
     """Link token encodings between layer pairs"""
 
     weights, biases, diff_count = {}, {}, 0
@@ -16,6 +17,17 @@ def link(nvmnet, tokens=[], verbose=0):
     all_tokens.update(op1.coder.list_tokens())
     all_tokens.update(op2.coder.list_tokens())
     all_tokens.update(nvmnet.constants)
+
+    # Encode tokens in each layer orthogonally
+    if orthogonal:
+        for name in ["ip","op1","op2","ci"] + nvmnet.devices.keys():
+            layer = nvmnet.layers[name]
+            patterns = hadamard(layer.size, len(all_tokens))
+            patterns = randomize_hadamard(patterns)
+            patterns = (layer.activator.on + layer.activator.off)/2 + \
+                (layer.activator.on - layer.activator.off)*patterns/2
+            for p,token in enumerate(all_tokens):
+                layer.coder.encode(token, patterns[:,[p]])
 
     # link op2 layer with device layers for movv instruction
     for name, layer in nvmnet.devices.items():

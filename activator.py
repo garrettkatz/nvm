@@ -22,7 +22,7 @@ class Activator:
 def tanh_activator(pad, layer_size):
     return Activator(
         f = np.tanh,
-        g = np.arctanh,
+        g = lambda v: np.arctanh(np.clip(v, pad - 1., 1 - pad)),
         e = lambda a, b: ((a > 0) == (b > 0)),
         make_pattern = lambda : (1.-pad)*np.sign(np.random.randn(layer_size,1)),
         hash_pattern = lambda p: (p > 0).tobytes(),
@@ -36,7 +36,7 @@ def logistic_activator(pad, layer_size):
         return (1. - pad)*r + (0. + pad)*(~r)
     return Activator(
         f = lambda v: .5*(np.tanh(v)+1),
-        g = lambda v: np.arctanh(2*v-1),
+        g = lambda v: np.arctanh(2*np.clip(v, pad, 1. - pad) - 1),
         e = lambda a, b: ((a > .5) == (b > .5)),
         make_pattern = make_pattern,
         hash_pattern = lambda p: (p > .5).tobytes(),

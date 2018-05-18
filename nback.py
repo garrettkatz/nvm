@@ -92,7 +92,7 @@ def make_nback_nvm(activator_label, tokens=[]):
     learning_rule = hebbian
 
     # make network
-    layer_shape = (1200,1)
+    layer_shape = (1024,1)
     layer_size = layer_shape[0]*layer_shape[1]
     pad = 0.0001
     act = activator(pad, layer_size)
@@ -107,7 +107,7 @@ def make_nback_nvm(activator_label, tokens=[]):
     nvmnet = NVMNet(layer_shape, pad, activator, learning_rule, devices, shapes=shapes)
     for name, program in nback_programs.items():
         nvmnet.assemble(program, name, verbose=1)
-    diff_count = nvmnet.link(verbose=2, tokens=tokens)
+    diff_count = nvmnet.link(verbose=2, tokens=tokens, orthogonal=True)
 
     return nvmnet, diff_count
 

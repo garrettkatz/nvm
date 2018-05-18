@@ -151,9 +151,9 @@ class NVMNet:
         update_add(self.weights, weights)
         update_add(self.biases, biases)
 
-    def link(self, verbose=1, tokens=[]):
+    def link(self, verbose=1, tokens=[], orthogonal=False):
         weights, biases, diff_count = link(
-            self, verbose=(verbose > 1), tokens=tokens)
+            self, verbose=(verbose > 1), tokens=tokens, orthogonal=orthogonal)
         if verbose > 0: print("linker diff count = %d"%diff_count)
         update_add(self.weights, weights)
         update_add(self.biases, biases)
