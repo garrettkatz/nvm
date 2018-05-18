@@ -41,6 +41,18 @@ nback_programs = {
 
 """,
 
+"cmpv":"""
+
+    start:  mov tc A
+            cmp tc A
+            jie eq
+            mov mc no
+            jmp end
+    eq:     mov mc yes
+    end:    exit
+
+""",
+
 "nback":"""
 
             jmp start{n}
@@ -137,11 +149,13 @@ if __name__ == "__main__":
     # print(prompts)
     # raw_input("continue?")
 
-    nvmnet.load("nback", {
-        "mc": "hold",
-        "ol": prompts[0],
-    })
+    # nvmnet.load("nback", {
+    #     "mc": "hold",
+    #     "ol": prompts[0],
+    # })
     # nvmnet.load("mem", {})
+    # nvmnet.load("cmp", {})
+    nvmnet.load("cmpv", {})
 
     history = []
     start_t = []

@@ -19,6 +19,7 @@ wait:   cmp tc cross
         jie cross
         jmp wait
 cross:  jmp tc
+# cross:  jmp tc
 left:   mov fef right
         jmp look
 right:  mov fef left
@@ -70,9 +71,9 @@ def make_saccade_nvm(activator_label):
     learning_rule = hebbian
 
     # make network
-    layer_shape = (16,16)
+    layer_shape = (32,32)
     layer_size = layer_shape[0]*layer_shape[1]
-    pad = 0.001
+    pad = 0.0001
     act = activator(pad, layer_size)
     
     devices = {
@@ -108,7 +109,7 @@ if __name__ == "__main__":
     history = []
     start_t = []
     tc_sched = [60, 110, 120]
-    for t in range(tc_sched[2]*2):
+    for t in range(tc_sched[2]*3):
     
         ### occassionally change tc
         if t > 0 and t % tc_sched[2] in tc_sched[:2]:
