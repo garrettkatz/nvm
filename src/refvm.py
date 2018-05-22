@@ -8,76 +8,85 @@ class RefVM:
         self.register_names = register_names
         self.programs = {}
         self.active_program = None
-        self.registers = {reg: None
+        self.layers = {reg: None
             for reg in self.register_names + \
             ["ip","co","mf"]}
         self.memory = {}
         self.stack = []
+        self.exit = False
 
-    def assemble(self, program, name):
+    def assemble(self, program, name, verbose=0):
         lines, labels = preprocess(program, self.register_names)
         self.programs[name] = (lines, labels)
 
     def load(self, program_name, initial_state):
         # set program pointer
         self.active_program = program_name
-        self.registers["ip"] = 0
-        self.registers["mf"] = 0
-        self.registers["co"] = False
+        self.layers["ip"] = 0
+        self.layers["mf"] = 0
+        self.layers["co"] = False
+        self.exit = False
         # set initial activities
-        self.registers.update(initial_state)
+        self.layers.update(initial_state)
 
     def state_string(self):
         lines, labels = self.programs[self.active_program]
-        return "ip %s: "%self.registers["ip"] + \
-            " ".join(lines[self.registers["ip"]]) + ", " + \
+        return "ip %s: "%self.layers["ip"] + \
+            " ".join(lines[self.layers["ip"]]) + ", " + \
             ",".join([
-                "%s:%s"%(r,self.registers[r]) for r in self.register_names
+                "%s:%s"%(r,self.layers[r]) for r in self.register_names
             ])
+
+    def decode_state(self):
+        return dict(self.layers)
+
+    def at_exit(self):
+        return self.exit
 
     def step(self):
         # load instruction
         lines, labels = self.programs[self.active_program]
-        line = lines[self.registers["ip"]]
+        line = lines[self.layers["ip"]]
 
         # execute instruction
-        if line[0] == "movv": self.registers[line[1]] = line[2]
-        if line[0] == "movd": self.registers[line[1]] = self.registers[line[2]]
+        if line[0] == "exit": self.exit = True
+        if line[0] == "movv": self.layers[line[1]] = line[2]
+        if line[0] == "movd": self.layers[line[1]] = self.layers[line[2]]
         if line[0] == "cmpv":
-            self.registers["co"] = (
-                self.registers[line[1]] == line[2])
+            self.layers["co"] = (
+                self.layers[line[1]] == line[2])
         if line[0] == "cmpd":
-            self.registers["co"] = (
-                self.registers[line[1]] == self.registers[line[2]])
+            self.layers["co"] = (
+                self.layers[line[1]] == self.layers[line[2]])
         if line[0] == "jie":
-            if self.registers["co"]:
-                self.registers["ip"] = labels[line[1]]-1
+            if self.layers["co"]:
+                self.layers["ip"] = labels[line[1]]-1
         if line[0] == "jmpv":
-            self.registers["ip"] = labels[line[1]]-1
+            self.layers["ip"] = labels[line[1]]-1
         if line[0] == "jmpd":
-            self.registers["ip"] = labels[self.registers[line[1]]]-1
+            self.layers["ip"] = labels[self.layers[line[1]]]-1
 
-        if line[0] == "nxt": self.registers["mf"] += 1
-        if line[0] == "prv": self.registers["mf"] -= 1
+        if line[0] == "nxt": self.layers["mf"] += 1
+        if line[0] == "prv": self.layers["mf"] -= 1
         if line[0] == "mem":
-            mf = self.registers["mf"]
+            mf = self.layers["mf"]
             if mf not in self.memory: self.memory[mf] = {}
-            self.memory[mf][line[1]] = self.registers[line[1]]
+            self.memory[mf][line[1]] = self.layers[line[1]]
         if line[0] == "rem":
-            mf = self.registers["mf"]
-            self.registers[line[1]] = self.memory[mf][line[1]]
+            mf = self.layers["mf"]
+            self.layers[line[1]] = self.memory[mf][line[1]]
 
         if line[0] == "subv":
-            self.stack.append(self.registers["ip"])
-            self.registers["ip"] = labels[line[1]]-1
+            self.stack.append(self.layers["ip"])
+            self.layers["ip"] = labels[line[1]]-1
         if line[0] == "subd":
-            self.stack.append(self.registers["ip"])
-            self.registers["ip"] = labels[self.registers[line[1]]]-1
+            self.stack.append(self.layers["ip"])
+            self.layers["ip"] = labels[self.layers[line[1]]]-1
         if line[0] == "ret":
-            self.registers["ip"] = self.stack.pop()
+            self.layers["ip"] = self.stack.pop()
 
         # advance instruction pointer
-        self.registers["ip"] += 1
+        self.layers["ip"] += 1
 
 if __name__ == "__main__":
 

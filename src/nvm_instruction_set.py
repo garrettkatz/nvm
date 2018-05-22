@@ -8,7 +8,7 @@ def gprog():
     """gates for program memory (ip and op) layer updates"""
     return [('ip','ip','u')]+[k for x in ['c','1','2'] for k in gflow('op'+x, 'ip')]
 
-def flash_instruction_set(nvmnet):
+def flash_instruction_set(nvmnet, verbose=False):
     """
     layers: dict of layers, including:
         gate_output, gate_hidden, ip, opc, op1, op2, op3, cmph, cmpo
@@ -499,5 +499,5 @@ def flash_instruction_set(nvmnet):
             new_gates = g_start, new_hidden = h_start,
             old_gates = g, old_hidden = h)
 
-    weights, biases, residual = gs.flash()
+    weights, biases, residual = gs.flash(verbose)
     return weights, biases

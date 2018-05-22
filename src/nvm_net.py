@@ -30,13 +30,13 @@ def address_space(forward_layer, backward_layer):
             Y, X = A[d_to], A[d_from]
             if d_from == 'f': X = np.roll(X, 1, axis=1)
             if d_from == 'b': Y = np.roll(Y, 1, axis=1)
-            print("%s residuals:"%str(key))
+            # print("%s residuals:"%str(key))
             weights[key], biases[key], _ = flash_mem(
                 np.zeros((N, N)), np.zeros((N, 1)),
                 X, Y,
                 layers[d_from].activator,
                 layers[d_to].activator,
-                linear_solve, verbose=True)
+                linear_solve, verbose=False)
     return weights, biases
 
 class NVMNet:
