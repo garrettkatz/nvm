@@ -40,6 +40,12 @@ class RefVM:
         # execute instruction
         if line[0] == "movv": self.registers[line[1]] = line[2]
         if line[0] == "movd": self.registers[line[1]] = self.registers[line[2]]
+        if line[0] == "cmpv":
+            self.registers["co"] = (
+                self.registers[line[1]] == line[2])
+        if line[0] == "cmpd":
+            self.registers["co"] = (
+                self.registers[line[1]] == self.registers[line[2]])
         if line[0] == "jie":
             if self.registers["co"]:
                 self.registers["ip"] = labels[line[1]]-1
@@ -47,6 +53,9 @@ class RefVM:
             self.registers["ip"] = labels[line[1]]-1
         if line[0] == "jmpd":
             self.registers["ip"] = labels[self.registers[line[1]]]-1
+
+        # if line[0] == "mem":
+        #     self.registers["ip"] = labels[self.registers[line[1]]]-1
 
         # advance instruction pointer
         self.registers["ip"] += 1

@@ -76,6 +76,64 @@ class RefVMTestCase(ut.TestCase):
 
         self._test(program, trace, num_registers=1, verbose=0)
 
+    def test_cmpv(self):
+
+        program = """
+        start:  mov r0 A        
+                cmp r0 B
+                jie eq1
+                mov r0 B
+        eq1:    mov r0 C
+                cmp r0 C
+                jie eq2
+                mov r0 B
+        eq2:    mov r0 A
+        end:    exit
+        """
+        trace = [
+            {"r0": None},
+            {"r0": "A"},
+            {"r0": "A"},
+            {"r0": "A"},
+            {"r0": "B"},
+            {"r0": "C"},
+            {"r0": "C"},
+            {"r0": "C"},
+            {"r0": "A"},]
+
+        self._test(program, trace, num_registers=1, verbose=0)
+
+    def test_cmpd(self):
+
+        program = """
+        start:  mov r0 A
+                mov r1 B
+                cmp r0 r1
+                jie eq1
+                mov r0 D
+        eq1:    mov r0 C
+                mov r1 C
+                cmp r0 r1
+                jie eq2
+                mov r0 B
+        eq2:    mov r0 A
+        end:    exit
+        """
+        trace = [
+            {"r0": None, "r1": None}, # start
+            {"r0": "A", "r1": None},
+            {"r0": "A", "r1": "B"},
+            {"r0": "A", "r1": "B"},
+            {"r0": "A", "r1": "B"},
+            {"r0": "D", "r1": "B"}, # eq1
+            {"r0": "C", "r1": "B"},
+            {"r0": "C", "r1": "C"},
+            {"r0": "C", "r1": "C"},
+            {"r0": "C", "r1": "C"},
+            {"r0": "A", "r1": "C"},]
+
+        self._test(program, trace, num_registers=2, verbose=0)
+
 if __name__ == "__main__":
     test_suite = ut.TestLoader().loadTestsFromTestCase(RefVMTestCase)
     ut.TextTestRunner(verbosity=2).run(test_suite)

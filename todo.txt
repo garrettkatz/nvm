@@ -16,6 +16,7 @@ next steps:
         read schiess2016biobackprop and refs (backprop within dendritic tree but not across synapses)
     auto-associative devices for better token stability
         and remove decay gate, instead letting auto-update stay on usually
+    normal learning in co, and single-corner sensitivity in gh (linprog?)
     overall diffcounts
     make layer/activator-specific:
         omega and beta for gain
