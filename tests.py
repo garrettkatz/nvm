@@ -134,6 +134,111 @@ class RefVMTestCase(ut.TestCase):
 
         self._test(program, trace, num_registers=2, verbose=0)
 
+    def test_memory(self):
+
+        program = """
+        start:  mov r0 A
+                mem r0
+                nxt
+                mov r0 B
+                prv
+                rem r0
+        overw:  mov r0 C
+                mem r0
+                nxt
+                mov r0 D
+                prv
+                rem r0
+        end:    exit
+        """
+        trace = [
+            {"r0": None}, # start
+            {"r0": "A"},
+            {"r0": "A"},
+            {"r0": "A"},
+            {"r0": "B"},
+            {"r0": "B"},
+            {"r0": "A"}, # overw
+            {"r0": "C"},
+            {"r0": "C"},
+            {"r0": "C"},
+            {"r0": "D"},
+            {"r0": "D"},
+            {"r0": "C"},
+            ]
+
+        self._test(program, trace, num_registers=1, verbose=0)
+
+    def test_subv(self):
+
+        program = """
+        start:  sub foo
+                exit
+
+        foo:    mov r0 A
+                sub bar
+                mov r0 B
+                sub bar
+                mov r0 C
+                ret
+
+        bar:    mov r0 D
+                ret
+        """
+        trace = [
+            {"r0": None}, # start
+            {"r0": None}, # foo
+            {"r0": "A"},
+            {"r0": "A"}, # bar
+            {"r0": "D"},
+            {"r0": "D"},
+            {"r0": "B"},
+            {"r0": "B"},
+            {"r0": "D"},
+            {"r0": "D"},
+            {"r0": "C"},
+            {"r0": "C"},
+            {"r0": "C"},
+            ]
+
+        self._test(program, trace, num_registers=1, verbose=0)
+
+    def test_subd(self):
+
+        program = """
+        start:  sub r1
+                exit
+
+        foo:    mov r0 A
+                mov r1 bar
+                sub r1
+                mov r0 B
+                sub r1
+                mov r0 C
+                ret
+
+        bar:    mov r0 D
+                ret
+        """
+        trace = [
+            {"r0": None, "r1": "foo"}, # start
+            {"r0": None, "r1": "foo"}, # foo
+            {"r0": "A", "r1": "foo"},
+            {"r0": "A", "r1": "bar"},
+            {"r0": "A", "r1": "bar"}, # bar
+            {"r0": "D", "r1": "bar"},
+            {"r0": "D", "r1": "bar"},
+            {"r0": "B", "r1": "bar"},
+            {"r0": "B", "r1": "bar"},
+            {"r0": "D", "r1": "bar"},
+            {"r0": "D", "r1": "bar"},
+            {"r0": "C", "r1": "bar"},
+            {"r0": "C", "r1": "bar"},
+            {"r0": "C", "r1": "bar"},
+            ]
+
+        self._test(program, trace, num_registers=2, verbose=0)
+
 if __name__ == "__main__":
     test_suite = ut.TestLoader().loadTestsFromTestCase(RefVMTestCase)
     ut.TextTestRunner(verbosity=2).run(test_suite)

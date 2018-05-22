@@ -10,7 +10,9 @@ class RefVM:
         self.active_program = None
         self.registers = {reg: None
             for reg in self.register_names + \
-            ["ip","co"]}
+            ["ip","co","mf"]}
+        self.memory = {}
+        self.stack = []
 
     def assemble(self, program, name):
         lines, labels = preprocess(program, self.register_names)
@@ -20,6 +22,7 @@ class RefVM:
         # set program pointer
         self.active_program = program_name
         self.registers["ip"] = 0
+        self.registers["mf"] = 0
         self.registers["co"] = False
         # set initial activities
         self.registers.update(initial_state)
@@ -54,8 +57,24 @@ class RefVM:
         if line[0] == "jmpd":
             self.registers["ip"] = labels[self.registers[line[1]]]-1
 
-        # if line[0] == "mem":
-        #     self.registers["ip"] = labels[self.registers[line[1]]]-1
+        if line[0] == "nxt": self.registers["mf"] += 1
+        if line[0] == "prv": self.registers["mf"] -= 1
+        if line[0] == "mem":
+            mf = self.registers["mf"]
+            if mf not in self.memory: self.memory[mf] = {}
+            self.memory[mf][line[1]] = self.registers[line[1]]
+        if line[0] == "rem":
+            mf = self.registers["mf"]
+            self.registers[line[1]] = self.memory[mf][line[1]]
+
+        if line[0] == "subv":
+            self.stack.append(self.registers["ip"])
+            self.registers["ip"] = labels[line[1]]-1
+        if line[0] == "subd":
+            self.stack.append(self.registers["ip"])
+            self.registers["ip"] = labels[self.registers[line[1]]]-1
+        if line[0] == "ret":
+            self.registers["ip"] = self.stack.pop()
 
         # advance instruction pointer
         self.registers["ip"] += 1
