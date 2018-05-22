@@ -23,6 +23,19 @@ class VMTestCase(ut.TestCase):
                 {r: state[r] for r in vm.register_names} == trace[t])
             vm.step()
 
+    def test_noop(self):
+
+        program = """
+        start:  nop
+                exit
+        """
+        trace = [
+            {"r0": None},
+            {"r0": None}]
+
+        self._test(program, trace, num_registers=1, verbose=0)
+
+    # @ut.skip("")
     def test_movv(self):
 
         program = """
@@ -257,8 +270,8 @@ class NVMTestCase(VMTestCase):
         return make_default_nvm(["r%d"%r for r in range(num_registers)])
 
 if __name__ == "__main__":
-    test_suite = ut.TestLoader().loadTestsFromTestCase(RefVMTestCase)
-    ut.TextTestRunner(verbosity=2).run(test_suite)
+    # test_suite = ut.TestLoader().loadTestsFromTestCase(RefVMTestCase)
+    # ut.TextTestRunner(verbosity=2).run(test_suite)
 
     test_suite = ut.TestLoader().loadTestsFromTestCase(NVMTestCase)
     ut.TextTestRunner(verbosity=2).run(test_suite)

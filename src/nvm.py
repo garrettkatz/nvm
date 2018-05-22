@@ -22,6 +22,7 @@ class NVM:
         self.net = NVMNet(layer_shape, pad, activator, learning_rule, registers, shapes=shapes)
 
     def assemble(self, program, name, verbose=1):
+        self.encode_program_tokens(program, name)
         self.net.assemble(program, name, verbose)
         self.net.link(verbose, self.tokens, self.orthogonal)
 

@@ -1,10 +1,9 @@
 next steps:
     2.0:
+        orthogonal encodings before assembly
         ipop
         no decay (auto-assoc) or forget (within learn)
         cts gates, slower smoother hidden
-        single address space with instruction, stack, heap pointers
-        orthogonal encodings before assembly
         namespaced labels, but program name is not ip
     instruction pitfalls:
         unlinked tokens in nvm_linker
