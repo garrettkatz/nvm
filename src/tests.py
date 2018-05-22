@@ -2,11 +2,11 @@ import itertools as it
 import unittest as ut
 from refvm import RefVM
 
-class RefVMTestCase(ut.TestCase):
+class VMTestCase(ut.TestCase):
 
     def _test(self, program, trace, num_registers=1, verbose=0):
     
-        rvm = RefVM(["r%d"%r for r in range(num_registers)])
+        rvm = self.VM(["r%d"%r for r in range(num_registers)])
         rvm.assemble(program, "test")
         rvm.load("test", trace[0])
         lines, labels = rvm.programs["test"]
@@ -238,6 +238,10 @@ class RefVMTestCase(ut.TestCase):
             ]
 
         self._test(program, trace, num_registers=2, verbose=0)
+
+class RefVMTestCase(VMTestCase):
+    def setUp(self):
+        self.VM = RefVM
 
 if __name__ == "__main__":
     test_suite = ut.TestLoader().loadTestsFromTestCase(RefVMTestCase)
