@@ -1,30 +1,27 @@
 import itertools as it
 import numpy as np
 
-def hadamard(N,P):
+# Persistent Hadamard matrix
+_H = np.array([[1]])
+
+def expand_hadamard(N):
     """
-    Make first P columns of NxN Hadamard matrix using Sylvester construction
-    N must be a power of two and greater than or equal to P.
+    Expand to NxN Hadamard matrix using Sylvester construction.
+    N must be a power of two.
     """
 
-    # Sylvester construction out to P columns
-    H = np.array([[1]])
-    while H.shape[1] < P:
-        H = np.concatenate((
-                np.concatenate((H, H),axis=1),
-                np.concatenate((H,-H),axis=1),
+    # Check for power of 2
+    if not np.log2(N) == int(np.log2(N)):
+        raise(Exception("N=%d is not a power of 2"%N))
+
+    # Sylvester construction out to N
+    while _H.shape[0] < N:
+        _H = np.concatenate((
+                np.concatenate((_H, _H),axis=1),
+                np.concatenate((_H,-_H),axis=1),
             ), axis=0)
 
-    # Continue to N rows without saving columns past P
-    H = H[:,:P]
-    while H.shape[0] < N:
-        H = np.concatenate((H,H), axis=0)
-    
-    if H.shape[0] != N: raise(Exception("N=%d is not a power of 2"%N))
-    
-    return H
-
-def randomize_hadamard(H):
+def random_hadamard(N, P):
     """
     Create randomized hadamard matrix equivalent to H
     """
