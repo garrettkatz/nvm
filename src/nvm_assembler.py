@@ -1,11 +1,16 @@
 import numpy as np
 from learning_rules import *
 from preprocessing import preprocess
+from nvm_encoder import encode_tokens
 
-def assemble(nvmnet, program, name, verbose=False):
+def assemble(nvmnet, program, name, verbose=False, orthogonal=False):
 
     ### Preprocess program string
     lines, labels = preprocess(program, nvmnet.devices.keys())
+
+    ### Encode tokens
+    tokens = list(set(tok for line in lines for tok in line))
+    encode_tokens(nvmnet, tokens, verbose, orthogonal)
 
     ### Encode instruction pointers and labels
     index_width = str(int(np.ceil(np.log10(len(lines)))))

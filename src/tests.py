@@ -35,7 +35,7 @@ class VMTestCase(ut.TestCase):
 
         self._test(program, trace, num_registers=1, verbose=0)
 
-    # @ut.skip("")
+    @ut.skip("")
     def test_movv(self):
 
         program = """
@@ -48,7 +48,7 @@ class VMTestCase(ut.TestCase):
 
         self._test(program, trace, num_registers=1, verbose=0)
 
-    # @ut.skip("")
+    @ut.skip("")
     def test_movd(self):
 
         program = """
@@ -63,7 +63,7 @@ class VMTestCase(ut.TestCase):
 
         self._test(program, trace, num_registers=2, verbose=0)
 
-    # @ut.skip("")
+    @ut.skip("")
     def test_jmpv(self):
 
         program = """
@@ -77,7 +77,7 @@ class VMTestCase(ut.TestCase):
 
         self._test(program, trace, num_registers=1, verbose=0)
 
-    # @ut.skip("")
+    @ut.skip("")
     def test_jmpd(self):
 
         program = """
@@ -93,7 +93,7 @@ class VMTestCase(ut.TestCase):
 
         self._test(program, trace, num_registers=1, verbose=0)
 
-    # @ut.skip("")
+    @ut.skip("")
     def test_cmpv(self):
 
         program = """
@@ -121,7 +121,7 @@ class VMTestCase(ut.TestCase):
 
         self._test(program, trace, num_registers=1, verbose=0)
 
-    # @ut.skip("")
+    @ut.skip("")
     def test_cmpd(self):
 
         program = """
@@ -153,7 +153,7 @@ class VMTestCase(ut.TestCase):
 
         self._test(program, trace, num_registers=2, verbose=0)
 
-    # @ut.skip("")
+    @ut.skip("")
     def test_memr(self):
 
         program = """
@@ -189,7 +189,7 @@ class VMTestCase(ut.TestCase):
 
         self._test(program, trace, num_registers=1, verbose=0)
 
-    # @ut.skip("")
+    @ut.skip("")
     def test_subv(self):
 
         program = """
@@ -224,7 +224,7 @@ class VMTestCase(ut.TestCase):
 
         self._test(program, trace, num_registers=1, verbose=0)
 
-    # @ut.skip("")
+    @ut.skip("")
     def test_subd(self):
 
         program = """

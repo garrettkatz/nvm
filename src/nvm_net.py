@@ -6,7 +6,7 @@ from activator import *
 from learning_rules import *
 from nvm_instruction_set import flash_instruction_set
 from nvm_assembler import assemble
-from nvm_linker import link
+# from nvm_linker import link
 
 def update_add(accumulator, summand):
     for k, v in summand.items():
@@ -151,13 +151,13 @@ class NVMNet:
         update_add(self.weights, weights)
         update_add(self.biases, biases)
 
-    def link(self, verbose=1, tokens=[], orthogonal=False):
-        weights, biases, diff_count = link(
-            self, verbose=(verbose > 1), tokens=tokens, orthogonal=orthogonal)
-        if verbose > 0: print("linker diff count = %d"%diff_count)
-        update_add(self.weights, weights)
-        update_add(self.biases, biases)
-        return diff_count
+    # def link(self, verbose=1, tokens=[], orthogonal=False):
+    #     weights, biases, diff_count = link(
+    #         self, verbose=(verbose > 1), tokens=tokens, orthogonal=orthogonal)
+    #     if verbose > 0: print("linker diff count = %d"%diff_count)
+    #     update_add(self.weights, weights)
+    #     update_add(self.biases, biases)
+    #     return diff_count
 
     def load(self, program_name, activity):
         # set program pointer

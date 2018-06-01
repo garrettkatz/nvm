@@ -26,7 +26,7 @@ class Coder:
         """
         Return the pattern encoding a token.
         Uses make_pattern() if token was not already encoded.
-        Uses given pattern if provided.
+        Uses given pattern if provided and token not already encoded.
         """
         # Encode if not already encoded
         if token not in self.encodings:
