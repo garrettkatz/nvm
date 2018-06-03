@@ -16,185 +16,7 @@ from syngen import get_dsst_params
 
 dsst_params = get_dsst_params(num_rows=8, cell_res=8)
 
-def build_exc_inh_pair(
-        exc_name,
-        inh_name,
-        rows = 200,
-        cols = 200,
-
-        half_inh = True,
-        mask = True,
-        delay = 0,
-
-        exc_tau = 0.05,
-        inh_tau = 0.05,
-
-        exc_decay = 0.02,
-        inh_decay = 0.02,
-
-        exc_noise_rate = 1,
-        inh_noise_rate = 1,
-        exc_noise_random = False,
-        inh_noise_random = False,
-
-        exc_exc_rf = 31,
-        exc_inh_rf = 123,
-        inh_exc_rf = 83,
-        inh_inh_rf = 63,
-
-        mask_rf = 31,
-
-        exc_exc_fraction = 1,
-        exc_inh_fraction = 1,
-        inh_exc_fraction = 1,
-        inh_inh_fraction = 1,
-
-        exc_exc_mean = 0.05,
-        exc_inh_mean = 0.025,
-        inh_exc_mean = 0.025,
-        inh_inh_mean = 0.025,
-
-        exc_exc_std_dev = 0.01,
-        exc_inh_std_dev = 0.005,
-        inh_exc_std_dev = 0.005,
-        inh_inh_std_dev = 0.005):
-
-    if exc_exc_rf > 0 and exc_exc_rf % 2 == 0: exc_exc_rf += 1
-    if exc_inh_rf > 0 and exc_inh_rf % 2 == 0: exc_inh_rf += 1
-    if inh_exc_rf > 0 and inh_exc_rf % 2 == 0: inh_exc_rf += 1
-    if inh_inh_rf > 0 and inh_inh_rf % 2 == 0: inh_inh_rf += 1
-
-    exc_noise_strength = 0.5 / exc_tau
-    inh_noise_strength = 0.5 / inh_tau
-    exc = {
-        "name" : exc_name,
-        "neural model" : "oscillator",
-        "rows" : rows,
-        "columns" : cols,
-        "tau" : exc_tau,
-        "decay" : exc_decay,
-        "init config" : {
-            "type" : "poisson",
-            "value" : exc_noise_strength,
-            "rate" : exc_noise_rate,
-            "random" : exc_noise_random
-        }}
-    inh = {
-        "name" : inh_name,
-        "neural model" : "oscillator",
-        "rows" : rows/2 if half_inh else rows,
-        "columns" : cols/2 if half_inh else cols,
-        "tau" : inh_tau,
-        "decay" : inh_decay,
-        "init config" : {
-            "type" : "poisson",
-            "value" : inh_noise_strength,
-            "rate" : inh_noise_rate,
-            "random" : inh_noise_random
-        }}
-
-    connections = [
-        {
-            "from layer" : exc_name,
-            "to layer" : exc_name,
-            "type" : "convergent",
-            "convolutional" : True,
-            "opcode" : "add",
-            "plastic" : False,
-            "delay" : delay,
-            "weight config" : {
-                "type" : "gaussian",
-                "mean" : exc_exc_mean,
-                "std dev" : exc_exc_std_dev,
-                "fraction" : exc_exc_fraction,
-                "diagonal" : False,
-                "circular mask" : [ { } ],
-                "distance callback" : "gaussian",
-            },
-            "arborized config" : {
-                "field size" : exc_exc_rf,
-                "stride" : 1,
-                "wrap" : False
-            }
-        } if exc_exc_rf > 0 else None,
-        {
-            "from layer" : exc_name,
-            "to layer" : inh_name,
-            "type" : "convergent",
-            "convolutional" : True,
-            "opcode" : "add",
-            "plastic" : False,
-            "delay" : delay,
-            "weight config" : {
-                "type" : "gaussian",
-                "mean" : exc_inh_mean,
-                "std dev" : exc_inh_std_dev,
-                "fraction" : exc_inh_fraction,
-                "circular mask" : [
-                    {
-                        "diameter" : mask_rf,
-                        "invert" : True
-                    },
-                    { }
-                ] if mask else [ { } ],
-                "distance callback" : "gaussian",
-                "to spacing" : 2,
-            },
-            "arborized config" : {
-                "field size" : exc_inh_rf,
-                "stride" : 2 if half_inh else 1,
-                "wrap" : False
-            }
-        } if exc_inh_rf > 0 else None,
-        {
-            "from layer" : inh_name,
-            "to layer" : exc_name,
-            "type" : "divergent" if half_inh else "convergent",
-            "convolutional" : True,
-            "opcode" : "sub",
-            "plastic" : False,
-            "delay" : delay,
-            "weight config" : {
-                "type" : "gaussian",
-                "mean" : inh_exc_mean,
-                "std dev" : inh_exc_std_dev,
-                "fraction" : inh_exc_fraction,
-                "circular mask" : [ { } ] if not half_inh else None,
-                "distance callback" : "gaussian",
-                "from spacing" : 2,
-            },
-            "arborized config" : {
-                "field size" : inh_exc_rf,
-                "stride" : 2 if half_inh else 1,
-                "wrap" : False
-            }
-        } if inh_exc_rf > 0 else None,
-#        {
-#            "from layer" : inh_name,
-#            "to layer" : inh_name,
-#            "type" : "convergent",
-#            "convolutional" : True,
-#            "opcode" : "sub",
-#            "plastic" : False,
-#            "delay" : delay,
-#                "weight config" : {
-#                "type" : "gaussian",
-#                "mean" : inh_inh_mean,
-#                "std dev" : inh_inh_std_dev,
-#                "fraction" : inh_inh_fraction,
-#                "circular mask" : [ { } ]
-#            },
-#            "arborized config" : {
-#                "field size" : inh_inh_rf,
-#                "stride" : 1,
-#                "wrap" : False
-#            }
-#        } if inh_inh_rf > 0 else None,
-    ]
-
-    return [exc, inh], connections
-
-def build_retina(name, rows, cols, center_surround_threshold):
+def build_retina(name, rows, cols, rf_size=5, threshold=24, convergence=1):
     photoreceptor = {
         "name" : name + "_photoreceptor",
         "neural model" : "relay",
@@ -216,15 +38,15 @@ def build_retina(name, rows, cols, center_surround_threshold):
     retina_on = {
         "name" : name + "_retina_on",
         "neural model" : "relay",
-        "rows" : rows,
-        "columns" : cols,
+        "rows" : rows / convergence,
+        "columns" : cols / convergence,
         "ramp" : True}
 
     retina_off = {
         "name" : name + "_retina_off",
         "neural model" : "relay",
-        "rows" : rows,
-        "columns" : cols,
+        "rows" : rows / convergence,
+        "columns" : cols / convergence,
         "ramp" : True}
 
     connections = [
@@ -255,13 +77,13 @@ def build_retina(name, rows, cols, center_surround_threshold):
                     {
                         "diameter" : 1,
                         "invert" : True,
-                        "value" : center_surround_threshold
+                        "value" : threshold
                     }
                 ]
             },
             "arborized config" : {
-                "field size" : 5,
-                "stride" : 1,
+                "field size" : rf_size,
+                "stride" : convergence,
                 "wrap" : True
             }
         },
@@ -279,13 +101,13 @@ def build_retina(name, rows, cols, center_surround_threshold):
                     {
                         "diameter" : 1,
                         "invert" : True,
-                        "value" : center_surround_threshold
+                        "value" : threshold
                     }
                 ]
             },
             "arborized config" : {
-                "field size" : 5,
-                "stride" : 1,
+                "field size" : rf_size,
+                "stride" : convergence,
                 "wrap" : True
             }
         }
@@ -295,127 +117,66 @@ def build_retina(name, rows, cols, center_surround_threshold):
 
 
 def build_network(rows=200, cols=200, scale=5):
-    dim = min(rows, cols)
-
-    sc_rf_scales = (20, 10, 10, 30)
-    #sc_rf_scales = (20, 10, 10, 50)
-    #sc_rf_scales = (60, 5, 5, 100)
-
-    motor_rf_scales = (10, 2, 2, 50)
-
     # Create main structure (parallel engine)
     sc_structure = {"name" : "oculomotor", "type" : "parallel"}
     retina_structure = {"name" : "retina", "type" : "feedforward"}
 
     # Add retinal layers
-    p_retina_layers, p_retina_connections = build_retina("peripheral", rows, cols, 24)
-    c_retina_layers, c_retina_connections = build_retina("central", rows/3, cols/3, 24)
+    p_retina_layers, p_retina_connections = build_retina(
+        "peripheral", rows, cols,
+        rf_size = 7,
+        threshold = 40,
+        convergence = scale)
+    c_retina_layers, c_retina_connections = build_retina(
+        "central", rows/3, cols/3,
+        rf_size = 5,
+        threshold = 24)
 
-    sc_layers, sc_conns = build_exc_inh_pair(
-        "sc_exc", "sc_inh",
-        rows, cols,
-        half_inh = True,
-        mask = True,
-        delay = 5,
+    # Add superior colliculus layers
+    sc_sup = {
+        "name" : "sc_sup",
+        "neural model" : "rate_encoding",
+        "rows" : int(rows / scale),
+        "columns" : int(cols / scale),
+        "init config" : {
+            "type" : "poisson",
+            "value" : 1,
+            "rate" : 0,
+            "random" : False
+        }}
 
-        exc_tau = 0.5,
-        inh_tau = 0.5,
-
-        exc_decay = 0.25,
-        inh_decay = 0.25,
-
-        exc_noise_rate = 0,
-        inh_noise_rate = 0,
-        exc_noise_random = False,
-        inh_noise_random = False,
-
-        exc_exc_rf = dim/sc_rf_scales[0],
-        exc_inh_rf = dim/sc_rf_scales[1],
-        inh_exc_rf = dim/sc_rf_scales[2],
-        inh_inh_rf = 1, #dim/sc_rf_scales[3],
-
-        mask_rf = dim/sc_rf_scales[3],
-
-        exc_exc_fraction = 0.1,
-        exc_inh_fraction = 0.25,
-        inh_exc_fraction = 0.5,
-        inh_inh_fraction = 1,
-
-        exc_exc_mean = 0.1,
-        exc_inh_mean = 0.05,
-        inh_exc_mean = 0.05,
-        inh_inh_mean = 0.05,
-
-        exc_exc_std_dev = 0.01,
-        exc_inh_std_dev = 0.005,
-        inh_exc_std_dev = 0.005,
-        inh_inh_std_dev = 0.005)
-
-    motor_rows = int(rows/scale)
-    motor_cols = int(cols/scale)
-    motor_dim = min(motor_rows, motor_cols)
-    sc_out_layers, sc_out_conns = build_exc_inh_pair(
-        "sc_out_exc", "sc_out_inh",
-        motor_rows, motor_cols,
-        half_inh = True,
-        mask = True,
-        delay = 0,
-
-        exc_tau = 0.5,
-        inh_tau = 1.0,
-
-        exc_decay = 0.5,
-        inh_decay = 0.1,
-
-        exc_noise_rate = 0,
-        inh_noise_rate = 0,
-        exc_noise_random = False,
-        inh_noise_random = False,
-
-        exc_exc_rf = motor_dim/motor_rf_scales[0],
-        exc_inh_rf = motor_dim/motor_rf_scales[1],
-        inh_exc_rf = motor_dim/motor_rf_scales[2],
-        inh_inh_rf = 1, #motor_dim/motor_rf_scales[3],
-
-        mask_rf = motor_dim/motor_rf_scales[3],
-
-        exc_exc_fraction = 1,
-        exc_inh_fraction = 1,
-        inh_exc_fraction = 1,
-        inh_inh_fraction = 1,
-
-        exc_exc_mean = 0.05,
-        exc_inh_mean = 0.05,
-        inh_exc_mean = 0.05,
-        inh_inh_mean = 0.05,
-
-        exc_exc_std_dev = 0.02,
-        exc_inh_std_dev = 0.01,
-        inh_exc_std_dev = 0.01,
-        inh_inh_std_dev = 0.01)
+    sc_deep = {
+        "name" : "sc_deep",
+        "neural model" : "rate_encoding",
+        "rows" : int(rows / scale),
+        "columns" : int(cols / scale),
+        "init config" : {
+            "type" : "poisson",
+            "value" : 1,
+            "rate" : 0,
+            "random" : False
+        }}
 
     gating_layer = {
         "name" : "gating",
-        "neural model" : "oscillator",
-        "rows" : motor_rows,
-        "columns" : motor_cols,
-        "tau" : 1.0,
-        "decay" : 0.15,
-        "tonic" : 0.0}
+        "neural model" : "rate_encoding",
+        "rows" : int(rows / scale),
+        "columns" : int(cols / scale),
+    }
 
     # Add layers to structure
-    sc_structure["layers"] = sc_layers + sc_out_layers + [gating_layer]
+    sc_structure["layers"] = [sc_sup, sc_deep, gating_layer]
     retina_structure["layers"] = p_retina_layers + c_retina_layers
 
     # Create connections
     receptive_field = 11
-    sc_input_strength = 0.01
-    sc_to_motor_strength = 0.25
+    sc_input_strength = 1.0
+    sc_to_motor_strength = 1.0
     connections = [
         # ON/OFF -> SC
         {
             "from layer" : "peripheral_retina_on",
-            "to layer" : "sc_exc",
+            "to layer" : "sc_sup",
             "type" : "convergent",
             "convolutional" : True,
             "opcode" : "add",
@@ -433,7 +194,7 @@ def build_network(rows=200, cols=200, scale=5):
         },
         {
             "from layer" : "peripheral_retina_off",
-            "to layer" : "sc_exc",
+            "to layer" : "sc_sup",
             "type" : "convergent",
             "convolutional" : True,
             "opcode" : "add",
@@ -451,8 +212,8 @@ def build_network(rows=200, cols=200, scale=5):
         },
         # SC -> SC out
         {
-            "from layer" : "sc_exc",
-            "to layer" : "sc_out_exc",
+            "from layer" : "sc_sup",
+            "to layer" : "sc_deep",
             "type" : "convergent",
             "convolutional" : True,
             "opcode" : "add",
@@ -460,20 +221,18 @@ def build_network(rows=200, cols=200, scale=5):
             "weight config" : {
                 "type" : "flat",
                 "weight" : sc_to_motor_strength,
+                "distance callback" : "gaussian",
             },
             "arborized config" : {
-                "field size" : scale,
-                "stride" : scale,
-                "wrap" : False,
-                "offset" : 0,
-                "distance callback" : "gaussian",
-                "to spacing" : scale
+                "field size" : receptive_field,
+                "stride" : 1,
+                "wrap" : False
             }
         },
         # Gating -> SC out
         {
             "from layer" : "gating",
-            "to layer" : "sc_out_exc",
+            "to layer" : "sc_deep",
             "type" : "one to one",
             "opcode" : "mult",
             "plastic" : False,
@@ -482,7 +241,7 @@ def build_network(rows=200, cols=200, scale=5):
                 "weight" : 1.0,
             }
         }
-        ] + sc_conns + sc_out_conns
+        ]
 
     # Create network
     return {"structures" : [sc_structure, retina_structure],
@@ -491,9 +250,6 @@ def build_network(rows=200, cols=200, scale=5):
 train_dump_index = 0
 
 def build_environment(rows=200, cols=200, scale=5, visualizer=False, task="saccade", train_dump=False):
-    dim = min(rows, cols)
-    motor_dim = min(rows/scale, cols/scale)
-
     # Create training data callback
     global train_dump_index
     # train_dump_index = 0
@@ -504,7 +260,6 @@ def build_environment(rows=200, cols=200, scale=5, visualizer=False, task="sacca
     ]
     def dump_training_data(ID, size, ptr):
         global train_dump_index
-        if not train_dump: return
 
         layer_name = training_layers[ID]
         fname = "resources/train_dump/%s_%03d.npy"%(
@@ -552,12 +307,14 @@ def build_environment(rows=200, cols=200, scale=5, visualizer=False, task="sacca
                         "central" : True,
                     },
                     {
-                        "layer" : "sc_out_exc",
+                        "layer" : "sc_deep",
                         "output" : True,
                     }
                 ]
-            },
-            {
+            }
+        ]
+        if train_dump:
+            modules.append({
                 "type" : "callback",
                 "layers" : [
                     {
@@ -567,8 +324,7 @@ def build_environment(rows=200, cols=200, scale=5, visualizer=False, task="sacca
                         "id" : i
                     } for i,layer_name in enumerate(training_layers)
                 ]
-            }
-        ]
+            })
     else:
         modules = [
             {
@@ -587,13 +343,11 @@ def build_environment(rows=200, cols=200, scale=5, visualizer=False, task="sacca
         modules.append({
             "type" : "visualizer",
             "layers" : [
-#                {"layer" : "peripheral_photoreceptor" },
-#                {"layer" : "peripheral_retina_on" },
-#                {"layer" : "peripheral_retina_off" },
-                {"layer" : "sc_exc" },
-                {"layer" : "sc_inh" },
-                {"layer" : "sc_out_exc" },
-                {"layer" : "sc_out_inh" },
+                {"layer" : "peripheral_photoreceptor" },
+                {"layer" : "peripheral_retina_on" },
+                {"layer" : "peripheral_retina_off" },
+                {"layer" : "sc_sup" },
+                {"layer" : "sc_deep" },
                 {"layer" : "gating" },
                 {"layer" : "central_photoreceptor" },
                 {"layer" : "central_retina_on" },
@@ -606,11 +360,8 @@ def build_environment(rows=200, cols=200, scale=5, visualizer=False, task="sacca
             "window" : "1000",
             "linear" : True,
             "layers" : [
-#                {"layer" : "peripheral_photoreceptor" },
-                {"layer" : "sc_exc" },
-                {"layer" : "sc_inh" },
-                {"layer" : "sc_out_exc" },
-                {"layer" : "sc_out_inh" },
+                {"layer" : "sc_sup" },
+                {"layer" : "sc_deep" },
                 {"layer" : "gating" },
             ]
         })
@@ -623,7 +374,7 @@ def build_bridge_connections():
 #            "from structure" : "nvm",
 #            "from layer" : "fef",
 #            "to structure" : "oculomotor",
-#            "to layer" : "sc_exc",
+#            "to layer" : "sc_sup",
 #            "type" : "divergent",
 #            "convolutional" : True,
 #            "opcode" : "add",
@@ -649,7 +400,7 @@ def build_bridge_connections():
             "plastic" : False,
             "weight config" : {
                 "type" : "flat",
-                "weight" : 0.01,
+                "weight" : 1.0,
                 "distance callback" : "gaussian",
             },
             "arborized config" : {
@@ -668,20 +419,18 @@ def build_bridge_connections():
             "plastic" : False,
             "weight config" : {
                 "type" : "flat",
-                "weight" : 0.05,
+                "weight" : 1.0 / 25,
                 "distance callback" : "gaussian",
             }
         }
     ]
 
-def main(visualizer=False, device=None, rate=0, iterations=1000000):
+def main(read=True, visualizer=False, device=None, rate=0, iterations=1000000):
     ''' Build oculomotor model '''
     task = "dsst"
     task = "saccade"
-    #task = "image"
 
-    #rows = 100
-    #cols = 200
+    # Scale for superior colliculus
     scale = 5
 
     if task == "dsst":
@@ -720,7 +469,8 @@ def main(visualizer=False, device=None, rate=0, iterations=1000000):
         viz_layers = viz_layers,
         #print_layers = nvmnet.layers,
         # stat_layers=["ip","go","gh"])
-        stat_layers=[])
+        stat_layers=[],
+        read=read)
 
     bridge_connections = build_bridge_connections()
 
@@ -774,4 +524,6 @@ if __name__ == "__main__":
     set_warnings(False)
     set_debug(False)
 
-    main(args.visualizer, device, args.r)
+    read = True
+
+    main(read, args.visualizer, device, args.r)

@@ -10,6 +10,9 @@ from nvm_assembler import assemble
 from nvm_linker import link
 from nvm_net import NVMNet
 
+# New version that uses comparison
+# Not implemented in syngen quite yet
+'''
 aas_program = {"aas":"""
 
 loop:   mov fef center
@@ -28,7 +31,28 @@ look:   mov sc on
         mov sc off
         jmp loop
         exit
-    
+
+"""}
+'''
+
+# Old version that doesn't depend on comparison
+aas_program = {"aas":"""
+
+loop:   mov fef center
+        mov sc on
+        mov sc off
+wait:   jmp tc
+cross:  jmp tc
+# cross:  jmp tc
+left:   mov fef right
+        jmp look
+right:  mov fef left
+        jmp look
+look:   mov sc on
+        mov sc off
+        jmp loop
+        exit
+
 """}
 
 def make_fef(pad, activator, rows, columns):
@@ -82,7 +106,7 @@ def make_saccade_nvm(activator_label):
         "sc": make_sc(pad, activator, 5, 5)}
 
     # assemble and link programs
-    shapes = {"gh": (32,16)}
+    shapes = {"gh": (32,16), "c": (1,1),}
     nvmnet = NVMNet(layer_shape, pad, activator, learning_rule, devices, shapes=shapes)
     for name, program in aas_program.items():
         nvmnet.assemble(program, name, verbose=1)

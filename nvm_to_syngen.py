@@ -227,7 +227,8 @@ def make_syngen_network(nvmnet):
 tick = 0
 do_print = False
 
-def make_syngen_environment(nvmnet, initial_patterns={}, run_nvm=False, viz_layers=[], print_layers=[], stat_layers=[]):
+def make_syngen_environment(nvmnet, initial_patterns={}, run_nvm=False,
+        viz_layers=[], print_layers=[], stat_layers=[], read=True):
     global tick, to_print
     tick = 0
     do_print = False
@@ -236,6 +237,11 @@ def make_syngen_environment(nvmnet, initial_patterns={}, run_nvm=False, viz_laye
     layer_names = nvmnet.layers.keys() # deterministic order
     layer_names.remove("gh") # make sure hidden gates come first
     layer_names.insert(0,"gh")
+
+    # Randomize TC input
+    # If True, run the input callback indefinitely
+    # Otherwise, only run it once
+    random_tc = False
 
     modules = [
         {
@@ -246,17 +252,21 @@ def make_syngen_environment(nvmnet, initial_patterns={}, run_nvm=False, viz_laye
         },
         {
             "type" : "callback",
+            "cutoff" : 0 if random_tc else 1,
             "layers" : [
                 {
                     "structure" : "nvm",
                     "layer" : layer_name,
                     "input" : True,
                     "function" : "nvm_input",
-                    "id" : i
+                    "id" : i,
                 } for i,layer_name in enumerate(layer_names)
             ]
-        },
-        {
+        }
+    ]
+
+    if read:
+        modules.append({
             "type" : "callback",
             "layers" : [
                 {
@@ -267,8 +277,7 @@ def make_syngen_environment(nvmnet, initial_patterns={}, run_nvm=False, viz_laye
                     "id" : i
                 } for i,layer_name in enumerate(layer_names)
             ]
-        }
-    ]
+        })
 
     def input_callback(ID, size, ptr):
 
@@ -407,7 +416,8 @@ if __name__ == "__main__":
         viz_layers = ["sc","fef","tc","ip","opc","op1","op2","gh","go"],
         print_layers = nvmnet.layers,
         # stat_layers=["ip","go","gh"])
-        stat_layers=[])
+        stat_layers=[],
+        read=True)
 
     net = Network({"structures" : [structure], "connections" : connections})
     env = Environment({"modules" : modules})

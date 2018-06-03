@@ -183,7 +183,9 @@ def build_vp_bridge_connections():
 def build_vp_environment(visualizer=False):
 
     read_layers = [] #["max","class"]
-    modules = [{
+    modules = []
+
+    modules.append({
         "type" : "callback",
         "layers" : [
             {
@@ -192,7 +194,7 @@ def build_vp_environment(visualizer=False):
                 "output" : True,
                 "function" : "vp_read",
                 "id" : i
-            } for i,layer_name in enumerate(read_layers)]}]
+            } for i,layer_name in enumerate(read_layers)]})
 
     if visualizer:
         modules.append({
@@ -251,7 +253,7 @@ def init_vpnet(net, nvmnet):
     for m in range(mat.size):
         mat.data[m] = w.flat[m]
 
-def main(visualizer=False, device=None, rate=0, iterations=1000000):
+def main(read=True, visualizer=False, device=None, rate=0, iterations=1000000):
     np.set_printoptions(linewidth=200, formatter = {'float': lambda x: '% .2f'%x})
     task = "saccade"
     rows = 340
@@ -274,7 +276,8 @@ def main(visualizer=False, device=None, rate=0, iterations=1000000):
         run_nvm=False,
         viz_layers = viz_layers,
         print_layers = nvmnet.layers,
-        stat_layers=[])
+        stat_layers=[],
+        read=read)
 
     ''' Visual pathway '''
     vp_structure, vp_connections = build_vp_network(rows, cols)
@@ -336,4 +339,6 @@ if __name__ == "__main__":
     set_warnings(False)
     set_debug(False)
 
-    main(args.visualizer, device, args.r)
+    read = True
+
+    main(read, args.visualizer, device, args.r)
