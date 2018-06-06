@@ -27,13 +27,6 @@ def build_vp_network(rows, cols):
 
     # Add convolutional and sum layers
     for feature in range(5):
-        for channel in ["on","off"]:
-            layers.append({
-                "name" : "conv-%s-%d"%(channel,feature),
-                "neural model" : "relay",
-                "ramp" : False,
-                "rows" : rows/3,
-                "columns" : cols/3, })
         layers.append({
             "name" : "conv-%d"%feature,
             "neural model" : "relay",
@@ -117,10 +110,6 @@ def build_vp_network(rows, cols):
     # Build connections
     connections = []
     for feature in range(5):
-        for channel in ["on","off"]:
-            connections.append(sum_weights_factory.build(
-                "conv-%s-%d"%(channel, feature),
-                "conv-%d"%(feature)))
         connections.append(max_weights_factory.build(
             "conv-%d"%(feature),
             "max"))
@@ -148,7 +137,7 @@ def build_vp_bridge_connections():
                 "from structure" : "retina",
                 "from layer" : "central_retina_%s"%channel,
                 "to structure" : "visual pathway",
-                "to layer" : "conv-%s-%d"%(channel, feature),
+                "to layer" : "conv-%d"%feature,
                 "type" : "convergent",
                 "convolutional" : True,
                 "opcode" : "add",
