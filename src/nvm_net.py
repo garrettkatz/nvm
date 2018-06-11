@@ -41,7 +41,7 @@ def address_space(forward_layer, backward_layer):
 
 class NVMNet:
     
-    def __init__(self, layer_shape, pad, activator, learning_rule, devices, shapes={}):
+    def __init__(self, layer_shape, pad, activator, learning_rule, devices, shapes={}, orthogonal=False):
         # layer_shape is default, shapes[layer_name] are overrides
         if 'gh' not in shapes: shapes['gh'] = (32,32)
         if 'm' not in shapes: shapes['m'] = (16,16)
@@ -130,6 +130,17 @@ class NVMNet:
             for to_layer in self.layers for from_layer in self.layers}
         self.learning_rules[('co','ci')] = lambda w, b, x, y, ax, ay: \
             dipole(w, b, x, co_true, ax, ay)
+
+        # encode opcodes
+        self.orthogonal = orthogonal
+        self.layers["opc"].encode_tokens(
+            tokens = [
+                "movv","movd","jmpv","jmpd"
+                "cmpv","cmpd","jie"
+                "subv","subd","ret",
+                "mem","rem","nxt","prv","ref","drf",
+                "exit","nop"],
+            orthogonal=orthogonal)
 
     def set_pattern(self, layer_name, pattern):
         self.activity[layer_name] = pattern

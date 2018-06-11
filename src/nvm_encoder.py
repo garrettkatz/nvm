@@ -1,18 +1,12 @@
 from learning_rules import *
 from orthogonal_patterns import random_hadamard
 
-def encode_tokens(nvmnet, tokens, verbose=False, orthogonal=False):
+def encode_tokens(nvmnet, name, lines, labels, verbose=False, orthogonal=False):
     T = len(tokens)
     registers = nvmnet.devices.keys()
-    for layer_name in ["op1","op2","ci"] + registers:
+    for layer_name in ["opc","op1","op2","ci"] + registers:
         layer = nvmnet.layers[layer_name]
-        if orthogonal:
-            patterns = random_hadamard(layer.size, T)
-            for t in range(T):
-                layer.coder.encode(tokens[t], patterns[:,[t]])
-        else:
-            for t in range(T):
-                layer.coder.encode(tokens[t])
+        encode_layer_tokens(layer, tokens, orthogonal=orthogonal)
     
     pathways = [(r1, r2) for r1 in registers for r2 in registers] # for movd
     pathways += [(r, "op2") for r in registers] # for movv

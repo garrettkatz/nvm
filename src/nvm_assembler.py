@@ -1,89 +1,97 @@
 import numpy as np
 from learning_rules import *
 from preprocessing import preprocess
-from nvm_encoder import encode_tokens
 
 def assemble(nvmnet, program, name, verbose=False, orthogonal=False):
 
     ### Preprocess program string
     lines, labels = preprocess(program, nvmnet.devices.keys())
 
-    ### Encode tokens
-    tokens = list(set(tok for line in lines for tok in line))
-    encode_tokens(nvmnet, tokens, verbose, orthogonal)
+    ### Encode all tokens in devices and ci
+    registers = nvmnet.devices.keys()
+    all_tokens = list(set([tok for line in lines for tok in line[1:]]))
+    for layer_name in ["ci"] + registers:
+        nvmnet.layers[layer_name].encode_tokens(
+            tokens=all_tokens, orthogonal=orthogonal)
+
+    ### Encode operand tokens
+    for x in [1,2]:
+        nvmnet.layers["op"+str(x)].encode_tokens(
+            tokens=list(set([line[x] for line in lines])),
+            orthogonal=orthogonal)
 
     ### Encode instruction pointers and labels
     index_width = str(int(np.ceil(np.log10(len(lines)))))
-    ips = [nvmnet.layers["ip"].coder.encode(name)] # pointer to program
-    for l in range(len(lines)):
-        ips.append(nvmnet.layers["ip"].coder.encode(
-            ("%s.%0"+index_width+"d") % (name,l)))
+    ip_patterns = nvmnet.layers["ip"].encode_tokens(
+        tokens=[name] + [
+            ("%s.%0"+index_width+"d") % (name,l) for l in range(len(lines))],
+        orthogonal=orthogonal)
     for label, line_index in labels.items():
-        ip_index = line_index + 1 # + 1 for leading program pointer
-        ip_index -= 1 # but - 1 for ip -> opx step
-        nvmnet.layers["ip"].coder.encode(label, ips[ip_index])
-    ips = np.concatenate(ips, axis=1)
-
-    ### Encode tokens in op layers
-    encodings = {"op"+x:list() for x in "c12"}
-    for l in range(len(lines)):
-        # encode ops
-        for o,x in enumerate("c12"):
-            pattern = nvmnet.layers["op"+x].coder.encode(lines[l][o])
-            encodings["op"+x].append(pattern)
-    encodings = {k: np.concatenate(v,axis=1) for k,v in encodings.items()}
+        # index is + 1 for leading program pointer, but - 1 for ip -> opx step
+        nvmnet.layers["ip"].coder.encode(label, ip_patterns[line_index])
 
     ### Track total number of errors
-    diff_count = 0
-    
-    ### Bind op tokens to instruction pointers
     weights, biases = {}, {}
-    for x in "c12":
-        if verbose: print("Binding ip -> op"+x)
+    diff_count = 0
+
+    ### Sequence ip
+    if verbose: print("Sequencing ip -> ip")
+    weights[("ip","ip")], biases[("ip","ip")], dc = flash_mem(
+        np.zeros((ip_patterns.shape[0], ip_patterns.shape[0])),
+        np.zeros((ip_patterns.shape[0], 1)),
+        ip_patterns[:,:-1], ip_patterns[:,1:],
+        nvmnet.layers["ip"].activator,
+        nvmnet.layers["ip"].activator,
+        nvmnet.learning_rules[("ip","ip")],
+        verbose=verbose)
+    diff_count += dc
+    
+    ### Link instructions to ip
+    for i,x in enumerate("c12"):
+        if verbose: print("Linking ip -> op"+x)
+        encodings = nvmnet.layers["op"+x].encode_tokens(
+            [line[i] for line in lines])
         weights[("op"+x,"ip")], biases[("op"+x,"ip")], dc = flash_mem(
-            np.zeros((encodings["op"+x].shape[0], ips.shape[0])),
-            np.zeros((encodings["op"+x].shape[0], 1)),
-            ips[:,:-1], encodings["op"+x],
+            np.zeros((encodings.shape[0], ip_patterns.shape[0])),
+            np.zeros((encodings.shape[0], 1)),
+            ip_patterns[:,:-1], encodings,
             nvmnet.layers["ip"].activator,
             nvmnet.layers["op"+x].activator,
             nvmnet.learning_rules[("op"+x,"ip")],
             verbose=verbose)
         diff_count += dc
 
-    ### Store instruction pointer sequence
-    if verbose: print("Binding ip -> ip"+x)
-    weights[("ip","ip")], biases[("ip","ip")], dc = flash_mem(
-        np.zeros((ips.shape[0], ips.shape[0])),
-        np.zeros((ips.shape[0],1)),
-        ips[:,:-1], ips[:,1:],
-        nvmnet.layers["ip"].activator,
-        nvmnet.layers["ip"].activator,
-        nvmnet.learning_rules[("ip","ip")],
-        verbose=verbose)
-    diff_count += dc
+    ### Link tokens across pathways
+    pathways = [(r1, r2) for r1 in registers for r2 in registers] # for movd
+    pathways += [(r, "op2") for r in registers] # for movv
+    pathways += [("ci", r) for r in registers] # for cmpd
+    pathways += [("ci", "op2")] # for cmpv
+    pathways += [("ip", r) for r in registers] # jmpd, subd
+    pathways += [("ip", "op1")] # for jmpv, subv
 
-    ### Bind labels to instruction pointers
-    if len(labels) > 0:
-        label_tokens = labels.keys()
-        X_label = np.concatenate([
-            nvmnet.layers["op2"].coder.encode(tok)
-            for tok in label_tokens], axis=1)
-        Y_label = np.concatenate([
-            nvmnet.layers["ip"].coder.encode(tok)
-            for tok in label_tokens], axis=1)
-        if verbose: print("Binding op2 -> ip")
-        weights[("ip","op2")], biases[("ip","op2")], dc = flash_mem(
-            np.zeros((Y_label.shape[0], X_label.shape[0])),
-            np.zeros((Y_label.shape[0], 1)),
-            X_label, Y_label,
-            nvmnet.layers["op2"].activator,
-            nvmnet.layers["ip"].activator,
-            nvmnet.learning_rules[("ip","op2")],
+    for pathway in pathways:
+    
+        # Set up training data
+        to_name, from_name = pathway
+        if verbose: print("Linking %s -> %s"%(from_name, to_name))
+        to_layer = nvmnet.layers[to_name]
+        from_layer = nvmnet.layers[from_name]
+        common_tokens = list(
+            set(to_layer.all_tokens()) & set(from_layer.all_tokens()))
+        X = from_layer.encode_tokens(common_tokens)
+        Y = to_layer.encode_tokens(common_tokens)
+        
+        # Learn associations
+        weights[pathway], biases[pathway], dc = flash_mem(
+            np.zeros((to_layer.size, from_layer.size)),
+            np.zeros((to_layer.size, 1)),
+            X, Y, from_layer.activator, to_layer.activator,
+            nvmnet.learning_rules[pathway],
             verbose=verbose)
         diff_count += dc
+        
+    return weights, biases, diff_count
     
-    return weights, biases, dc
-
 if __name__ == '__main__':
 
     np.set_printoptions(linewidth=200, formatter = {'float': lambda x: '% .2f'%x})

@@ -21,8 +21,9 @@ class VMTestCase(ut.TestCase):
                 print(trace[t])
             self.assertTrue(
                 {r: state[r] for r in vm.register_names} == trace[t])
-            vm.step()
+            vm.step(verbose=verbose)
 
+    # @ut.skip("")
     def test_noop(self):
 
         program = """
@@ -75,7 +76,7 @@ class VMTestCase(ut.TestCase):
             {"r0": None},
             {"r0": None}]
 
-        self._test(program, trace, num_registers=1, verbose=0)
+        self._test(program, trace, num_registers=1, verbose=1)
 
     @ut.skip("")
     def test_jmpd(self):

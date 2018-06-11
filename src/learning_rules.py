@@ -43,6 +43,7 @@ def dipole(w, b, X, Y, actx, acty):
 def flash_mem(w, b, X, Y, actx, acty, learning_rule, verbose=False):
     
     dw, db = learning_rule(w, b, X, Y, actx, acty)
+    print(w.shape, b.shape, dw.shape, db.shape)
     w, b = w + dw, b + db
 
     _Y = acty.f(w.dot(X) + b)
