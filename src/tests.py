@@ -262,6 +262,36 @@ class VMTestCase(ut.TestCase):
 
         self._test(program, trace, num_registers=2, verbose=0)
 
+    # @ut.skip("")
+    def test_dref(self):
+
+        program = """
+        start:  mov r0 A
+                mem r0
+                mov r1 X
+                ref r1
+                nxt
+                mov r0 B
+                mem r0
+                drf r1
+                rem r0
+                exit
+        """
+        trace = [
+            {"r0": None, "r1": None}, # start: mov
+            {"r0": "A", "r1": None}, # mem
+            {"r0": "A", "r1": None}, # mov
+            {"r0": "A", "r1": "X"}, # ref
+            {"r0": "A", "r1": "X"}, # nxt
+            {"r0": "A", "r1": "X"}, # mov
+            {"r0": "B", "r1": "X"}, # mem
+            {"r0": "B", "r1": "X"}, # drf
+            {"r0": "B", "r1": "X"}, # rem
+            {"r0": "A", "r1": "X"}, # exit
+            ]
+
+        self._test(program, trace, num_registers=2, verbose=0)
+
 class RefVMTestCase(VMTestCase):
     def _make_vm(self, num_registers):
         return RefVM(["r%d"%r for r in range(num_registers)])
@@ -276,11 +306,11 @@ class NVMOrthogonalTestCase(VMTestCase):
             orthogonal=True)
 
 if __name__ == "__main__":
-    # test_suite = ut.TestLoader().loadTestsFromTestCase(RefVMTestCase)
-    # ut.TextTestRunner(verbosity=2).run(test_suite)
+    test_suite = ut.TestLoader().loadTestsFromTestCase(RefVMTestCase)
+    ut.TextTestRunner(verbosity=2).run(test_suite)
 
-    # test_suite = ut.TestLoader().loadTestsFromTestCase(NVMTestCase)
-    # ut.TextTestRunner(verbosity=2).run(test_suite)
+    test_suite = ut.TestLoader().loadTestsFromTestCase(NVMTestCase)
+    ut.TextTestRunner(verbosity=2).run(test_suite)
 
     test_suite = ut.TestLoader().loadTestsFromTestCase(NVMOrthogonalTestCase)
     ut.TextTestRunner(verbosity=2).run(test_suite)

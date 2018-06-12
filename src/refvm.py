@@ -12,6 +12,7 @@ class RefVM:
             for reg in self.register_names + \
             ["ip","co","mf"]}
         self.memory = {}
+        self.pointers = {}
         self.stack = []
         self.exit = False
 
@@ -75,6 +76,13 @@ class RefVM:
         if line[0] == "rem":
             mf = self.layers["mf"]
             self.layers[line[1]] = self.memory[mf][line[1]]
+        if line[0] == "ref":
+            reg, mf = line[1], self.layers["mf"]
+            if reg not in self.pointers: self.pointers[reg] = {}
+            self.pointers[reg][self.layers[reg]] = mf
+        if line[0] == "drf":
+            reg = line[1]
+            self.layers["mf"] = self.pointers[reg][self.layers[reg]]
 
         if line[0] == "subv":
             self.stack.append(self.layers["ip"])
