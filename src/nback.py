@@ -7,51 +7,51 @@ from activator import *
 from learning_rules import *
 from nvm_instruction_set import flash_instruction_set
 from nvm_assembler import assemble
-from nvm_linker import link
+# from nvm_linker import link
 from nvm_net import NVMNet
 
 nback_programs = {
-"mem":"""
+# "mem":"""
 
-    start:  mov tc A
-            mem tc
-            nxt
-            mov tc B
-            prv
-            rem tc
-    overw:  mov tc C
-            mem tc
-            nxt
-            mov tc B
-            prv
-            rem tc
-    end:    exit
-""",
+#     start:  mov tc A
+#             mem tc
+#             nxt
+#             mov tc B
+#             prv
+#             rem tc
+#     overw:  mov tc C
+#             mem tc
+#             nxt
+#             mov tc B
+#             prv
+#             rem tc
+#     end:    exit
+# """,
 
-"cmp":"""
+# "cmp":"""
 
-    start:  mov tc A
-            mov mc B
-            cmp tc mc
-            jie eq
-            mov mc no
-            jmp end
-    eq:     mov mc yes
-    end:    exit
+#     start:  mov tc A
+#             mov mc B
+#             cmp tc mc
+#             jie eq
+#             mov mc no
+#             jmp end
+#     eq:     mov mc yes
+#     end:    exit
 
-""",
+# """,
 
-"cmpv":"""
+# "cmpv":"""
 
-    start:  mov tc A
-            cmp tc A
-            jie eq
-            mov mc no
-            jmp end
-    eq:     mov mc yes
-    end:    exit
+#     start:  mov tc A
+#             cmp tc A
+#             jie eq
+#             mov mc no
+#             jmp end
+#     eq:     mov mc yes
+#     end:    exit
 
-""",
+# """,
 
 "nback":"""
 
@@ -101,7 +101,8 @@ def make_nback_nvm(activator_label, tokens=[]):
         activator = logistic_activator
     if activator_label == "tanh":
         activator = tanh_activator
-    learning_rule = hebbian
+    # learning_rule = hebbian
+    learning_rule = rehebbian
 
     # make network
     layer_shape = (1024,1)
@@ -118,18 +119,18 @@ def make_nback_nvm(activator_label, tokens=[]):
     shapes = {"gh":(32,16)}
     nvmnet = NVMNet(layer_shape, pad, activator, learning_rule, devices, shapes=shapes)
     for name, program in nback_programs.items():
-        nvmnet.assemble(program, name, verbose=1)
-    diff_count = nvmnet.link(verbose=2, tokens=tokens, orthogonal=True)
+        nvmnet.assemble(program, name, verbose=1, other_tokens=tokens)
+    # diff_count = nvmnet.link(verbose=2, tokens=tokens, orthogonal=True)
 
     return nvmnet, diff_count
 
 if __name__ == "__main__":
     
-    letters = np.array(list('abcd'))
+    letters = list('abcd')
     diff_count = 10
     while diff_count > 5:
-        nvmnet, diff_count = make_nback_nvm("logistic", tokens=letters)
-        # nvmnet, diff_count = make_nback_nvm("tanh", tokens=letters)
+        # nvmnet, diff_count = make_nback_nvm("logistic", tokens=letters)
+        nvmnet, diff_count = make_nback_nvm("tanh", tokens=letters)
         break
     # nvmnet = make_nback_nvm("tanh")
     # raw_input("continue?")
@@ -143,19 +144,19 @@ if __name__ == "__main__":
     show_corrosion = False
     show_gates = False
 
-    prompts = letters[np.random.randint(letters.size,size=10)]
+    # prompts = np.array(letters)[np.random.randint(letters.size,size=10)]
     prompts = ['a','a','b','a','a']
     prompt_index = 0
     # print(prompts)
     # raw_input("continue?")
 
-    # nvmnet.load("nback", {
-    #     "mc": "hold",
-    #     "ol": prompts[0],
-    # })
+    nvmnet.load("nback", {
+        "mc": "hold",
+        "ol": prompts[0],
+    })
     # nvmnet.load("mem", {})
     # nvmnet.load("cmp", {})
-    nvmnet.load("cmpv", {})
+    # nvmnet.load("cmpv", {})
 
     history = []
     start_t = []

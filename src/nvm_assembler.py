@@ -5,7 +5,7 @@ from preprocessing import preprocess
 def unique(x):
     return list(set(x))
 
-def assemble(nvmnet, program, name, verbose=False, orthogonal=False):
+def assemble(nvmnet, program, name, verbose=False, orthogonal=False, other_tokens=[]):
 
     ### Preprocess program string
     lines, labels = preprocess(program, nvmnet.devices.keys())
@@ -13,7 +13,8 @@ def assemble(nvmnet, program, name, verbose=False, orthogonal=False):
     ### Encode all tokens in devices and ci (including labels for device jumps)
     registers = nvmnet.devices.keys()
     all_tokens = unique(
-        [tok for line in lines for tok in line[1:]] + labels.keys())
+        [tok for line in lines for tok in line[1:]] + \
+        other_tokens + labels.keys())
     for layer_name in ["ci"] + registers:
         nvmnet.layers[layer_name].encode_tokens(
             tokens=all_tokens, orthogonal=orthogonal)

@@ -27,7 +27,7 @@ def rehebbian(w, b, X, Y, actx, acty):
     for p in range(Y.shape[1]):
         x, y = X[:,[p]], Y[:,[p]]
         dw = (acty.g(y) - (w.dot(x)+b)) * (x - c).T / (N*r**2)
-        db = - dw.sum(axis=1) * c
+        db = - dw.sum(axis=1)[:,np.newaxis] * c
         w, b = w + dw, b + db
 
     dw, db = w - w0, b - b0

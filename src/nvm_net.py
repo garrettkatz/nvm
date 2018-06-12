@@ -83,7 +83,8 @@ class NVMNet:
 
         # set up gates
         NL = len(layers) + 2 # +2 for gate out/hidden
-        NG = NL + 3*NL**2 # number of gates (d + u + l + f)
+        # NG = NL + 3*NL**2 # number of gates (d + u + l + f)
+        NG = NL + 2*NL**2 # number of gates (d + u + l)
         NH = shapes['gh'][0]*shapes['gh'][1] # number of hidden units
         acto = heaviside_activator(NG)
         acth = activator(pad,NH)
@@ -155,9 +156,10 @@ class NVMNet:
                 open_gates.append(k)
         return open_gates
 
-    def assemble(self, program, name, verbose=1, orthogonal=False):
+    def assemble(self, program, name, verbose=1, orthogonal=False, other_tokens=[]):
         weights, biases, diff_count = assemble(self,
-            program, name, verbose=(verbose > 1), orthogonal=orthogonal)
+            program, name, verbose=(verbose > 1),
+            orthogonal=orthogonal, other_tokens=other_tokens)
         if verbose > 0: print("assembler diff count = %d"%diff_count)
         update_add(self.weights, weights)
         update_add(self.biases, biases)
@@ -206,30 +208,11 @@ class NVMNet:
         for (to_layer, from_layer) in self.weights:
             l = self.gate_map.get_gate_value(
                 (to_layer, from_layer, 'l'), current_gates)
-            f = self.gate_map.get_gate_value(
-                (to_layer, from_layer, 'f'), current_gates)
             pair_key = (to_layer, from_layer)
 
             # actg = self.layers["go"].activator
             # if np.fabs(l - actg.on) < np.fabs(l - actg.off):
             # if True:
-            if f != 0: # forget before learning since uses previous weights
-
-                old_to = self.layers[to_layer].activator.f(
-                    self.weights[pair_key].dot(self.activity[from_layer]) +
-                    self.biases[pair_key])
-
-                dw, db = self.learning_rules[pair_key](
-                    self.weights[pair_key],
-                    self.biases[pair_key],
-                    self.activity[from_layer],
-                    old_to,
-                    self.layers[from_layer].activator,
-                    self.layers[to_layer].activator)
-
-                self.weights[pair_key] -= f*dw
-                self.biases[pair_key] -= f*db
-
             if l != 0:
 
                 dw, db = self.learning_rules[pair_key](

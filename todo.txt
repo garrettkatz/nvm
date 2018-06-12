@@ -1,9 +1,10 @@
 next steps:
     2.0:
         ipop
-        no decay (auto-assoc) or forget (within learn)
+        no decay (auto-assoc)
         cts gates, slower smoother hidden
     vmpfc and goal selection
+    refactor devices to registers
     instruction pitfalls:
         unlinked tokens in nvm_linker
         missing internal connectivity in nvm_net

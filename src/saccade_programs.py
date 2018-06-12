@@ -7,7 +7,7 @@ from activator import *
 from learning_rules import *
 from nvm_instruction_set import flash_instruction_set
 from nvm_assembler import assemble
-from nvm_linker import link
+# from nvm_linker import link
 from nvm_net import NVMNet
 
 aas_program = {"aas":"""
@@ -68,7 +68,8 @@ def make_saccade_nvm(activator_label):
         activator = logistic_activator
     if activator_label == "tanh":
         activator = tanh_activator
-    learning_rule = hebbian
+    # learning_rule = hebbian
+    learning_rule = rehebbian
 
     # make network
     layer_shape = (32,32)
@@ -86,7 +87,7 @@ def make_saccade_nvm(activator_label):
     nvmnet = NVMNet(layer_shape, pad, activator, learning_rule, devices, shapes=shapes)
     for name, program in aas_program.items():
         nvmnet.assemble(program, name, verbose=1)
-    nvmnet.link(verbose=2)
+    # nvmnet.link(verbose=2)
 
     # initialize layers
     nvmnet.activity["ip"] = nvmnet.layers["ip"].coder.encode(name) # program pointer

@@ -176,8 +176,7 @@ def flash_instruction_set(nvmnet, verbose=False):
 
         # Open plasticity from mf to device in op1
         g, h = gs.add_transit(
-            ungate = [(device, 'mf', 'l'), (device, 'mf', 'f')],
-            # ungate = [(device, 'mf', 'l')],
+            ungate = [(device, 'mf', 'l')],
             old_gates = g_mem, old_hidden = h_mem,
             op1 = device)
         g_mem_dev, h_mem_dev = g.copy(), h.copy()
@@ -437,14 +436,6 @@ def flash_instruction_set(nvmnet, verbose=False):
     # # Stabilize ip
     # g, h = gs.stabilize(h, num_iters=3)
 
-    # Clean stack (unlearn to avoid future interference)
-    g, h = gs.add_transit(
-        ungate = [("ip","sf","f")],
-        old_gates = g, old_hidden = h)
-    g_ret_unl, h_ret_unl = g.copy(), h.copy()
-    gate_hidden.coder.encode('ret_unl', h_ret_unl)
-    gate_output.coder.encode('ip!sf', g_ret_unl)
-
     # then return to start state
     gs.add_transit(
         new_gates = g_start, new_hidden = h_start,
@@ -462,8 +453,7 @@ def flash_instruction_set(nvmnet, verbose=False):
 
         # Open plasticity from device in op1 to mf
         g, h = gs.add_transit(
-            ungate = [('mf', device, 'l'), ('mf', device, 'f')],
-            # ungate = [('mf', device, 'l')],
+            ungate = [('mf', device, 'l')],
             old_gates = g_ref, old_hidden = h_ref,
             op1 = device)
         g_ref_dev, h_ref_dev = g.copy(), h.copy()
