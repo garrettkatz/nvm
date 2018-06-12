@@ -155,9 +155,9 @@ class NVMNet:
                 open_gates.append(k)
         return open_gates
 
-    def assemble(self, program, name, verbose=1):
+    def assemble(self, program, name, verbose=1, orthogonal=False):
         weights, biases, diff_count = assemble(self,
-            program, name, verbose=(verbose > 1))
+            program, name, verbose=(verbose > 1), orthogonal=orthogonal)
         if verbose > 0: print("assembler diff count = %d"%diff_count)
         update_add(self.weights, weights)
         update_add(self.biases, biases)

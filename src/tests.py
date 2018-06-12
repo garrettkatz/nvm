@@ -36,7 +36,7 @@ class VMTestCase(ut.TestCase):
 
         self._test(program, trace, num_registers=1, verbose=0)
 
-    @ut.skip("")
+    # @ut.skip("")
     def test_movv(self):
 
         program = """
@@ -49,7 +49,7 @@ class VMTestCase(ut.TestCase):
 
         self._test(program, trace, num_registers=1, verbose=0)
 
-    @ut.skip("")
+    # @ut.skip("")
     def test_movd(self):
 
         program = """
@@ -64,7 +64,7 @@ class VMTestCase(ut.TestCase):
 
         self._test(program, trace, num_registers=2, verbose=0)
 
-    @ut.skip("")
+    # @ut.skip("")
     def test_jmpv(self):
 
         program = """
@@ -76,9 +76,9 @@ class VMTestCase(ut.TestCase):
             {"r0": None},
             {"r0": None}]
 
-        self._test(program, trace, num_registers=1, verbose=1)
+        self._test(program, trace, num_registers=1, verbose=0)
 
-    @ut.skip("")
+    # @ut.skip("")
     def test_jmpd(self):
 
         program = """
@@ -94,7 +94,7 @@ class VMTestCase(ut.TestCase):
 
         self._test(program, trace, num_registers=1, verbose=0)
 
-    @ut.skip("")
+    # @ut.skip("")
     def test_cmpv(self):
 
         program = """
@@ -122,7 +122,7 @@ class VMTestCase(ut.TestCase):
 
         self._test(program, trace, num_registers=1, verbose=0)
 
-    @ut.skip("")
+    # @ut.skip("")
     def test_cmpd(self):
 
         program = """
@@ -154,7 +154,7 @@ class VMTestCase(ut.TestCase):
 
         self._test(program, trace, num_registers=2, verbose=0)
 
-    @ut.skip("")
+    # @ut.skip("")
     def test_memr(self):
 
         program = """
@@ -190,7 +190,7 @@ class VMTestCase(ut.TestCase):
 
         self._test(program, trace, num_registers=1, verbose=0)
 
-    @ut.skip("")
+    # @ut.skip("")
     def test_subv(self):
 
         program = """
@@ -225,7 +225,7 @@ class VMTestCase(ut.TestCase):
 
         self._test(program, trace, num_registers=1, verbose=0)
 
-    @ut.skip("")
+    # @ut.skip("")
     def test_subd(self):
 
         program = """
@@ -270,9 +270,17 @@ class NVMTestCase(VMTestCase):
     def _make_vm(self, num_registers):
         return make_default_nvm(["r%d"%r for r in range(num_registers)])
 
+class NVMOrthogonalTestCase(VMTestCase):
+    def _make_vm(self, num_registers):
+        return make_default_nvm(["r%d"%r for r in range(num_registers)],
+            orthogonal=True)
+
 if __name__ == "__main__":
     # test_suite = ut.TestLoader().loadTestsFromTestCase(RefVMTestCase)
     # ut.TextTestRunner(verbosity=2).run(test_suite)
 
-    test_suite = ut.TestLoader().loadTestsFromTestCase(NVMTestCase)
+    # test_suite = ut.TestLoader().loadTestsFromTestCase(NVMTestCase)
+    # ut.TextTestRunner(verbosity=2).run(test_suite)
+
+    test_suite = ut.TestLoader().loadTestsFromTestCase(NVMOrthogonalTestCase)
     ut.TextTestRunner(verbosity=2).run(test_suite)

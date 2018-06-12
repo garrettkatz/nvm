@@ -22,7 +22,7 @@ class NVM:
         self.net = NVMNet(layer_shape, pad, activator, learning_rule, registers, shapes=shapes)
 
     def assemble(self, program, name, verbose=1):
-        self.net.assemble(program, name, verbose)
+        self.net.assemble(program, name, verbose, self.orthogonal)
 
     def load(self, program_name, initial_state):
         self.net.load(program_name, initial_state)
@@ -50,15 +50,15 @@ class NVM:
             if self.net.at_start(): break
             if self.at_exit(): break
 
-def make_default_nvm(register_names):
-    layer_shape = (32,32)
+def make_default_nvm(register_names, orthogonal=False):
+    layer_shape = (16,8) if orthogonal else (32,32)
     pad = 0.0001
     activator, learning_rule = logistic_activator, hebbian
     # activator, learning_rule = tanh_activator, hebbian
 
     return NVM(layer_shape,
         pad, activator, learning_rule, register_names,
-        shapes={}, tokens=[], orthogonal=False)
+        shapes={}, tokens=[], orthogonal=orthogonal)
 
 if __name__ == "__main__":
 

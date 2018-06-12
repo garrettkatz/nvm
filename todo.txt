@@ -1,7 +1,6 @@
 next steps:
-    dbg: wierd numpy broadcasting: shapes (3,1)+(3,0) has shape (3,0)
     2.0:
-        orthogonal encodings before assembly
+        test ref/drf
         ipop
         no decay (auto-assoc) or forget (within learn)
         cts gates, slower smoother hidden

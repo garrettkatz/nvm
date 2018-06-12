@@ -2,14 +2,18 @@ import numpy as np
 from learning_rules import *
 from preprocessing import preprocess
 
+def unique(x):
+    return list(set(x))
+
 def assemble(nvmnet, program, name, verbose=False, orthogonal=False):
 
     ### Preprocess program string
     lines, labels = preprocess(program, nvmnet.devices.keys())
 
-    ### Encode all tokens in devices and ci
+    ### Encode all tokens in devices and ci (including labels for device jumps)
     registers = nvmnet.devices.keys()
-    all_tokens = list(set([tok for line in lines for tok in line[1:]]))
+    all_tokens = unique(
+        [tok for line in lines for tok in line[1:]] + labels.keys())
     for layer_name in ["ci"] + registers:
         nvmnet.layers[layer_name].encode_tokens(
             tokens=all_tokens, orthogonal=orthogonal)
@@ -17,18 +21,18 @@ def assemble(nvmnet, program, name, verbose=False, orthogonal=False):
     ### Encode operand tokens
     for x in [1,2]:
         nvmnet.layers["op"+str(x)].encode_tokens(
-            tokens=list(set([line[x] for line in lines])),
+            tokens=unique([line[x] for line in lines]),
             orthogonal=orthogonal)
 
     ### Encode instruction pointers and labels
     index_width = str(int(np.ceil(np.log10(len(lines)))))
     ip_patterns = nvmnet.layers["ip"].encode_tokens(
-        tokens=[name] + [
-            ("%s.%0"+index_width+"d") % (name,l) for l in range(len(lines))],
+        tokens=[name] + \
+            [("%s.%0"+index_width+"d") % (name,l) for l in range(len(lines))],
         orthogonal=orthogonal)
     for label, line_index in labels.items():
         # index is + 1 for leading program pointer, but - 1 for ip -> opx step
-        nvmnet.layers["ip"].coder.encode(label, ip_patterns[line_index])
+        nvmnet.layers["ip"].coder.encode(label, ip_patterns[:,[line_index]])
 
     ### Track total number of errors
     weights, biases = {}, {}

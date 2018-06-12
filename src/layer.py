@@ -14,7 +14,7 @@ class Layer:
         """
         T = len(tokens)
         if orthogonal:
-            on, off = activator.on, activator.off
+            on, off = self.activator.on, self.activator.off
             patterns = random_hadamard(self.size, T)
             patterns = off + (on - off)*(patterns + 1.)/2.
             for t in range(T):

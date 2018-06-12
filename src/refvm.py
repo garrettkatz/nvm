@@ -43,7 +43,7 @@ class RefVM:
     def at_exit(self):
         return self.exit
 
-    def step(self):
+    def step(self, verbose=False):
         # load instruction
         lines, labels = self.programs[self.active_program]
         line = lines[self.layers["ip"]]

@@ -42,12 +42,17 @@ def dipole(w, b, X, Y, actx, acty):
 
 def flash_mem(w, b, X, Y, actx, acty, learning_rule, verbose=False):
     
-    dw, db = learning_rule(w, b, X, Y, actx, acty)
-    print(w.shape, b.shape, dw.shape, db.shape)
-    w, b = w + dw, b + db
+    if X.shape[1] > 0:
 
-    _Y = acty.f(w.dot(X) + b)
-    diff_count = (np.ones(Y.shape) - acty.e(Y, _Y)).sum()
+        dw, db = learning_rule(w, b, X, Y, actx, acty)
+        w, b = w + dw, b + db
+    
+        _Y = acty.f(w.dot(X) + b)
+        diff_count = (np.ones(Y.shape) - acty.e(Y, _Y)).sum()
+
+    else:
+
+        diff_count = 0
 
     # if verbose and diff_count > 0:
     if verbose:
