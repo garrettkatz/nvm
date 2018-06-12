@@ -306,8 +306,8 @@ class NVMOrthogonalTestCase(VMTestCase):
             orthogonal=True)
 
 if __name__ == "__main__":
-    test_suite = ut.TestLoader().loadTestsFromTestCase(RefVMTestCase)
-    ut.TextTestRunner(verbosity=2).run(test_suite)
+    # test_suite = ut.TestLoader().loadTestsFromTestCase(RefVMTestCase)
+    # ut.TextTestRunner(verbosity=2).run(test_suite)
 
     test_suite = ut.TestLoader().loadTestsFromTestCase(NVMTestCase)
     ut.TextTestRunner(verbosity=2).run(test_suite)

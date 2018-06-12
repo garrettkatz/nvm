@@ -51,10 +51,11 @@ class NVM:
             if self.at_exit(): break
 
 def make_default_nvm(register_names, orthogonal=False):
-    layer_shape = (16,8) if orthogonal else (32,32)
+    layer_shape = (8,8) if orthogonal else (32,32)
     pad = 0.0001
-    activator, learning_rule = logistic_activator, hebbian
-    # activator, learning_rule = tanh_activator, hebbian
+    # activator, learning_rule = logistic_activator, hebbian
+    activator, learning_rule = tanh_activator, hebbian
+    # activator, learning_rule = tanh_activator, rehebbian
 
     return NVM(layer_shape,
         pad, activator, learning_rule, register_names,

@@ -1,21 +1,18 @@
 next steps:
     2.0:
-        test ref/drf
         ipop
         no decay (auto-assoc) or forget (within learn)
         cts gates, slower smoother hidden
-        namespaced labels, but program name is not ip
     vmpfc and goal selection
     instruction pitfalls:
         unlinked tokens in nvm_linker
         missing internal connectivity in nvm_net
         uninitialized internal layers in nvm_net
+    note about namespaced labels, but programmer's responsibility
     raise more during assembly
         sub to label that doesn't exist
     biorealism for new unlearning:
         read schiess2016biobackprop and refs (backprop within dendritic tree but not across synapses)
-    auto-associative devices for better token stability
-        and remove decay gate, instead letting auto-update stay on usually
     normal learning in co, and single-corner sensitivity in gh (linprog?)
     overall diffcounts
     make layer/activator-specific:

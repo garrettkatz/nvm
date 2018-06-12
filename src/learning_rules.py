@@ -17,6 +17,22 @@ def hebbian(w, b, X, Y, actx, acty):
     db = acty.g(Y).dot(- alpha * beta * X.T + beta**2 * one.T).dot(one[:,:1]) / N
     return dw, db
 
+def rehebbian(w, b, X, Y, actx, acty):
+
+    N = X.shape[0]
+    c = (actx.on + actx.off)/2. # center
+    r = (actx.on - actx.off)/2. # radius
+
+    w0, b0 = w, b
+    for p in range(Y.shape[1]):
+        x, y = X[:,[p]], Y[:,[p]]
+        dw = (acty.g(y) - (w.dot(x)+b)) * (x - c).T / (N*r**2)
+        db = - dw.sum(axis=1) * c
+        w, b = w + dw, b + db
+
+    dw, db = w - w0, b - b0
+    return dw, db
+
 def dipole(w, b, X, Y, actx, acty):
     # only works for single x, y
     
