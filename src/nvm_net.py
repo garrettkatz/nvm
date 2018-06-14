@@ -78,9 +78,6 @@ class NVMNet:
         self.devices = devices
         self.layers = layers
 
-        # set up gain
-        self.w_gain, self.b_gain = act.gain()
-
         # set up gates
         NL = len(layers) + 2 # +2 for gate out/hidden
         # NG = NL + 3*NL**2 # number of gates (d + u + l + f)
@@ -91,6 +88,11 @@ class NVMNet:
         layers['go'] = Layer('go', (1,NG), acto, Coder(acto))
         layers['gh'] = Layer('gh', shapes['gh'], acth, Coder(acth))
         self.gate_map = make_nvm_gate_map(layers.keys())        
+
+        # set up gain
+        self.w_gain, self.b_gain = {}, {}
+        for layer_name, layer in layers.items():
+            self.w_gain[layer_name], self.b_gain[layer_name] = layer.activator.gain()
 
         # set up connection matrices
         self.weights, self.biases = flash_instruction_set(self)
@@ -198,7 +200,7 @@ class NVMNet:
         for name, layer in self.layers.items():
             u = self.gate_map.get_gate_value((name, name, 'u'), current_gates)
             d = self.gate_map.get_gate_value((name, name, 'd'), current_gates)
-            wvb = self.w_gain * self.activity[name] + self.b_gain
+            wvb = self.w_gain[name] * self.activity[name] + self.b_gain[name]
             activity_new[name] += (1-u) * (1-d) * wvb
     
         for name in activity_new:
