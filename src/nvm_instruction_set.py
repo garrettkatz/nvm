@@ -6,7 +6,7 @@ def gflow(to_layer, from_layer):
 
 def gprog():
     """gates for program memory (ip and op) layer updates"""
-    return [('ip','ip','u')]+[k for x in ['c','1','2'] for k in gflow('op'+x, 'ip')]
+    return gflow('ip','ip') + gflow('opc','ip') + gflow('op1','ip') + gflow('op2','ip')
 
 def flash_instruction_set(nvmnet, verbose=False):
     """

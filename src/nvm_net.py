@@ -198,10 +198,9 @@ class NVMNet:
             activity_new[to_layer] += wvb
 
         for name, layer in self.layers.items():
-            u = self.gate_map.get_gate_value((name, name, 'u'), current_gates)
             d = self.gate_map.get_gate_value((name, name, 'd'), current_gates)
             wvb = self.w_gain[name] * self.activity[name] + self.b_gain[name]
-            activity_new[name] += (1-u) * (1-d) * wvb
+            activity_new[name] += (1-d) * wvb
     
         for name in activity_new:
             activity_new[name] = self.layers[name].activator.f(activity_new[name])

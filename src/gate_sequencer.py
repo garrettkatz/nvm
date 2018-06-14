@@ -19,6 +19,7 @@ class GateSequencer(Sequencer, object):
         pattern = self.gate_output.activator.off * np.ones((self.gate_output.size,1))
         gate_keys = [
             (self.gate_hidden.name, self.gate_hidden.name, 'u'),
+            (self.gate_hidden.name, self.gate_hidden.name, 'd'),
             (self.gate_output.name, self.gate_hidden.name, 'u'),
             (self.gate_output.name, self.gate_output.name, 'd')]
 

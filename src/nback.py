@@ -129,8 +129,8 @@ if __name__ == "__main__":
     letters = list('abcd')
     diff_count = 10
     while diff_count > 5:
-        # nvmnet, diff_count = make_nback_nvm("logistic", tokens=letters)
-        nvmnet, diff_count = make_nback_nvm("tanh", tokens=letters)
+        nvmnet, diff_count = make_nback_nvm("logistic", tokens=letters)
+        # nvmnet, diff_count = make_nback_nvm("tanh", tokens=letters)
         break
     # nvmnet = make_nback_nvm("tanh")
     # raw_input("continue?")
