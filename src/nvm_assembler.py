@@ -9,6 +9,7 @@ def assemble(nvmnet, program, name, verbose=False, orthogonal=False, other_token
 
     ### Preprocess program string
     lines, labels = preprocess(program, nvmnet.devices.keys())
+    program_tokens = [tok for line in lines for tok in line]
 
     ### Encode all tokens in devices and ci (including labels for device jumps)
     registers = nvmnet.devices.keys()
@@ -19,21 +20,24 @@ def assemble(nvmnet, program, name, verbose=False, orthogonal=False, other_token
         nvmnet.layers[layer_name].encode_tokens(
             tokens=all_tokens, orthogonal=orthogonal)
 
-    ### Encode operand tokens
-    for x in [1,2]:
-        nvmnet.layers["op"+str(x)].encode_tokens(
-            tokens=unique([line[x] for line in lines]),
-            orthogonal=orthogonal)
+    ### Encode all program tokens in op
+    nvmnet.layers["op"].encode_tokens(
+        tokens=unique(program_tokens),
+        orthogonal=orthogonal)
 
-    ### Encode instruction pointers and labels
-    index_width = str(int(np.ceil(np.log10(len(lines)))))
+    ### Encode instruction pointers
+    index_width = str(int(np.ceil(np.log10(len(program_tokens)))))
     ip_patterns = nvmnet.layers["ip"].encode_tokens(
         tokens=[name] + \
-            [("%s.%0"+index_width+"d") % (name,l) for l in range(len(lines))],
+            [("%s.%0"+index_width+"d") % (name,t) for t in range(len(program_tokens))],
         orthogonal=orthogonal)
+    
+    ### Encode labels with corresponding instruction pointer patterns
+    line_offsets = np.cumsum([0] + [len(line) for line in lines])
     for label, line_index in labels.items():
-        # index is + 1 for leading program pointer, but - 1 for ip -> opx step
-        nvmnet.layers["ip"].coder.encode(label, ip_patterns[:,[line_index]])
+        # index is + 1 for leading program pointer, but - 1 for ip -> op step
+        nvmnet.layers["ip"].coder.encode(label,
+            ip_patterns[:,[line_offsets[line_index]]])
 
     ### Track total number of errors
     weights, biases = {}, {}
@@ -51,28 +55,26 @@ def assemble(nvmnet, program, name, verbose=False, orthogonal=False, other_token
         verbose=verbose)
     diff_count += dc
     
-    ### Link instructions to ip
-    for i,x in enumerate("c12"):
-        if verbose: print("Linking ip -> op"+x)
-        encodings = nvmnet.layers["op"+x].encode_tokens(
-            [line[i] for line in lines])
-        weights[("op"+x,"ip")], biases[("op"+x,"ip")], dc = flash_mem(
-            np.zeros((encodings.shape[0], ip_patterns.shape[0])),
-            np.zeros((encodings.shape[0], 1)),
-            ip_patterns[:,:-1], encodings,
-            nvmnet.layers["ip"].activator,
-            nvmnet.layers["op"+x].activator,
-            nvmnet.learning_rules[("op"+x,"ip")],
-            verbose=verbose)
-        diff_count += dc
-
+    ### Link op to ip
+    if verbose: print("Linking ip -> op")
+    op_patterns = nvmnet.layers["op"].encode_tokens(program_tokens)
+    weights[("op","ip")], biases[("op","ip")], dc = flash_mem(
+        np.zeros((op_patterns.shape[0], ip_patterns.shape[0])),
+        np.zeros((op_patterns.shape[0], 1)),
+        ip_patterns[:,:-1], op_patterns,
+        nvmnet.layers["ip"].activator,
+        nvmnet.layers["op"].activator,
+        nvmnet.learning_rules[("op","ip")],
+        verbose=verbose)
+    diff_count += dc
+    
     ### Link tokens across pathways
     pathways = [(r1, r2) for r1 in registers for r2 in registers] # for movd
-    pathways += [(r, "op2") for r in registers] # for movv
+    pathways += [(r, "op") for r in registers] # for movv
     pathways += [("ci", r) for r in registers] # for cmpd
-    pathways += [("ci", "op2")] # for cmpv
+    pathways += [("ci", "op")] # for cmpv
     pathways += [("ip", r) for r in registers] # jmpd, subd
-    pathways += [("ip", "op1")] # for jmpv, subv
+    pathways += [("ip", "op")] # for jmpv, subv
 
     for pathway in pathways:
     

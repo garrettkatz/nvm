@@ -19,9 +19,6 @@ def preprocess(program, register_names):
             # remove and save label
             labels[lines[l][0][:-1]] = l
             lines[l] = lines[l][1:]
-        # pad with nulls
-        while len(lines[l]) < 3:
-            lines[l].append("null")
         # replace generic instructions with value/device distinctions
         if lines[l][0] in ["mov", "cmp"]:
             if lines[l][2] in register_names: lines[l][0] += "d"

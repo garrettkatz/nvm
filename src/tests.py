@@ -21,16 +21,18 @@ class VMTestCase(ut.TestCase):
                 print(trace[t])
             self.assertTrue(
                 {r: state[r] for r in vm.register_names} == trace[t])
-            vm.step(verbose=verbose)
+            vm.step(verbose=verbose-1)
 
     # @ut.skip("")
     def test_noop(self):
 
         program = """
         start:  nop
+                nop
                 exit
         """
         trace = [
+            {"r0": None},
             {"r0": None},
             {"r0": None}]
 
@@ -70,15 +72,17 @@ class VMTestCase(ut.TestCase):
         program = """
         start:  jmp end
                 mov r0 A
-        end:    exit
+        end:    nop
+                exit
         """
         trace = [
+            {"r0": None},
             {"r0": None},
             {"r0": None}]
 
         self._test(program, trace, num_registers=1, verbose=0)
 
-    # @ut.skip("")
+    @ut.skip("")
     def test_jmpd(self):
 
         program = """
@@ -94,7 +98,7 @@ class VMTestCase(ut.TestCase):
 
         self._test(program, trace, num_registers=1, verbose=0)
 
-    # @ut.skip("")
+    @ut.skip("")
     def test_cmpv(self):
 
         program = """
@@ -122,7 +126,7 @@ class VMTestCase(ut.TestCase):
 
         self._test(program, trace, num_registers=1, verbose=0)
 
-    # @ut.skip("")
+    @ut.skip("")
     def test_cmpd(self):
 
         program = """
@@ -154,7 +158,7 @@ class VMTestCase(ut.TestCase):
 
         self._test(program, trace, num_registers=2, verbose=0)
 
-    # @ut.skip("")
+    @ut.skip("")
     def test_memr(self):
 
         program = """
@@ -190,7 +194,7 @@ class VMTestCase(ut.TestCase):
 
         self._test(program, trace, num_registers=1, verbose=0)
 
-    # @ut.skip("")
+    @ut.skip("")
     def test_subv(self):
 
         program = """
@@ -225,7 +229,7 @@ class VMTestCase(ut.TestCase):
 
         self._test(program, trace, num_registers=1, verbose=0)
 
-    # @ut.skip("")
+    @ut.skip("")
     def test_subd(self):
 
         program = """
@@ -262,7 +266,7 @@ class VMTestCase(ut.TestCase):
 
         self._test(program, trace, num_registers=2, verbose=0)
 
-    # @ut.skip("")
+    @ut.skip("")
     def test_dref(self):
 
         program = """

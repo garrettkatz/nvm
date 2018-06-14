@@ -44,8 +44,9 @@ class NVM:
         return self.net.at_exit()
 
     def step(self, verbose=0):
-        while True:
-            self.net.tick()
+        # while True:
+        for t in range(10):
+            self.net.tick(verbose=verbose-1)
             if verbose > 0: print(self.state_string())
             if self.net.at_start(): break
             if self.at_exit(): break
