@@ -10,13 +10,14 @@ class RefVM:
         self.active_program = None
         self.layers = {reg: None
             for reg in self.register_names + \
-            ["ip","co","mf"]}
+            ["ip","opc","op1","op2","co","mf"]}
         self.memory = {}
         self.pointers = {}
         self.stack = []
         self.exit = False
+        self.error = None
 
-    def assemble(self, program, name, verbose=0):
+    def assemble(self, program, name, verbose=0, other_tokens=[]):
         lines, labels = preprocess(program, self.register_names)
         self.programs[name] = (lines, labels)
 
@@ -24,6 +25,9 @@ class RefVM:
         # set program pointer
         self.active_program = program_name
         self.layers["ip"] = 0
+        self.layers["opc"] = "null"
+        self.layers["op1"] = "null"
+        self.layers["op2"] = "null"
         self.layers["mf"] = 0
         self.layers["co"] = False
         self.exit = False
@@ -32,69 +36,102 @@ class RefVM:
 
     def state_string(self):
         lines, labels = self.programs[self.active_program]
-        return "ip %s: "%self.layers["ip"] + \
+        ip = self.layers["ip"]
+        for label, l in labels.items():
+            if ip == l:
+                ip = label
+                break
+        return "ip %s: "%ip + \
             " ".join(lines[self.layers["ip"]]) + ", " + \
             ",".join([
                 "%s:%s"%(r,self.layers[r]) for r in self.register_names
             ])
 
-    def decode_state(self):
-        return dict(self.layers)
+    def decode_state(self, layer_names=None):
+        if layer_names is None: layer_names = self.layers.keys()
+        return {name: self.layers[name] for name in layer_names}
 
     def at_exit(self):
+        # lines, labels = self.programs[self.active_program]
+        # line = lines[self.layers["ip"]]
+        # return line[0] == "exit"
         return self.exit
 
-    def step(self, verbose=False):
+    def step(self, verbose=False, max_ticks=0):
         # load instruction
         lines, labels = self.programs[self.active_program]
         line = lines[self.layers["ip"]]
+        opc, op1, op2 = line
+        self.layers["opc"], self.layers["op1"], self.layers["op2"] = opc, op1, op2
 
         # execute instruction
-        if line[0] == "exit": self.exit = True
-        if line[0] == "movv": self.layers[line[1]] = line[2]
-        if line[0] == "movd": self.layers[line[1]] = self.layers[line[2]]
-        if line[0] == "cmpv":
+        if opc == "exit": self.exit = True
+        if opc == "movv": self.layers[op1] = op2
+        if opc == "movd": self.layers[op1] = self.layers[op2]
+        if opc == "cmpv":
             self.layers["co"] = (
-                self.layers[line[1]] == line[2])
-        if line[0] == "cmpd":
+                self.layers[op1] == op2)
+        if opc == "cmpd":
             self.layers["co"] = (
-                self.layers[line[1]] == self.layers[line[2]])
-        if line[0] == "jie":
-            if self.layers["co"]:
-                self.layers["ip"] = labels[line[1]]-1
-        if line[0] == "jmpv":
-            self.layers["ip"] = labels[line[1]]-1
-        if line[0] == "jmpd":
-            self.layers["ip"] = labels[self.layers[line[1]]]-1
+                self.layers[op1] == self.layers[op2])
+        if opc == "jie":
+            if op1 not in labels:
+                self.error = "jie to non-existent label"
+                self.exit = True
+            elif self.layers["co"]:
+                self.layers["ip"] = labels[op1]-1
+        if opc == "jmpv":
+            if op1 not in labels:
+                self.error = "jmpv to non-existent label"
+                self.exit = True
+            else:
+                self.layers["ip"] = labels[op1]-1
+        if opc == "jmpd":
+            if self.layers[op1] not in labels:
+                self.error = "jmpd to non-existent label"
+                self.exit = True
+            else:
+                self.layers["ip"] = labels[self.layers[op1]]-1
 
-        if line[0] == "nxt": self.layers["mf"] += 1
-        if line[0] == "prv": self.layers["mf"] -= 1
-        if line[0] == "mem":
+        if opc == "nxt": self.layers["mf"] += 1
+        if opc == "prv": self.layers["mf"] -= 1
+        if opc == "mem":
             mf = self.layers["mf"]
             if mf not in self.memory: self.memory[mf] = {}
-            self.memory[mf][line[1]] = self.layers[line[1]]
-        if line[0] == "rem":
+            self.memory[mf][op1] = self.layers[op1]
+        if opc == "rem":
             mf = self.layers["mf"]
-            self.layers[line[1]] = self.memory[mf][line[1]]
-        if line[0] == "ref":
-            reg, mf = line[1], self.layers["mf"]
+            if mf not in self.memory or op1 not in self.memory[mf]:
+                self.exit = True
+                self.error = "rem non-existent memory"
+            else:
+                self.layers[op1] = self.memory[mf][op1]
+        if opc == "ref":
+            reg, mf = op1, self.layers["mf"]
             if reg not in self.pointers: self.pointers[reg] = {}
             self.pointers[reg][self.layers[reg]] = mf
-        if line[0] == "drf":
-            reg = line[1]
-            self.layers["mf"] = self.pointers[reg][self.layers[reg]]
+        if opc == "drf":
+            reg, val = op1, self.layers[op1]
+            if reg in self.pointers and val in self.pointers[reg]:
+                self.layers["mf"] = self.pointers[reg][val]
+            else:
+                self.error = "drf non-existent pointer"
+                self.exit = True
 
-        if line[0] == "subv":
+        if opc == "subv":
             self.stack.append(self.layers["ip"])
-            self.layers["ip"] = labels[line[1]]-1
-        if line[0] == "subd":
+            self.layers["ip"] = labels[op1]-1
+        if opc == "subd":
             self.stack.append(self.layers["ip"])
-            self.layers["ip"] = labels[self.layers[line[1]]]-1
-        if line[0] == "ret":
+            self.layers["ip"] = labels[self.layers[op1]]-1
+        if opc == "ret":
             self.layers["ip"] = self.stack.pop()
 
-        # advance instruction pointer
-        self.layers["ip"] += 1
+        if self.error is not None:
+            print("RVM ERROR: %s"%self.error)
+        else:
+            # advance instruction pointer
+            self.layers["ip"] += 1        
 
 if __name__ == "__main__":
 

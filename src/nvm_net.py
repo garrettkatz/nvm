@@ -4,7 +4,7 @@ from coder import Coder
 from gate_map import make_nvm_gate_map
 from activator import *
 from learning_rules import *
-from nvm_instruction_set import flash_instruction_set
+from nvm_instruction_set import opcodes, flash_instruction_set
 from nvm_assembler import assemble
 # from nvm_linker import link
 
@@ -114,16 +114,6 @@ class NVMNet:
             self.weights[(to_name, from_name)] = np.zeros((N_to, N_from))
             self.biases[(to_name, from_name)] = np.zeros((N_to, 1))
 
-        # initialize layer states
-        self.activity = {
-            name: layer.activator.off * np.ones((layer.size,1))
-            for name, layer in self.layers.items()}
-        self.activity['go'] = self.layers['go'].coder.encode('start')
-        self.activity['gh'] = self.layers['gh'].coder.encode('start')
-        for ms in 'ms':
-            self.activity[ms+'f'] = self.layers[ms+'f'].coder.encode('0')
-            self.activity[ms+'b'] = self.layers[ms+'b'].coder.encode('0')
-
         # initialize constants
         self.constants = ["null"] #"true", "false"]
 
@@ -136,14 +126,7 @@ class NVMNet:
 
         # encode opcodes
         self.orthogonal = orthogonal
-        self.layers["opc"].encode_tokens(
-            tokens = [
-                "movv","movd","jmpv","jmpd"
-                "cmpv","cmpd","jie"
-                "subv","subd","ret",
-                "mem","rem","nxt","prv","ref","drf",
-                "exit","nop"],
-            orthogonal=orthogonal)
+        self.layers["opc"].encode_tokens(opcodes, orthogonal=orthogonal)
 
     def set_pattern(self, layer_name, pattern):
         self.activity[layer_name] = pattern
@@ -166,18 +149,26 @@ class NVMNet:
         update_add(self.weights, weights)
         update_add(self.biases, biases)
 
-    # def link(self, verbose=1, tokens=[], orthogonal=False):
-    #     weights, biases, diff_count = link(
-    #         self, verbose=(verbose > 1), tokens=tokens, orthogonal=orthogonal)
-    #     if verbose > 0: print("linker diff count = %d"%diff_count)
-    #     update_add(self.weights, weights)
-    #     update_add(self.biases, biases)
-    #     return diff_count
-
     def load(self, program_name, activity):
-        # set program pointer
-        self.activity["ip"] = self.layers["ip"].coder.encode(program_name)
-        # set initial activities
+        # default all layers to off state
+        self.activity = {
+            name: layer.activator.off * np.ones((layer.size,1))
+            for name, layer in self.layers.items()}
+
+        # initialize gates
+        self.activity['go'] = self.layers['go'].coder.encode('start')
+        self.activity['gh'] = self.layers['gh'].coder.encode('start')
+
+        # initialize pointers
+        self.activity['ip'] = self.layers['ip'].coder.encode(program_name)
+        for ms in 'ms':
+            self.activity[ms+'f'] = self.layers[ms+'f'].coder.encode('0')
+            self.activity[ms+'b'] = self.layers[ms+'b'].coder.encode('0')
+
+        # initialize comparison
+        self.activity["co"] = self.layers["co"].coder.encode('false')
+
+        # user initializations
         for layer, token in activity.items():
             self.activity[layer] = self.layers[layer].coder.encode(token)
 
@@ -231,6 +222,9 @@ class NVMNet:
 
     def at_start(self):
         return self.layers["gh"].coder.decode(self.activity["gh"]) == "start"
+
+    def at_ready(self):
+        return self.layers["gh"].coder.decode(self.activity["gh"]) == "ready"
 
     def at_exit(self):
         return (self.layers["opc"].coder.decode(self.activity["opc"]) == "exit")

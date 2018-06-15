@@ -1,8 +1,7 @@
 next steps:
     2.0:
         ipop
-        simplified decay
-        cts gates, slower smoother hidden
+    cts gates, slower smoother hidden
     vmpfc and goal selection
     refactor devices to registers
     instruction pitfalls:

@@ -1,5 +1,12 @@
 from gate_sequencer import GateSequencer
 
+opcodes = [
+    "movv","movd","jmpv","jmpd",
+    "cmpv","cmpd","jie",
+    "subv","subd","ret",
+    "mem","rem","nxt","prv","ref","drf",
+    "exit","nop"]
+
 def gflow(to_layer, from_layer):
     """gates for inter-layer information flow"""
     return [(to_layer,from_layer,'u'), (to_layer,to_layer,'d')]
