@@ -54,7 +54,7 @@ class NVMNet:
 
         # set up instruction layers
         act = activator(pad, self.layer_size)
-        layer_names = ['ip','opc','op1','op2']
+        layer_names = ['ip','op']
         layers = {name: Layer(name, shapes.get(name, layer_shape), act, Coder(act))
             for name in layer_names}
 
@@ -95,7 +95,7 @@ class NVMNet:
             self.w_gain[layer_name], self.b_gain[layer_name] = layer.activator.gain()
 
         # set up connection matrices
-        self.weights, self.biases = flash_instruction_set(self)
+        self.weights, self.biases = flash_instruction_set(self, verbose=False)
         for ms in 'ms':
             ms_weights, ms_biases = address_space(
                 layers[ms+'f'], layers[ms+'b'])
@@ -172,7 +172,11 @@ class NVMNet:
         for layer, token in activity.items():
             self.activity[layer] = self.layers[layer].coder.encode(token)
 
-    def tick(self):
+    def tick(self, verbose=0):
+
+        if verbose > 0: print([
+            "%s=%s"%(name, self.layers[name].coder.decode(self.activity[name]))
+            for name in ["gh","go","ip","op"]])
 
         ### NVM tick
         current_gates = self.activity['go']
@@ -227,7 +231,7 @@ class NVMNet:
         return self.layers["gh"].coder.decode(self.activity["gh"]) == "ready"
 
     def at_exit(self):
-        return (self.layers["opc"].coder.decode(self.activity["opc"]) == "exit")
+        return (self.layers["op"].coder.decode(self.activity["op"]) == "exit")
 
     def state_string(self, show_layers=[], show_tokens=False, show_corrosion=False, show_gates=False):
         s = ""

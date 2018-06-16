@@ -125,7 +125,7 @@ if __name__ == '__main__':
     act = act_fun(PAD, N)
     coder = Coder(act)
 
-    layer_names = ['mem','ip','opc','op1','op2','op3']
+    layer_names = ['mem','ip','op']
     layers = [Layer(name, N, act, coder) for name in layer_names]
 
     NL = len(layers) + 2 # +2 for gate out/hidden

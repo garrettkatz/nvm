@@ -1,6 +1,7 @@
 next steps:
     2.0:
         ipop
+    need to clean all mains and sanity in all system tests including pointer
     cts gates, slower smoother hidden
     vmpfc and goal selection
     refactor devices to registers
