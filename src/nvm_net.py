@@ -43,7 +43,7 @@ class NVMNet:
     
     def __init__(self, layer_shape, pad, activator, learning_rule, devices, shapes={}, orthogonal=False):
         # layer_shape is default, shapes[layer_name] are overrides
-        if 'gh' not in shapes: shapes['gh'] = (16,16)
+        if 'gh' not in shapes: shapes['gh'] = (32,16)
         if 'm' not in shapes: shapes['m'] = (16,16)
         if 's' not in shapes: shapes['s'] = (8,8)
         if 'c' not in shapes: shapes['c'] = (16,16)
@@ -95,7 +95,7 @@ class NVMNet:
             self.w_gain[layer_name], self.b_gain[layer_name] = layer.activator.gain()
 
         # set up connection matrices
-        self.weights, self.biases = flash_instruction_set(self)
+        self.weights, self.biases = flash_instruction_set(self, verbose=False)
         for ms in 'ms':
             ms_weights, ms_biases = address_space(
                 layers[ms+'f'], layers[ms+'b'])

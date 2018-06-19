@@ -1,6 +1,7 @@
 next steps:
     2.0:
         ipop
+    auto-infer required layer sizes
     cts gates, slower smoother hidden
     vmpfc and goal selection
     refactor devices to registers
