@@ -57,7 +57,7 @@ class NVM:
             if self.net.at_start(): break
             if self.at_exit(): break
 
-def make_default_nvm(register_names, layer_shape=None, orthogonal=False):
+def make_default_nvm(register_names, layer_shape=None, orthogonal=False, shapes={}):
     if layer_shape is None: layer_shape = (8,8) if orthogonal else (32,32)
     pad = 0.0001
     # activator, learning_rule = tanh_activator, rehebbian
@@ -65,7 +65,7 @@ def make_default_nvm(register_names, layer_shape=None, orthogonal=False):
 
     return NVM(layer_shape,
         pad, activator, learning_rule, register_names,
-        shapes={}, tokens=[], orthogonal=orthogonal)
+        shapes=shapes, tokens=[], orthogonal=orthogonal)
 
 if __name__ == "__main__":
 

@@ -1,5 +1,5 @@
 import numpy as np
-from orthogonal_patterns import random_hadamard
+from orthogonal_patterns import random_orthogonal_patterns
 
 class Layer:
     def __init__(self, name, shape, activator, coder):
@@ -15,7 +15,7 @@ class Layer:
         T = len(tokens)
         if orthogonal:
             on, off = self.activator.on, self.activator.off
-            patterns = random_hadamard(self.size, T)
+            patterns = random_orthogonal_patterns(self.size, T)
             patterns = off + (on - off)*(patterns + 1.)/2.
             for t in range(T):
                 self.coder.encode(tokens[t], patterns[:,[t]])

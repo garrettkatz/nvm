@@ -40,6 +40,9 @@ def generate_random_program(register_names, num_tokens, num_subroutines, num_lin
     # Initialize tokens
     tokens = ['tok'+str(t) for t in range(num_tokens)]
 
+    # Randomize opcodes on each line
+    lines = np.random.choice(hr_opcodes, num_lines)
+
     # Initialize line indices of subroutine code
     subroutine_partition = np.random.choice(
         np.arange(2,num_lines), # leave >= 2 for sub and exit in main
@@ -47,9 +50,6 @@ def generate_random_program(register_names, num_tokens, num_subroutines, num_lin
     subroutine_partition.sort()
     subroutine_partition = np.insert(subroutine_partition, 0, 0)
     subroutine_partition = np.append(subroutine_partition, num_lines)
-
-    # Randomize opcodes on each line
-    lines = np.random.choice(hr_opcodes, num_lines)
 
     # Make sure main code ends in exit and subroutines end in ret
     lines[subroutine_partition[1]-1] = 'exit'
@@ -83,7 +83,7 @@ def generate_random_program(register_names, num_tokens, num_subroutines, num_lin
 
     # Prepend labels to program lines
     for l in range(len(lines)):
-        lines[l] = " "*8 + lines[l]
+        lines[l] = " "*10 + lines[l]
     for label, l in labels.items():
         lines[l] = label + ":" + lines[l][len(label)+1:]
     
@@ -123,7 +123,10 @@ def match_trial(
         register_names, num_tokens, num_subroutines, num_lines)
 
     # NVM run
-    nvm = make_default_nvm(register_names, layer_shape=layer_shape, orthogonal=orthogonal)
+    nvm = make_default_nvm(
+        register_names, layer_shape=layer_shape, orthogonal=orthogonal,
+        shapes = {"ip": (max(
+            layer_shape[0], 2**int(np.ceil(np.log2(num_lines+1)))),1) })
     nvm_trace = run_random_program(nvm,
         program, tokens, initial_activity, max_steps=max_steps, verbose=0)
 
@@ -142,7 +145,11 @@ def match_trial(
     return program, leading_match_count, trial_step_count, nvm_trace, rvm_trace
 
 def match_trial_caller(args):
-    return match_trial(*args)
+    try:
+        return match_trial(*args)
+    except Exception as e:
+        print(e.message)
+        return None
 
 def run_match_trial_pool(args_list, num_procs=0):
 
@@ -175,48 +182,99 @@ def plot_trial_complexities(args_list, results):
     pt.ylabel('Number of unique tokens')
     pt.show()
 
-"""
-color or bargroup by network size (too striated)
-mark by orth
-plot: relate success to program complexity
-"""
-
 def plot_match_trials(args_list, results, layer_shape_colors):
-
+    sizes = {k: set() for k in [False, True]}
+    line_counts = {k: set() for k in [False, True]}
+    successes = {}
+    failures = {}
     for a in range(len(args_list)):
         register_names, program = args_list[a][0], results[a][0]
         num_lines, layer_shape, orthogonal = args_list[a][3:6]
         leading_match_count, trial_step_count = results[a][1:3]
         lines, labels = preprocess(program, register_names)
         num_tokens = len(set([tok for line in lines for tok in line] + labels.keys()))
-        
         success = (leading_match_count == trial_step_count)
-        # if  orthogonal and  success:
-        #     pt.scatter(num_tokens, layer_shape[0], marker='o',facecolors='none',edgecolors='k')
-        if  orthogonal and ~success:
-            pt.scatter(num_tokens, layer_shape[0], marker='o',facecolors='none',edgecolors='gray')
-        if ~orthogonal and  success:
-            pt.scatter(num_tokens, layer_shape[0], marker='+',c='k')
-        # if ~orthogonal and ~success:
-        #     pt.scatter(num_tokens, layer_shape[0], marker='+',c='gray')
-        # if  orthogonal and  success: kwa = dict(marker='o',c='k')
-        # if  orthogonal and ~success: kwa = dict(marker='o')
-        # if ~orthogonal and  success: kwa = dict(marker='+',c='k')
-        # if ~orthogonal and ~success: kwa = dict(marker='+',c='k')
-        # # if orthogonal and success: pt.scatter([0],[0],marker='o',c='k')
-        # if orthogonal and success:
-        #     print(num_tokens, layer_shape[0])
-        #     pt.scatter(num_tokens, layer_shape[0], **kwa)
+        
+        sizes[orthogonal].add(layer_shape[0])
+        line_counts[orthogonal].add(num_lines)
+        k = (layer_shape[0], num_lines, orthogonal)
+        if success: successes[k] = successes.get(k, 0) + 1
+        else: failures[k] = failures.get(k, 0) + 1
 
-    pt.legend([
-        Line2D([0],[0], marker='o', color='none',markeredgecolor='k', linestyle='none'),
-        Line2D([0],[0], marker='+', color='k', linestyle='none'),
-        Line2D([0],[0], marker='s', color='k', linestyle='none'),
-        Line2D([0],[0], marker='s', color='gray', linestyle='none'),
-    ],["Orth","Rand","Success","Fail"])
-    pt.xlabel("# unique program tokens")
-    pt.ylabel("Layer size") 
+    sizes = {k: np.sort(list(sizes[k])) for k in [False, True]}
+    line_counts = {k: np.sort(list(line_counts[k])) for k in [False, True]}
+    y = {}
+    y_orth = {}
+    for orth in [False, True]:
+        for size in sizes[orth]:
+            if orth: y_orth[size] = []
+            else: y[size] = []
+            for count in line_counts[orth]:
+                k = (size, count, orth)
+                if orth:
+                    y_orth[size].append(
+                        float(successes.get(k,0))/(successes.get(k,0)+failures.get(k,0)))
+                else:
+                    y[size].append(
+                        float(successes.get(k,0))/(successes.get(k,0)+failures.get(k,0)))
+
+    pt.subplot(1,2,1)
+    print("rand")
+    for size in sizes[False]:
+        print(size, ["%d:%.2f"%tup for tup in zip(line_counts[False], y[size])])
+        pt.plot(line_counts[False], y[size], '-o')
+    pt.subplot(1,2,2)
+    print("orth")
+    for size in sizes[True]:
+        print(size, ["%d:%.2f"%tup for tup in zip(line_counts[True], y_orth[size])])
+        pt.plot(line_counts[True], y_orth[size], '-o')
     pt.show()
+
+# To assess whether relationship between prog size and required nvm size linear, log, poly, etc:
+# for each prog size, find smallest nvm with perfect success rate.
+# then plot that prog size vs required nvm size.
+
+# def plot_match_trials(args_list, results, layer_shape_colors):
+
+#     for a in range(len(args_list)):
+#         register_names, program = args_list[a][0], results[a][0]
+#         num_lines, layer_shape, orthogonal = args_list[a][3:6]
+#         leading_match_count, trial_step_count = results[a][1:3]
+#         lines, labels = preprocess(program, register_names)
+#         num_tokens = len(set([tok for line in lines for tok in line] + labels.keys()))
+#         num_tokens += np.random.rand()
+        
+#         success = (leading_match_count == trial_step_count)
+#         if  orthogonal and  success:
+#             # pt.scatter(num_tokens, layer_shape[0], marker='o',facecolors='none',edgecolors='k')
+#             pt.plot(num_tokens, layer_shape[0], marker='o',markerfacecolor='none',markeredgecolor='k', linestyle='none')
+#         if  orthogonal and ~success:
+#             # pt.scatter(num_tokens, layer_shape[0], marker='o',facecolors='none',edgecolors='gray')
+#             pt.plot(num_tokens, layer_shape[0], marker='d',markerfacecolor='none',markeredgecolor='gray', linestyle='none')
+#         if ~orthogonal and  success:
+#             # pt.scatter(num_tokens, layer_shape[0], marker='+',c='k')
+#             pt.plot(num_tokens, layer_shape[0], marker='+',c='k', linestyle='none')
+#         if ~orthogonal and ~success:
+#             # pt.scatter(num_tokens, layer_shape[0], marker='+',c='gray')
+#             pt.plot(num_tokens, layer_shape[0], marker='^',c='gray', linestyle='none')
+#         # if  orthogonal and  success: kwa = dict(marker='o',c='k')
+#         # if  orthogonal and ~success: kwa = dict(marker='o')
+#         # if ~orthogonal and  success: kwa = dict(marker='+',c='k')
+#         # if ~orthogonal and ~success: kwa = dict(marker='+',c='k')
+#         # # if orthogonal and success: pt.scatter([0],[0],marker='o',c='k')
+#         # if orthogonal and success:
+#         #     print(num_tokens, layer_shape[0])
+#         #     pt.scatter(num_tokens, layer_shape[0], **kwa)
+
+#     pt.legend([
+#         Line2D([0],[0], marker='o', color='none',markeredgecolor='k', linestyle='none'),
+#         Line2D([0],[0], marker='+', color='k', linestyle='none'),
+#         Line2D([0],[0], marker='s', color='k', linestyle='none'),
+#         Line2D([0],[0], marker='s', color='gray', linestyle='none'),
+#     ],["Orth","Rand","Success","Fail"])
+#     pt.xlabel("# unique program tokens")
+#     pt.ylabel("Layer size") 
+#     pt.show()
 
 
 # def plot_match_trials(args_list, results, layer_shape_colors):
@@ -272,26 +330,38 @@ if __name__ == "__main__":
     num_registers = 3
     register_names = ["r%d"%r for r in range(num_registers)]
     num_tokens = 2
-    max_steps = 50
+    max_steps = 5
     verbose = 0
-    program_sizes = [ # num_subroutines, num_lines
-        (1, 8),
-        (1, 16),
-        (2, 24),
-        (3, 36),
-        (3, 48),
-    ]
-    layer_shapes = [
+    program_sizes = {False: # not orth
+        [ # num_subroutines, num_lines
+        (1, 7),
+        (1, 15),
+        (2, 31),
+        (2, 63),
+        (3, 127),
+        ], True: [# orth
+        (1, 7),
+        (1, 15),
+        (1, 31),
+        (2, 63),
+        (3, 511),
+        (4, 1023), # must be layer_size-1 for ip layer encoding
+        ]}
+    layer_shapes = {False: [# not orth
+        (64, 1),
+        (128, 1),
+        (512, 1),
+        (1024, 1),
+        ], True: [ # orth
         (16, 1),
         (32, 1),
         (64, 1),
         (128,1),
-        (256,1),
-        # (512,1),
-    ]
-    layer_shape_colors = {
-        s: np.arange(0, len(layer_shapes), dtype=float)[::-1][i]/len(layer_shapes)
-        for i,s in enumerate(layer_shapes)}
+        ]}
+    layer_shape_colors = {k:
+        {s: np.arange(0, len(layer_shapes[k]), dtype=float)[::-1][i]/len(layer_shapes[k])
+            for i,s in enumerate(layer_shapes[k])}
+        for k in [False, True]}
     # layer_shape_colors = {
     #     (16, 1): .8,
     #     (32, 1): .6,
@@ -300,17 +370,21 @@ if __name__ == "__main__":
     #     (256,1): .0,
     #     # (512,1): .0,
     # }
+    num_repetitions = 10
     
     args_list = [(
         register_names, num_tokens, num_subroutines, num_lines,
         layer_shape, orthogonal, max_steps, verbose)
-        for (orthogonal, (num_subroutines, num_lines), layer_shape) in it.product(
-            [False, True], program_sizes, layer_shapes)]
+        for orthogonal in [False, True]
+            for ((num_subroutines, num_lines), layer_shape, _) in it.product(
+                program_sizes[orthogonal],
+                layer_shapes[orthogonal],
+                range(num_repetitions))]
 
-    # results = run_match_trial_pool(args_list, num_procs=0)
-    # with open('tmp.pkl','w') as f: pk.dump(results, f)
+    results = run_match_trial_pool(args_list, num_procs=0)
+    with open('tmp.pkl','w') as f: pk.dump((args_list, results), f)
 
-    with open('tmp.pkl','r') as f: results = pk.load(f)
+    with open('tmp.pkl','r') as f: args_list, results = pk.load(f)
     
     for a, (_, leading_match_count, trial_step_count, _, _) in enumerate(results):
         print("|prog|=%d, N=%d, %s: %d of %d"%(

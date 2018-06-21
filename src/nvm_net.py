@@ -48,15 +48,15 @@ class NVMNet:
         if 's' not in shapes: shapes['s'] = (8,8)
         if 'c' not in shapes: shapes['c'] = (16,16)
 
-        # set up parameters
-        self.layer_size = layer_shape[0]*layer_shape[1]
+        # Save padding
         self.pad = pad
 
         # set up instruction layers
-        act = activator(pad, self.layer_size)
-        layer_names = ['ip','opc','op1','op2']
-        layers = {name: Layer(name, shapes.get(name, layer_shape), act, Coder(act))
-            for name in layer_names}
+        layers = {}
+        for name in ['ip','opc','op1','op2']:
+            shape = shapes.get(name, layer_shape)
+            act = activator(pad, shape[0]*shape[1])
+            layers[name] = Layer(name, shape, act, Coder(act))
 
         # set up memory and stack layers
         NM, NS = shapes['m'][0]*shapes['m'][1], shapes['s'][0]*shapes['s'][1]
