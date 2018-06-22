@@ -188,6 +188,7 @@ def plot_match_trials(args_list, results, layer_shape_colors):
     successes = {}
     failures = {}
     for a in range(len(args_list)):
+        if results[a] is None: continue
         register_names, program = args_list[a][0], results[a][0]
         num_lines, layer_shape, orthogonal = args_list[a][3:6]
         leading_match_count, trial_step_count = results[a][1:3]
@@ -220,14 +221,18 @@ def plot_match_trials(args_list, results, layer_shape_colors):
 
     pt.subplot(1,2,1)
     print("rand")
+    h = []
     for size in sizes[False]:
         print(size, ["%d:%.2f"%tup for tup in zip(line_counts[False], y[size])])
-        pt.plot(line_counts[False], y[size], '-o')
+        h.append(pt.plot(line_counts[False], y[size], '-o')[0])
+    pt.legend(h, ["N=%d"%s for s in sizes[False]])
     pt.subplot(1,2,2)
     print("orth")
+    h = []
     for size in sizes[True]:
         print(size, ["%d:%.2f"%tup for tup in zip(line_counts[True], y_orth[size])])
-        pt.plot(line_counts[True], y_orth[size], '-o')
+        h.append(pt.plot(line_counts[True], y_orth[size], '-o')[0])
+    pt.legend(h, ["N=%d"%s for s in sizes[True]])
     pt.show()
 
 # To assess whether relationship between prog size and required nvm size linear, log, poly, etc:
@@ -330,33 +335,42 @@ if __name__ == "__main__":
     num_registers = 3
     register_names = ["r%d"%r for r in range(num_registers)]
     num_tokens = 2
-    max_steps = 50
+    max_steps = 100
     verbose = 0
     program_sizes = {False: # not orth
         [ # num_subroutines, num_lines
-        (1, 7),
-        (1, 15),
-        (2, 31),
-        (2, 63),
-        (3, 127),
+        (1, 8-1),
+        (1, 16-1),
+        (2, 32-1),
+        (2, 48-1),
+        (2, 64-1),
+        (2, 96-1),
+        (3, 128-1),
+        (4, 256-1),
         ], True: [# orth
-        (1, 7),
-        (1, 15),
-        (1, 31),
-        (2, 63),
-        (3, 511),
-        (4, 1023), # must be layer_size-1 for ip layer encoding
+        (1, 8-1),
+        (1, 64-1),
+        (2, 256-1),
+        (3, 512-1),
+        (4, 768-1),
+        (5, 1024-1),
+        (4, 1023-1), # must be layer_size-1 for ip layer encoding
         ]}
     layer_shapes = {False: [# not orth
+        (16, 1),
+        (32, 1),
         (64, 1),
         (128, 1),
+        (256, 1),
         (512, 1),
         (1024, 1),
         ], True: [ # orth
         (16, 1),
         (32, 1),
         (64, 1),
-        (128,1),
+        (256, 1),
+        (512, 1),
+        (1024, 1),
         ]}
     layer_shape_colors = {k:
         {s: np.arange(0, len(layer_shapes[k]), dtype=float)[::-1][i]/len(layer_shapes[k])
@@ -370,7 +384,7 @@ if __name__ == "__main__":
     #     (256,1): .0,
     #     # (512,1): .0,
     # }
-    num_repetitions = 10
+    num_repetitions = 50
     
     args_list = [(
         register_names, num_tokens, num_subroutines, num_lines,
@@ -386,7 +400,11 @@ if __name__ == "__main__":
 
     with open('tmp.pkl','r') as f: args_list, results = pk.load(f)
     
-    for a, (_, leading_match_count, trial_step_count, _, _) in enumerate(results):
+    for a, res in enumerate(results):
+        if res is None:
+            print("crashed")
+            continue
+        (_, leading_match_count, trial_step_count, _, _) = res
         print("|prog|=%d, N=%d, %s: %d of %d"%(
             args_list[a][3], args_list[a][4][0],
             "orth" if args_list[a][5] else "rand",
