@@ -1,8 +1,4 @@
 next steps:
-    va:
-        test out nvm with the default gh~go gates off such that nvm freezes in current state
-        send greg a weight matrix that would let amy counterbalance gh to get desired go
-        check out https://link.springer.com/article/10.1007%2FBF00235863
     2.0:
         ipop
     auto-infer required layer sizes

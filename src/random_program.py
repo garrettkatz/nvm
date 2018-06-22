@@ -235,9 +235,27 @@ def plot_match_trials(args_list, results, layer_shape_colors):
     pt.legend(h, ["N=%d"%s for s in sizes[True]])
     pt.show()
 
-# To assess whether relationship between prog size and required nvm size linear, log, poly, etc:
-# for each prog size, find smallest nvm with perfect success rate.
-# then plot that prog size vs required nvm size.
+    # To assess whether relationship between prog size and required nvm size linear, log, poly, etc:
+    # for each line count, find smallest nvm size with perfect success rate.
+    # then plot that line count vs required nvm size.
+    h = []
+    pt.figure()
+    for orth in [False, True]:
+        x, y = [], []
+        for count in line_counts:
+            x.append(count)
+            best_size = sizes.max()
+            for size in sizes:
+                k = (size, count, orth)
+                success_rate = float(successes.get(k,0))
+                success_rate /= (successes.get(k,0)+failures.get(k,0)))
+                if success_rate == 1.0 and size < best_size: best_size = size
+            y.append(best_size)
+        h.append(pt.plot(x, y)[0])
+    pt.legend(h, ["Rand", "Orth"])
+    pt.show()
+                
+                
 
 # def plot_match_trials(args_list, results, layer_shape_colors):
 
