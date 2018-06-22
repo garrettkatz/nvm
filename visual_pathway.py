@@ -63,12 +63,6 @@ def build_vp_network(rows, cols):
         "columns" : 3, })
     
     # create internal connection factories
-    def build_sum_weights(from_layer, to_layer, props):
-        props["name"] = "%s <- %s"%(to_layer, from_layer)
-        props["from layer"] = from_layer
-        props["to layer"] = to_layer
-        props["type"] = "one to one"
-        props["opcode"] = "add"
     def build_max_weights(from_layer, to_layer, props):
         props["name"] = "%s <- %s"%(to_layer, from_layer)
         props["from layer"] = from_layer
@@ -102,7 +96,6 @@ def build_vp_network(rows, cols):
         "from structure" : "visual pathway", "to structure" : "visual pathway",
         "plastic" : False, "sparse" : False,
         "weight config": {"type" : "flat", "weight" : 1 }}
-    sum_weights_factory = ConnectionFactory(defaults, build_sum_weights)
     max_weights_factory = ConnectionFactory(defaults, build_max_weights)
     class_weights_factory = ConnectionFactory(defaults, build_class_weights)
     class_biases_factory = ConnectionFactory(defaults, build_class_biases)
@@ -257,7 +250,7 @@ def main(read=True, visualizer=False, device=None, rate=0, iterations=1000000):
     nvmnet = make_saccade_nvm("logistic")
     nvm_structure, nvm_connections = make_syngen_network(nvmnet)
     if visualizer:
-        viz_layers = ["sc","fef","tc","ip","opc","op1","op2","gh","go"]
+        viz_layers = ["sc","fef","tc","ip","opc","op1","op2","gh","go", "ci", "csom", "co"]
     else:
         viz_layers = []
     nvm_modules = make_syngen_environment(nvmnet,
@@ -296,7 +289,7 @@ def main(read=True, visualizer=False, device=None, rate=0, iterations=1000000):
                                "iterations" : iterations,
                                "refresh rate" : rate,
                                "verbose" : True,
-                               "learning flag" : False})
+                               "learning flag" : True})
     if report is None:
         print("Engine failure.  Exiting...")
         return
