@@ -330,7 +330,7 @@ if __name__ == "__main__":
     num_registers = 3
     register_names = ["r%d"%r for r in range(num_registers)]
     num_tokens = 2
-    max_steps = 5
+    max_steps = 50
     verbose = 0
     program_sizes = {False: # not orth
         [ # num_subroutines, num_lines
