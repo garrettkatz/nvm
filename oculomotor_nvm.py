@@ -16,7 +16,7 @@ from syngen import get_dsst_params
 
 dsst_params = get_dsst_params(num_rows=8, cell_res=8)
 
-def build_retina(name, rows, cols, rf_size=5, threshold=24, convergence=1):
+def build_retina(name, rows, cols, rf_size=5, convergence=1):
     photoreceptor = {
         "name" : name + "_photoreceptor",
         "neural model" : "relay",
@@ -37,14 +37,14 @@ def build_retina(name, rows, cols, rf_size=5, threshold=24, convergence=1):
 
     retina_on = {
         "name" : name + "_retina_on",
-        "neural model" : "relay",
+        "neural model" : "rate_encoding",
         "rows" : rows / convergence,
         "columns" : cols / convergence,
         "ramp" : True}
 
     retina_off = {
         "name" : name + "_retina_off",
-        "neural model" : "relay",
+        "neural model" : "rate_encoding",
         "rows" : rows / convergence,
         "columns" : cols / convergence,
         "ramp" : True}
@@ -72,14 +72,9 @@ def build_retina(name, rows, cols, rf_size=5, threshold=24, convergence=1):
             "plastic" : False,
             "weight config" : {
                 "type" : "flat",
-                "weight" : -1.0,
-                "circular mask" : [
-                    {
-                        "diameter" : 1,
-                        "invert" : True,
-                        "value" : threshold
-                    }
-                ]
+                "weight" : 1.0,
+                "distance callback" : "mexican_hat",
+                "to spacing" : convergence,
             },
             "arborized config" : {
                 "field size" : rf_size,
@@ -96,14 +91,9 @@ def build_retina(name, rows, cols, rf_size=5, threshold=24, convergence=1):
             "plastic" : False,
             "weight config" : {
                 "type" : "flat",
-                "weight" : -1.0,
-                "circular mask" : [
-                    {
-                        "diameter" : 1,
-                        "invert" : True,
-                        "value" : threshold
-                    }
-                ]
+                "weight" : 1.0,
+                "distance callback" : "mexican_hat",
+                "to spacing" : convergence,
             },
             "arborized config" : {
                 "field size" : rf_size,
@@ -124,44 +114,37 @@ def build_network(rows=200, cols=200, scale=5):
     # Add retinal layers
     p_retina_layers, p_retina_connections = build_retina(
         "peripheral", rows, cols,
-        rf_size = 7,
-        threshold = 40,
+        rf_size = 5,
         convergence = scale)
     c_retina_layers, c_retina_connections = build_retina(
         "central", rows/3, cols/3,
         rf_size = 5,
-        threshold = 24)
+        convergence = 1)
 
     # Add superior colliculus layers
     sc_sup = {
         "name" : "sc_sup",
         "neural model" : "rate_encoding",
         "rows" : int(rows / scale),
-        "columns" : int(cols / scale),
-        "init config" : {
-            "type" : "poisson",
-            "value" : 1,
-            "rate" : 0,
-            "random" : False
-        }}
+        "columns" : int(cols / scale)
+        }
 
     sc_deep = {
         "name" : "sc_deep",
         "neural model" : "rate_encoding",
         "rows" : int(rows / scale),
-        "columns" : int(cols / scale),
-        "init config" : {
-            "type" : "poisson",
-            "value" : 1,
-            "rate" : 0,
-            "random" : False
-        }}
+        "columns" : int(cols / scale)}
 
     gating_layer = {
         "name" : "gating",
         "neural model" : "rate_encoding",
         "rows" : int(rows / scale),
         "columns" : int(cols / scale),
+        "dendrites" : [{"name" : "disinhibition"}],
+        "init config" : {
+            "type" : "flat",
+            "value" : 1.0
+        }
     }
 
     # Add layers to structure
@@ -169,8 +152,8 @@ def build_network(rows=200, cols=200, scale=5):
     retina_structure["layers"] = p_retina_layers + c_retina_layers
 
     # Create connections
-    receptive_field = 11
-    sc_input_strength = 1.0
+    receptive_field = 5
+    sc_input_strength = 0.1
     sc_to_motor_strength = 1.0
     connections = [
         # ON/OFF -> SC
@@ -184,7 +167,7 @@ def build_network(rows=200, cols=200, scale=5):
             "weight config" : {
                 "type" : "flat",
                 "weight" : sc_input_strength,
-                "distance callback" : "gaussian",
+                "distance callback" : "mexican_hat",
             },
             "arborized config" : {
                 "field size" : receptive_field,
@@ -202,7 +185,7 @@ def build_network(rows=200, cols=200, scale=5):
             "weight config" : {
                 "type" : "flat",
                 "weight" : sc_input_strength,
-                "distance callback" : "gaussian",
+                "distance callback" : "mexican_hat",
             },
             "arborized config" : {
                 "field size" : receptive_field,
@@ -221,7 +204,7 @@ def build_network(rows=200, cols=200, scale=5):
             "weight config" : {
                 "type" : "flat",
                 "weight" : sc_to_motor_strength,
-                "distance callback" : "gaussian",
+                "distance callback" : "mexican_hat",
             },
             "arborized config" : {
                 "field size" : receptive_field,
@@ -234,11 +217,11 @@ def build_network(rows=200, cols=200, scale=5):
             "from layer" : "gating",
             "to layer" : "sc_deep",
             "type" : "one to one",
-            "opcode" : "mult",
+            "opcode" : "sub",
             "plastic" : False,
             "weight config" : {
                 "type" : "flat",
-                "weight" : 1.0,
+                "weight" : 5.0,
             }
         }
         ]
@@ -370,31 +353,12 @@ def build_environment(rows=200, cols=200, scale=5, visualizer=False, task="sacca
 
 def build_bridge_connections():
     return [
-#        {
-#            "from structure" : "nvm",
-#            "from layer" : "fef",
-#            "to structure" : "oculomotor",
-#            "to layer" : "sc_sup",
-#            "type" : "divergent",
-#            "convolutional" : True,
-#            "opcode" : "add",
-#            "plastic" : False,
-#            "weight config" : {
-#                "type" : "flat",
-#                "weight" : 0.25,
-#            },
-#            "arborized config" : {
-#                "field size" : 5,
-#                "stride" : 5,
-#                "wrap" : False
-#            }
-#        },
         {
             "from structure" : "nvm",
             "from layer" : "fef",
             "to structure" : "oculomotor",
-            "to layer" : "gating",
-            "type" : "convergent",
+            "to layer" : "sc_sup",
+            "type" : "divergent",
             "convolutional" : True,
             "opcode" : "add",
             "plastic" : False,
@@ -404,7 +368,28 @@ def build_bridge_connections():
                 "distance callback" : "gaussian",
             },
             "arborized config" : {
-                "field size" : 11,
+                "field size" : 5,
+                "stride" : 1,
+                "wrap" : False
+            }
+        },
+        {
+            "from structure" : "nvm",
+            "from layer" : "fef",
+            "to structure" : "oculomotor",
+            "to layer" : "gating",
+            "dendrite" : "disinhibition",
+            "type" : "convergent",
+            "convolutional" : True,
+            "opcode" : "sub",
+            "plastic" : False,
+            "weight config" : {
+                "type" : "flat",
+                "weight" : 1.0,
+                "distance callback" : "gaussian",
+            },
+            "arborized config" : {
+                "field size" : 5,
                 "stride" : 1,
                 "wrap" : False
             }
@@ -414,6 +399,7 @@ def build_bridge_connections():
             "from layer" : "sc",
             "to structure" : "oculomotor",
             "to layer" : "gating",
+            "dendrite" : "disinhibition",
             "type" : "fully connected",
             "opcode" : "mult",
             "plastic" : False,
