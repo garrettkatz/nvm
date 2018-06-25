@@ -4,7 +4,7 @@ from coder import Coder
 from gate_map import make_nvm_gate_map
 from activator import *
 from learning_rules import *
-from nvm_instruction_set import flash_instruction_set
+from nvm_instruction_set import sequence_instruction_set
 from nvm_assembler import assemble
 from nvm_linker import link
 
@@ -44,6 +44,7 @@ class NVMNet:
     def __init__(self, layer_shape, pad, activator, learning_rule, devices, shapes={}):
         # layer_shape is default, shapes[layer_name] are overrides
         if 'gh' not in shapes: shapes['gh'] = (32,32)
+        if 'gi' not in shapes: shapes['gi'] = (8,8)
         if 'm' not in shapes: shapes['m'] = (16,16)
         if 's' not in shapes: shapes['s'] = (8,8)
         if 'c' not in shapes: shapes['c'] = (32,32)
@@ -72,7 +73,7 @@ class NVMNet:
         layers['co'].coder.encode('false', np.array([
             [actc.on if tf == actc.off else actc.off]
             for tf in co_true.flatten()]))
-        
+
         # add device layers
         layers.update(devices)
         self.devices = devices
@@ -82,17 +83,21 @@ class NVMNet:
         self.w_gain, self.b_gain = act.gain()
 
         # set up gates
-        NL = len(layers) + 2 # +2 for gate out/hidden
+        NL = len(layers) + 3 # +3 for gate out/hidden/interrupt
         NG = NL + 3*NL**2 # number of gates (d + u + l + f)
         NH = shapes['gh'][0]*shapes['gh'][1] # number of hidden units
+        NI = shapes['gi'][0]*shapes['gi'][1] # number of interrupt units
         acto = heaviside_activator(NG)
         acth = activator(pad,NH)
+        acti = heaviside_activator(NI)
         layers['go'] = Layer('go', (1,NG), acto, Coder(acto))
         layers['gh'] = Layer('gh', shapes['gh'], acth, Coder(acth))
+        layers['gi'] = Layer('gi', shapes['gi'], acti, Coder(acti))
         self.gate_map = make_nvm_gate_map(layers.keys())        
 
         # set up connection matrices
-        self.weights, self.biases = flash_instruction_set(self)
+        gs = sequence_instruction_set(self)
+        self.weights, self.biases, _ = gs.flash()
         for ms in 'ms':
             ms_weights, ms_biases = address_space(
                 layers[ms+'f'], layers[ms+'b'])
@@ -117,6 +122,7 @@ class NVMNet:
             for name, layer in self.layers.items()}
         self.activity['go'] = self.layers['go'].coder.encode('start')
         self.activity['gh'] = self.layers['gh'].coder.encode('start')
+        self.activity['gi'] = self.layers['gi'].coder.encode('quiet')
         for ms in 'ms':
             self.activity[ms+'f'] = self.layers[ms+'f'].coder.encode('0')
             self.activity[ms+'b'] = self.layers[ms+'b'].coder.encode('0')

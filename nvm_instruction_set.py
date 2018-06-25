@@ -8,7 +8,7 @@ def gprog():
     """gates for program memory (ip and op) layer updates"""
     return [('ip','ip','u')]+[k for x in ['c','1','2'] for k in gflow('op'+x, 'ip')]
 
-def flash_instruction_set(nvmnet):
+def sequence_instruction_set(nvmnet):
     """
     layers: dict of layers, including:
         gate_output, gate_hidden, ip, opc, op1, op2, op3, cmph, cmpo
@@ -20,11 +20,26 @@ def flash_instruction_set(nvmnet):
 
     ### Start executing new instruction
     
-    # Load operands and step instruction pointer
     h = gate_hidden.coder.encode('start')
-    g = gs.make_gate_output(ungate = gprog())
+    g = gs.make_gate_output() # start with default gates
     gate_output.coder.encode('start', g)
-    g_start, h_start = g.copy(), h.copy()    
+    g_start, h_start = g.copy(), h.copy()
+
+    # Check for interrupt signal
+    g, h = gs.add_transit(ungate = [('gh','gi','u')],
+        old_gates = g, old_hidden=h)
+    gate_output.coder.encode('int', g)
+    gate_hidden.coder.encode('int', h)
+    g_int, h_int = g.copy(), h.copy()
+    
+    # Hang on pause interrupt
+    gs.add_transit(
+        new_gates = g_int, new_hidden = h_int,
+        old_gates = g_int, old_hidden = h_int, gi = 'pause')
+    
+    # If no interrupt, load operands and step instruction pointer
+    g, h = gs.add_transit(ungate = gprog(),
+        old_gates = g_int, old_hidden=h_int, gi = 'quiet')
     
     # Let opcode bias the gate layer
     g, h = gs.add_transit(ungate = [('gh','opc','u')],
@@ -499,5 +514,5 @@ def flash_instruction_set(nvmnet):
             new_gates = g_start, new_hidden = h_start,
             old_gates = g, old_hidden = h)
 
-    weights, biases, residual = gs.flash()
-    return weights, biases
+    return gs
+

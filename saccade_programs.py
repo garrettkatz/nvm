@@ -5,7 +5,6 @@ from coder import Coder
 from gate_map import make_nvm_gate_map
 from activator import *
 from learning_rules import *
-from nvm_instruction_set import flash_instruction_set
 from nvm_assembler import assemble
 from nvm_linker import link
 from nvm_net import NVMNet
@@ -123,7 +122,7 @@ if __name__ == "__main__":
     raw_input("continue?")
     
     show_layers = [
-        ["go", "gh","ip"] + ["op"+x for x in "c12"] + nvmnet.devices.keys(),
+        ["go", "gh", "gi", "ip"] + ["op"+x for x in "c12"] + nvmnet.devices.keys(),
     ]
     show_tokens = True
     show_corrosion = True
@@ -131,9 +130,16 @@ if __name__ == "__main__":
 
     history = []
     start_t = []
+    int_sched = [20, 80]
     tc_sched = [60, 110, 120]
     for t in range(tc_sched[2]*3):
-    
+
+        # brief interrupt
+        if t == int_sched[0]:
+            nvmnet.activity["gi"] = nvmnet.layers["gi"].coder.encode("pause")
+        if t == int_sched[1]:
+            nvmnet.activity["gi"] = nvmnet.layers["gi"].coder.encode("quiet")
+
         ### occassionally change tc
         if t > 0 and t % tc_sched[2] in tc_sched[:2]:
         # if np.random.rand() < 1./100:
@@ -145,8 +151,8 @@ if __name__ == "__main__":
 
         ### show state and tick
         # if True:
-        # if t % 2 == 0 or nvmnet.at_exit():
-        if nvmnet.at_start() or nvmnet.at_exit():
+        if t % 2 == 0 or nvmnet.at_exit():
+        # if nvmnet.at_start() or nvmnet.at_exit():
             if nvmnet.at_start(): start_t.append(t)
             print('t = %d'%t)
             print(nvmnet.state_string(show_layers, show_tokens, show_corrosion, show_gates))
