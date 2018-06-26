@@ -95,6 +95,14 @@ class NVMNet:
         layers['gi'] = Layer('gi', shapes['gi'], acti, Coder(acti))
         self.gate_map = make_nvm_gate_map(layers.keys())        
 
+        # Encode interrupts
+        layers['gi'].coder.encode('quiet',
+            # layers['gi'].activator.off * np.ones((layers['gi'].size,1)))
+            0. * np.ones((layers['gi'].size,1)))
+        layers['gi'].coder.encode('pause',
+            # layers['gi'].activator.on * np.ones((layers['gi'].size,1)))
+            1. * np.ones((layers['gi'].size,1)))
+
         # set up connection matrices
         gs = sequence_instruction_set(self)
         self.weights, self.biases, _ = gs.flash()
