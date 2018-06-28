@@ -37,14 +37,16 @@ def build_retina(name, rows, cols, rf_size=5, convergence=1):
 
     retina_on = {
         "name" : name + "_retina_on",
-        "neural model" : "rate_encoding",
+        #"neural model" : "rate_encoding",  # use rate_encoding for new visual pathway
+        "neural model" : "relay",
         "rows" : rows / convergence,
         "columns" : cols / convergence,
         "ramp" : True}
 
     retina_off = {
         "name" : name + "_retina_off",
-        "neural model" : "rate_encoding",
+        #"neural model" : "rate_encoding",  # use rate_encoding for new visual pathway
+        "neural model" : "relay",
         "rows" : rows / convergence,
         "columns" : cols / convergence,
         "ramp" : True}
@@ -278,7 +280,7 @@ def build_environment(rows=200, cols=200, scale=5, visualizer=False, task="sacca
                 "type" : "saccade",
                 "saccade rate" : 0.75,
                 "automatic" : True,
-                "cycle rate" : 150,
+                "cycle rate" : 100,
                 "layers" : [
                     {
                         "layer" : "peripheral_photoreceptor",

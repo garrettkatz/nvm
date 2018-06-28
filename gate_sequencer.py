@@ -5,11 +5,12 @@ from sequencer import Sequencer
 import gate_map as gm
 
 class GateSequencer(Sequencer, object):
-    def __init__(self, gate_map, gate_output, gate_hidden, input_layers):
+    def __init__(self, gate_map, gate_output, gate_hidden, input_layers, gate_interrupt=None):
         self.gate_map = gate_map
         self.gate_output = gate_output
         super(GateSequencer, self).__init__(gate_hidden, input_layers)
         self.gate_hidden = self.sequence_layer
+        self.gate_interrupt = gate_interrupt
         self.transit_outputs = []
 
     def make_gate_output(self, ungate=[]):
@@ -21,6 +22,10 @@ class GateSequencer(Sequencer, object):
             (self.gate_hidden.name, self.gate_hidden.name, 'u'),
             (self.gate_output.name, self.gate_hidden.name, 'u'),
             (self.gate_output.name, self.gate_output.name, 'd')]
+
+        if self.gate_interrupt is not None:
+            gate_keys.append(
+                (self.gate_interrupt.name, self.gate_interrupt.name, 'd'))
 
         # Ungate provided keys
         for k in gate_keys + ungate:

@@ -15,8 +15,8 @@ def sequence_instruction_set(nvmnet):
     """
     
     gate_map, layers, devices = nvmnet.gate_map, nvmnet.layers, nvmnet.devices
-    gate_output, gate_hidden = layers['go'], layers['gh']
-    gs = GateSequencer(gate_map, gate_output, gate_hidden, layers)
+    gate_output, gate_hidden, gate_interrupt = layers['go'], layers['gh'], layers['gi']
+    gs = GateSequencer(gate_map, gate_output, gate_hidden, layers, gate_interrupt)
 
     ### Start executing new instruction
     

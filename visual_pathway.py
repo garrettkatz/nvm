@@ -119,6 +119,65 @@ def build_vp_network(rows, cols):
 
     return structure, connections
 
+def build_emot_network():
+    layers = []
+    connections = []
+
+    # Add amygdala layer
+    layers.append({
+        "name" : "amygdala",
+        "neural model" : "oscillator",
+        "tau" : 0.05,
+        "decay" : 0.01,
+        "rows" : 1,
+        "columns" : 1, })
+
+    # Add vmpfc layer
+    layers.append({
+        "name" : "vmpfc",
+        "neural model" : "oscillator",
+        "tau" : 0.05,
+        "decay" : 0.01,
+        "tonic" : 0.05,
+        "rows" : 1,
+        "columns" : 1, })
+
+    # Build main structure
+    structure = {
+        "name" : "emotional",
+        "type" : "parallel",
+        "layers" : layers}
+
+    # amygdala -> vmpfc
+    # Implements amygdala -> vmpfc mapping for emotional regulation activation
+    connections.append({
+        "name" : "vmpfc <- amygdala",
+        "from layer" : "amygdala",
+        "to layer" : "vmpfc",
+        "type" : "fully connected",
+        "opcode" : "add",
+        "plastic" : False,
+        "weight config" : {
+            "type" : "flat",
+            "weight" : 1,
+        }})
+
+    # vmpfc -> amygdala
+    # Implements vmpfc -> amygdala mapping for interrupt suppression
+    connections.append({
+        "name" : "amygdala <- vmpfc",
+        "from layer" : "vmpfc",
+        "to layer" : "amygdala",
+        "type" : "fully connected",
+        "opcode" : "sub",
+        "plastic" : False,
+        "weight config" : {
+            "type" : "flat",
+            "weight" : 1,
+        }})
+
+    return structure, connections
+
 def build_vp_bridge_connections():
 
     # Retina -> convolutional
@@ -158,6 +217,54 @@ def build_vp_bridge_connections():
         "weight config" : {
             "type" : "flat",
             "weight" : 1,
+        }})
+
+    # bias -> gi
+    # Keeps gi in the quiet state
+    connections.append({
+        "name" : "gi <- bias",
+        "from structure" : "nvm",
+        "from layer" : "bias",
+        "to structure" : "nvm",
+        "to layer" : "gi",
+        "type" : "fully connected",
+        "opcode" : "add",
+        "plastic" : False,
+        "weight config" : {
+            "type" : "flat",
+            "weight" : 0,
+        }})
+
+    # class -> amygdala
+    # Implements class -> amygdala mapping for emotional activation
+    connections.append({
+        "name" : "amygdala <- class",
+        "from structure" : "visual pathway",
+        "from layer" : "class",
+        "to structure" : "emotional",
+        "to layer" : "amygdala",
+        "type" : "fully connected",
+        "opcode" : "add",
+        "plastic" : False,
+        "weight config" : {
+            "type" : "flat",
+            "weight" : 0,
+        }})
+
+    # amygdala -> gi
+    # Implements amygdala -> gi mapping for nvm interrupt
+    connections.append({
+        "name" : "gi <- amygdala",
+        "from structure" : "emotional",
+        "from layer" : "amygdala",
+        "to structure" : "nvm",
+        "to layer" : "gi",
+        "type" : "fully connected",
+        "opcode" : "add",
+        "plastic" : False,
+        "weight config" : {
+            "type" : "flat",
+            "weight" : 0,
         }})
 
     return connections
@@ -200,8 +307,41 @@ def build_vp_environment(visualizer=False):
     
     return modules
 
+def build_emot_environment(visualizer=False, print_activ=False):
 
-def init_vpnet(net, nvmnet):
+    modules = []
+
+    if print_activ:
+        modules.append({
+            "type" : "csv_output",
+            "layers" : [
+                {
+                    "structure" : "visual pathway",
+                    "layer" : "class"
+                },
+                {
+                    "structure" : "emotional",
+                    "layer" : "amygdala"
+                },
+                {
+                    "structure" : "emotional",
+                    "layer" : "vmpfc"
+                },
+                ]})
+
+    if visualizer:
+        modules.append({
+            "type" : "visualizer",
+            "layers" : [
+                {"layer" : "vmpfc" },
+                {"layer" : "amygdala" }
+            ]
+        })
+
+    return modules
+
+
+def init_vpnet(net, nvmnet, amygdala_sensitivity=0.1):
     # load trained parameters
     vp_params = dict(**np.load("cnn2.npz"))
 
@@ -235,6 +375,39 @@ def init_vpnet(net, nvmnet):
     for m in range(mat.size):
         mat.data[m] = w.flat[m]
 
+    # bias to gi
+    # This causes default pattern of gi to be quiet
+    mat_name = "gi <- bias"
+    mat = net.get_weight_matrix(mat_name)
+    gi = nvmnet.layers["gi"]
+
+    quiet = gi.activator.g(gi.coder.encode("quiet"))
+    for m in range(mat.size):
+        mat.data[m] = quiet.flat[m]
+
+    # class to amygdala
+    # This allows tc to activate amygdala when a face is detected
+    mat_name = "amygdala <- class"
+    mat = net.get_weight_matrix(mat_name)
+
+    # Left face, cross, right face
+    amygdala_sensitivity = 0.5
+    w = [x * amygdala_sensitivity for x in [1, 0, 1]]
+    for m in range(mat.size):
+        mat.data[m] = w[m]
+
+    # amygdala to gi
+    # This allows amygdala to interrupt nvm
+    mat_name = "gi <- amygdala"
+    mat = net.get_weight_matrix(mat_name)
+    gi = nvmnet.layers["gi"]
+
+    w = np.zeros((gi.size, 1))
+    w = gi.coder.encode("pause").reshape((gi.size, 1))
+    w = gi.activator.g(w) * 10
+    for m in range(mat.size):
+        mat.data[m] = w.flat[m]
+
 def main(read=True, visualizer=False, device=None, rate=0, iterations=1000000):
     np.set_printoptions(linewidth=200, formatter = {'float': lambda x: '% .2f'%x})
     task = "saccade"
@@ -265,18 +438,22 @@ def main(read=True, visualizer=False, device=None, rate=0, iterations=1000000):
     vp_structure, vp_connections = build_vp_network(rows, cols)
     vp_modules = build_vp_environment(visualizer)
 
+    ''' Emotional network '''
+    emot_structure, emot_connections = build_emot_network()
+    emot_modules = build_emot_environment(visualizer, print_activ=False)
+
     ''' entire network '''
-    connections = nvm_connections + om_network["connections"] + vp_connections
+    connections = nvm_connections + om_network["connections"] + vp_connections + emot_connections
     connections += build_om_bridge_connections()
     connections += build_vp_bridge_connections()
 
     net = Network({
-        "structures" : [nvm_structure, vp_structure] + om_network["structures"],
+        "structures" : [nvm_structure, vp_structure, emot_structure] + om_network["structures"],
         "connections" : connections})
-    env = Environment({"modules" : nvm_modules + om_modules + vp_modules})
+    env = Environment({"modules" : nvm_modules + om_modules + vp_modules + emot_modules})
 
     init_syngen_nvm(nvmnet, net)
-    init_vpnet(net, nvmnet)
+    init_vpnet(net, nvmnet, amygdala_sensitivity=0.1)
 
     ''' Run Simulation '''
     if device is None:
