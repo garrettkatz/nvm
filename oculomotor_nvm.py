@@ -359,14 +359,14 @@ def build_bridge_connections():
             "from structure" : "nvm",
             "from layer" : "fef",
             "to structure" : "oculomotor",
-            "to layer" : "sc_sup",
-            "type" : "divergent",
+            "to layer" : "sc_deep",
+            "type" : "convergent",
             "convolutional" : True,
             "opcode" : "add",
             "plastic" : False,
             "weight config" : {
                 "type" : "flat",
-                "weight" : 1.0,
+                "weight" : 0.1,
                 "distance callback" : "gaussian",
             },
             "arborized config" : {
