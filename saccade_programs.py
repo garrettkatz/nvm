@@ -120,8 +120,8 @@ def make_saccade_nvm(activator_label):
     
     devices = {
         "tc": Layer("tc", layer_shape, act, Coder(act)),
-        "fef": make_ef("fef", pad, activator, 68, 96),
-        "pef": make_ef("pef", pad, activator, 68, 96),
+        "fef": make_ef("fef", pad, activator, 34, 48),
+        "pef": make_ef("pef", pad, activator, 34, 48),
         "sc": make_sc(pad, activator, 5, 5)}
 
     shapes = {"gh": (32,16)}

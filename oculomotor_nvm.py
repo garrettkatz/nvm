@@ -360,18 +360,19 @@ def build_bridge_connections():
             "from layer" : "fef",
             "to structure" : "oculomotor",
             "to layer" : "sc_deep",
-            "type" : "convergent",
+            "type" : "divergent",
             "convolutional" : True,
             "opcode" : "add",
             "plastic" : False,
             "weight config" : {
                 "type" : "flat",
                 "weight" : 0.1,
+                "from spacing" : 2,
                 "distance callback" : "gaussian",
             },
             "arborized config" : {
                 "field size" : 5,
-                "stride" : 1,
+                "stride" : 2,
                 "wrap" : False
             }
         },
@@ -381,18 +382,19 @@ def build_bridge_connections():
             "to structure" : "oculomotor",
             "to layer" : "gating",
             "dendrite" : "disinhibition",
-            "type" : "convergent",
+            "type" : "divergent",
             "convolutional" : True,
             "opcode" : "sub",
             "plastic" : False,
             "weight config" : {
                 "type" : "flat",
-                "weight" : 1.0,
+                "weight" : 2.0,
+                "from spacing" : 2,
                 "distance callback" : "gaussian",
             },
             "arborized config" : {
                 "field size" : 5,
-                "stride" : 1,
+                "stride" : 2,
                 "wrap" : False
             }
         },

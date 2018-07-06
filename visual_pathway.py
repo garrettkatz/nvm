@@ -391,7 +391,6 @@ def init_vpnet(net, nvmnet, amygdala_sensitivity=0.1):
     mat = net.get_weight_matrix(mat_name)
 
     # Left face, cross, right face
-    amygdala_sensitivity = 0.5
     w = [x * amygdala_sensitivity for x in [1, 0, 1]]
     for m in range(mat.size):
         mat.data[m] = w[m]
@@ -423,7 +422,7 @@ def main(read=True, visualizer=False, device=None, rate=0, iterations=1000000):
     nvmnet = make_saccade_nvm("logistic")
     nvm_structure, nvm_connections = make_syngen_network(nvmnet)
     if visualizer:
-        viz_layers = ["sc","fef","tc","ip","opc","op1","op2","gh","go", "ci", "csom", "co"]
+        viz_layers = ["sc","fef","pef","tc","ip","opc","op1","op2","gh","go", "ci", "csom", "co"]
     else:
         viz_layers = []
     nvm_modules = make_syngen_environment(nvmnet,
@@ -453,7 +452,7 @@ def main(read=True, visualizer=False, device=None, rate=0, iterations=1000000):
     env = Environment({"modules" : nvm_modules + om_modules + vp_modules + emot_modules})
 
     init_syngen_nvm(nvmnet, net)
-    init_vpnet(net, nvmnet, amygdala_sensitivity=0.1)
+    init_vpnet(net, nvmnet, amygdala_sensitivity=0.0)
 
     ''' Run Simulation '''
     if device is None:
