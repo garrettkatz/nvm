@@ -1,11 +1,9 @@
 next steps:
-    2.0:
-        ipop
     auto-infer required layer sizes
     pass activator shape, not size
     cts gates, slower smoother hidden
-    vmpfc and goal selection
     refactor devices to registers
+    asymmetric time learning, and seq/lnk commands for programming learning within/between layers
     instruction pitfalls:
         unlinked tokens in nvm_linker
         missing internal connectivity in nvm_net
@@ -23,13 +21,11 @@ next steps:
         although, to be fair, dendritic inhibition was apical (right before entering soma, not at subsets of dendritic tree leaves)
         modulation is "divisive": higher inhibition *divides* the firing rate.  high gate output should = high inhibition.
         also intertwined with dendritic backpropagation.
-    cts gate output
     dynamics move through htn finite state machine?
     talk to greg about:
         only one input module per layer?
         in input callback I need to explicitly set 0 after first tick
         for tc I needed to overcompensate to cancel out previous activity
-    smarter linking (only what's necessary)
     namespaces for clobbered human-readable labels
     different coding semantics/errors when pattern provided and token already used?
     check Z that randomly interpolates X,Y and multiple intermediate Z steps
