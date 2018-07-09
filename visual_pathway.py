@@ -497,6 +497,6 @@ if __name__ == "__main__":
     set_warnings(False)
     set_debug(False)
 
-    read = True
+    read = False
 
     main(read, args.visualizer, device, args.r)
