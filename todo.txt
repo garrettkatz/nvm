@@ -1,4 +1,5 @@
 next steps:
+    more encapsulated callback API for IO
     auto-infer required layer sizes
     pass activator shape, not size
     cts gates, slower smoother hidden
