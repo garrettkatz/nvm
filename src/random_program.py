@@ -193,14 +193,24 @@ def plot_trial_complexities(args_list, results):
     lc = np.array(line_counts)
     tc = np.array(token_counts)
 
+    pt.figure(figsize=(6.5,2))
     # pt.scatter(lc, tc, c='none', edgecolor='k')
     pt.scatter(lc + 4*np.random.random_sample(*lc.shape), tc, c='k', marker='+')
     pt.xlabel('Program length (lines)')
-    pt.ylabel('Number of distinct tokens')
+    pt.ylabel('Distinct token count')
+    pt.legend(["Tokens vs. lines"])
+    pt.tight_layout()
     
     print(np.mean((lc - lc.mean())*(tc - tc.mean())/(lc.std()*tc.std())))    
     R = np.corrcoef(lc, tc)
     print("Pearson's R:")
+    print(R)
+
+    tc = tc[lc < 200]
+    lc = lc[lc < 200]       
+    print(np.mean((lc - lc.mean())*(tc - tc.mean())/(lc.std()*tc.std())))    
+    R = np.corrcoef(lc, tc)
+    print("Pearson's R (<200 lines):")
     print(R)
     pt.show()
 
@@ -241,52 +251,74 @@ def plot_match_trials(args_list, results, layer_shape_colors):
                     y[size].append(
                         float(successes.get(k,0))/(successes.get(k,0)+failures.get(k,0)))
 
-    pt.subplot(1,2,1)
+    xmx = max(line_counts[True].max(), line_counts[False].max())
+    pt.figure(figsize=(7,5))
+    pt.subplot(2,1,1)
     print("rand")
     h = []
-    for size in sizes[False]:
+    shades = np.linspace(0,0.5,len(sizes[False]))[::-1]
+    for s,size in enumerate(sizes[False]):
         print(size, ["%d:%.2f"%tup for tup in zip(line_counts[False], y[size])])
-        h.append(pt.plot(line_counts[False], y[size], '-o')[0])
+        h.append(pt.plot(line_counts[False], y[size], '-o', c=3*[shades[s]])[0])
     pt.legend(h, ["N=%d"%s for s in sizes[False]])
     pt.ylabel("Success rate")
-    pt.xlabel("Line counts")
-    pt.title("Rand")
-    pt.subplot(1,2,2)
+    pt.xlim([0, xmx])
+    pt.title("Random Encodings")
+    pt.subplot(2,1,2)
     print("orth")
     h = []
-    for size in sizes[True]:
+    shades = np.linspace(0,0.5,len(sizes[True]))[::-1]
+    for s,size in enumerate(sizes[True]):
         print(size, ["%d:%.2f"%tup for tup in zip(line_counts[True], y_orth[size])])
-        h.append(pt.plot(line_counts[True], y_orth[size], '-o')[0])
+        h.append(pt.plot(line_counts[True], y_orth[size], '-o', c=3*[shades[s]])[0])
     pt.legend(h, ["N=%d"%s for s in sizes[True]])
+    pt.ylabel("Success rate")
     pt.xlabel("Line counts")
-    pt.title("Orth")
+    pt.xlim([0, xmx])
+    pt.title("Orthogonal Encodings")
     pt.tight_layout()
     pt.show()
 
     # To assess whether relationship between prog size and required nvm size linear, log, poly, etc:
     # for each line count, find smallest nvm size with perfect success rate.
     # then plot that line count vs required nvm size.
+    rates = [.5, .8, .95, 1.]
+    shades = [.7, .6, .1, 0] #np.linspace(0, .5, len(rates))[::-1]
     h = []
-    pt.figure()
+    pt.figure(figsize=(7,3.5))
     for orth in [False, True]:
-        x, y = [], []
-        for count in line_counts[orth]:
-            x.append(count)
-            best_size = np.inf
-            for size in sizes[orth]:
-                k = (size, count, orth)
-                success_count = float(successes.get(k,0))
-                total_count = successes.get(k,0)+failures.get(k,0)
-                print(k, success_count, total_count)
-                if total_count == 0: continue
-                success_rate = success_count/total_count
-                # if success_rate == 1.0 and size < best_size: best_size = size
-                if success_rate >= 0.9 and size < best_size: best_size = size
-            y.append(best_size)
-        h.append(pt.plot(x, y, '-o')[0])
-    pt.legend(h, ["Rand", "Orth"])
+        mk = 's' if orth else 'o'
+        for r,rate in enumerate(rates):
+            x, y = [], []
+            for count in line_counts[orth]:
+                x.append(count)
+                best_size = np.inf
+                for size in sizes[orth]:
+                    k = (size, count, orth)
+                    success_count = float(successes.get(k,0))
+                    total_count = successes.get(k,0)+failures.get(k,0)
+                    print(k, success_count, total_count)
+                    if total_count == 0: continue
+                    success_rate = success_count/total_count
+                    # if success_rate == 1.0 and size < best_size: best_size = size
+                    if success_rate >= rate and size < best_size: best_size = size
+                y.append(best_size)
+            h.append(pt.plot(x, y, '-', marker=mk, color=3*[shades[r]],markerfacecolor='none')[0])
+    # fit logarithm: C log2(256) = 256 -> C = 256/log2(256) = 256/8 = 32
+    # fit sqrt: C sqrt(256) = 256 -> C = 256/sqrt(256) = 16
+    pt.plot(np.arange(1,1000), 32*np.log2(np.arange(1,1000)), '--k')
+    # pt.plot(np.arange(1,1000), 16*np.sqrt(np.arange(1,1000)), '--k')
+    pt.legend([
+        Line2D([0],[0], marker='o', color='none',markeredgecolor='k', linestyle='none'),
+        Line2D([0],[0], marker='s', color='none',markeredgecolor='k', linestyle='none')] + [
+            Line2D([0],[0], linestyle='-', color = 3*[shades[r]])
+            for r in range(len(rates))] + [Line2D([0],[0], color='k',linestyle='--')],
+        ["Random Encodings", "Orthogonal Encodings"] + [
+            "Success rate $\geq$ %.2f"%r for r in rates] + ["Heuristic"],
+        loc='upper right')
     pt.xlabel("Line count")
     pt.ylabel("Network size")
+    pt.tight_layout()
     pt.show()
 
 def plot_match_trials_tokens(args_list, results, layer_shape_colors):
@@ -312,6 +344,7 @@ def plot_match_trials_tokens(args_list, results, layer_shape_colors):
         else: failures[k] = failures.get(k, 0) + 1
 
     sizes = {k: np.sort(list(sizes[k])) for k in [False, True]}
+    sizes[True] = sizes[True][[0, 2, -1]] # less cluttered figure
     token_counts = {k: np.sort(list(token_counts[k])) for k in [False, True]}
     x, y = {}, {}
     for orth in [False, True]:
@@ -326,25 +359,31 @@ def plot_match_trials_tokens(args_list, results, layer_shape_colors):
                 x[orth][size].append(count)
                 y[orth][size].append(success_count/total_count)
 
-    pt.subplot(1,2,1)
+    xmx = max(token_counts[True].max(), token_counts[False].max())
+    pt.figure(figsize=(7,5))
+    pt.subplot(2,1,1)
     print("rand")
     h = []
-    for size in sizes[False]:
+    shades = np.linspace(0,0.5,len(sizes[False]))[::-1]
+    for s, size in enumerate(sizes[False]):
         print(size, ["%d:%.2f"%tup for tup in zip(x[False][size], y[False][size])])
-        h.append(pt.plot(x[False][size], y[False][size], '-o')[0])
+        h.append(pt.plot(x[False][size], y[False][size], '-o', color=3*[shades[s]])[0])
     pt.legend(h, ["N=%d"%s for s in sizes[False]])
     pt.ylabel("Success rate")
-    pt.xlabel("Distinct token counts")
-    pt.title("Rand")
-    pt.subplot(1,2,2)
+    pt.xlim([0, xmx])
+    pt.title("Random Encodings")
+    pt.subplot(2,1,2)
     print("orth")
     h = []
-    for size in sizes[True]:
+    shades = np.linspace(0,0.5,len(sizes[True]))[::-1]
+    for s,size in enumerate(sizes[True]):
         print(size, ["%d:%.2f"%tup for tup in zip(x[True][size], y[True][size])])
-        h.append(pt.plot(x[True][size], y[True][size], '-o')[0])
-    pt.legend(h, ["N=%d"%s for s in sizes[True]])
+        h.append(pt.plot(x[True][size], y[True][size], '-o', color=3*[shades[s]])[0])
+    pt.legend(h, ["N=%d"%s for s in sizes[True]], loc='center')
+    pt.ylabel("Success rate")
     pt.xlabel("Distinct token counts")
-    pt.title("Orth")
+    pt.xlim([0, xmx])
+    pt.title("Orthogonal Encodings")
     pt.tight_layout()
     pt.show()
 
@@ -352,25 +391,39 @@ def plot_match_trials_tokens(args_list, results, layer_shape_colors):
     # for each line count, find smallest nvm size with perfect success rate.
     # then plot that line count vs required nvm size.
     h = []
-    pt.figure()
+    # rates = [.5, .8, .95, 1.]
+    rates = [1.]
+    shades = np.linspace(0, .5, len(rates))[::-1]
+    pt.figure(figsize=(7,5))
     pt.subplot(2,1,1)
     for orth in [False, True]:
-        x, y = [], []
-        for count in token_counts[orth]:
-            x.append(count)
-            best_size = np.inf
-            for size in sizes[orth]:
-                k = (size, count, orth)
-                success_count = float(successes.get(k,0))
-                total_count = successes.get(k,0)+failures.get(k,0)
-                print(k, success_count, total_count)
-                if total_count == 0: continue
-                success_rate = success_count/total_count
-                # if success_rate == 1.0 and size < best_size: best_size = size
-                if success_rate >= 0.9 and size < best_size: best_size = size
-            y.append(best_size)
-        h.append(pt.plot(x, y, '-o')[0])
-    pt.legend(h, ["Rand", "Orth"])
+        mk = 's' if orth else 'o'
+        for r,rate in enumerate(rates):
+            x, y = [], []
+            for count in token_counts[orth]:
+                x.append(count)
+                best_size = np.inf
+                for size in sizes[orth]:
+                    k = (size, count, orth)
+                    success_count = float(successes.get(k,0))
+                    total_count = successes.get(k,0)+failures.get(k,0)
+                    print(k, success_count, total_count)
+                    if total_count == 0: continue
+                    success_rate = success_count/total_count
+                    # if success_rate == 1.0 and size < best_size: best_size = size
+                    if success_rate >= rate and size < best_size: best_size = size
+                y.append(best_size)
+            # h.append(pt.plot(x, y, '-', marker=mk, color=3*[shades[r]],markerfacecolor='none')[0])
+            col = 0. if orth else .5
+            h.append(pt.plot(x, y, '-', marker=mk, color=3*[col],markerfacecolor='none')[0])
+    pt.legend(h, ["Random Encodings", "Orthogonal Encodings"])
+    # pt.legend([
+    #     Line2D([0],[0], marker='o', color='none',markeredgecolor='k', linestyle='none'),
+    #     Line2D([0],[0], marker='s', color='none',markeredgecolor='k', linestyle='none')] + [
+    #         Line2D([0],[0], linestyle='-', color = 3*[shades[r]])
+    #         for r in range(len(rates))],
+    #     ["Random Encodings", "Orthogonal Encodings"] + [
+    #         "Success rate $\geq$ %.2f"%r for r in rates])
     pt.xlabel("Distinct token count")
     pt.ylabel("Smallest perfect network size")
 
@@ -379,7 +432,7 @@ def plot_match_trials_tokens(args_list, results, layer_shape_colors):
     count_frequencies = {tc: 0 for tc in distinct_token_counts}
     for tc in all_token_counts: count_frequencies[tc] += 1
     count_frequencies = [count_frequencies[tc] for tc in distinct_token_counts]
-    pt.bar(distinct_token_counts, count_frequencies)
+    pt.bar(distinct_token_counts, count_frequencies, color='k')
     pt.xlabel("Distinct token count")
     pt.ylabel("Frequency")
     pt.tight_layout()
@@ -542,7 +595,7 @@ if __name__ == "__main__":
                 layer_shapes[orthogonal],
                 range(num_repetitions))]
 
-    print_random_program(register_names, num_tokens=num_tokens, num_subroutines=2, num_lines=12)
+    # print_random_program(register_names, num_tokens=num_tokens, num_subroutines=2, num_lines=12)
 
     # results = run_match_trial_pool(args_list, num_procs=0)
     # with open('tmp.pkl','w') as f: pk.dump((args_list, results), f)
@@ -562,7 +615,7 @@ if __name__ == "__main__":
 
     # plot_trial_complexities(args_list, results)
     plot_match_trials(args_list, results, layer_shape_colors)
-    plot_match_trials_tokens(args_list, results, layer_shape_colors)
+    # plot_match_trials_tokens(args_list, results, layer_shape_colors)
 
     # num_registers = 3
     # register_names = ["r%d"%r for r in range(num_registers)]

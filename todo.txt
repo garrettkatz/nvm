@@ -1,4 +1,7 @@
 next steps:
+    redo randprog and update manuscript
+        variable ip size?
+        same distinct token sizes tested on all NVMs (more independent and reusable test data)
     more encapsulated callback API for IO
     auto-infer required layer sizes
     pass activator shape, not size
