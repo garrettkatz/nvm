@@ -12,7 +12,10 @@ next steps:
         unlinked tokens in nvm_linker
         missing internal connectivity in nvm_net
         uninitialized internal layers in nvm_net
-    note about namespaced labels, but programmer's responsibility
+    namespaced labels issue:
+        preprocessor puts program "name" in op2, and then jumps use both ip<<op1/r and ip<<op2
+        i.e., puts random pattern for name.0
+        interrupts could also use the stack and jump across programs.  then exit is basically return.
     raise more during assembly
         sub to label that doesn't exist
     biorealism for new unlearning:
