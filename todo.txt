@@ -2,6 +2,7 @@ next steps:
     redo randprog and update manuscript
         variable ip size?
         same distinct token sizes tested on all NVMs (more independent and reusable test data)
+    multiprogram assembly, long jumps in refvm
     more encapsulated callback API for IO
     auto-infer required layer sizes
     pass activator shape, not size
@@ -12,10 +13,7 @@ next steps:
         unlinked tokens in nvm_linker
         missing internal connectivity in nvm_net
         uninitialized internal layers in nvm_net
-    namespaced labels issue:
-        preprocessor puts program "name" in op2, and then jumps use both ip<<op1/r and ip<<op2
-        i.e., puts random pattern for name.0
-        interrupts could also use the stack and jump across programs.  then exit is basically return.
+    namespaced labels error
     raise more during assembly
         sub to label that doesn't exist
     biorealism for new unlearning:

@@ -330,6 +330,33 @@ class VMTestCase(ut.TestCase):
 
         self._test(programs, ["one","two"], traces, num_registers=2, verbose=0)
 
+    # @ut.skip("")
+    def test_multisub(self):
+
+        programs = {
+        "one": """
+        start1: mov r0 A
+                sub sub2
+                mov r0 C
+                exit
+        """,
+        "two": """
+                exit
+        sub2:   mov r0 B
+                ret
+        """
+        }
+        trace = [
+            {"r0": None, "r1": None}, # one start: mov
+            {"r0": "A", "r1": None}, # one sub
+            {"r0": "A", "r1": None}, # two mov
+            {"r0": "B", "r1": None}, # two ret
+            {"r0": "B", "r1": None}, # one mov
+            {"r0": "C", "r1": None}, # one exit
+        ]
+
+        self._test(programs, ["one"], [trace], num_registers=2, verbose=0)
+
 class RefVMTestCase(VMTestCase):
     def _make_vm(self, num_registers):
         return RefVM(["r%d"%r for r in range(num_registers)])

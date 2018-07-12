@@ -7,6 +7,7 @@ class RefVM:
     def __init__(self, register_names):
         self.register_names = register_names
         self.programs = {}
+        self.labels = {}
         self.active_program = None
         self.layers = {reg: None
             for reg in self.register_names + \
@@ -20,6 +21,8 @@ class RefVM:
     def assemble(self, program, name, verbose=0, other_tokens=[]):
         lines, labels = preprocess(program, self.register_names)
         self.programs[name] = (lines, labels)
+        self.labels.update({
+            label: (name, l) for label, l in labels.items()})
 
     def load(self, program_name, initial_state):
         # set program pointer
@@ -75,23 +78,26 @@ class RefVM:
             self.layers["co"] = (
                 self.layers[op1] == self.layers[op2])
         if opc == "jie":
-            if op1 not in labels:
+            if op1 not in self.labels:
                 self.error = "jie to non-existent label"
                 self.exit = True
             elif self.layers["co"]:
-                self.layers["ip"] = labels[op1]-1
+                name, l = self.labels[op1]
+                self.active_program, self.layers["ip"] = name, l-1
         if opc == "jmpv":
-            if op1 not in labels:
+            if op1 not in self.labels:
                 self.error = "jmpv to non-existent label"
                 self.exit = True
             else:
-                self.layers["ip"] = labels[op1]-1
+                name, l = self.labels[op1]
+                self.active_program, self.layers["ip"] = name, l-1
         if opc == "jmpd":
-            if self.layers[op1] not in labels:
+            if self.layers[op1] not in self.labels:
                 self.error = "jmpd to non-existent label"
                 self.exit = True
             else:
-                self.layers["ip"] = labels[self.layers[op1]]-1
+                name, l = self.labels[self.layers[op1]]
+                self.active_program, self.layers["ip"] = name, l-1
 
         if opc == "nxt": self.layers["mf"] += 1
         if opc == "prv": self.layers["mf"] -= 1
@@ -119,13 +125,23 @@ class RefVM:
                 self.exit = True
 
         if opc == "subv":
-            self.stack.append(self.layers["ip"])
-            self.layers["ip"] = labels[op1]-1
+            if op1 not in self.labels:
+                self.error = "subv to non-existent label"
+                self.exit = True
+            else:
+                self.stack.append((self.active_program, self.layers["ip"]))
+                name, l = self.labels[op1]
+                self.active_program, self.layers["ip"] = name, l-1
         if opc == "subd":
-            self.stack.append(self.layers["ip"])
-            self.layers["ip"] = labels[self.layers[op1]]-1
+            if self.layers[op1] not in self.labels:
+                self.error = "subd to non-existent label"
+                self.exit = True
+            else:
+                self.stack.append((self.active_program, self.layers["ip"]))
+                name, l = self.labels[self.layers[op1]]
+                self.active_program, self.layers["ip"] = name, l-1
         if opc == "ret":
-            self.layers["ip"] = self.stack.pop()
+            self.active_program, self.layers["ip"] = self.stack.pop()
 
         if self.error is not None:
             print("RVM ERROR: %s"%self.error)
