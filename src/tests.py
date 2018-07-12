@@ -16,7 +16,7 @@ class VMTestCase(ut.TestCase):
             vm.assemble(program, name, verbose=0)
 
         for name, trace in zip(names, traces):
-            vm.load("test", trace[0])
+            vm.load(name, trace[0])
     
             if verbose > 0:
                 print()
@@ -300,6 +300,35 @@ class VMTestCase(ut.TestCase):
             ]
 
         self._test({"test": program}, ["test"], [trace], num_registers=2, verbose=0)
+
+    # @ut.skip("")
+    def test_multi(self):
+
+        programs = {
+        "one": """
+        start1: mov r0 A
+                mov r1 X
+                exit
+        """,
+        "two": """
+        start2: mov r0 B
+                mov r1 Y
+                exit
+        """
+        }
+        traces = [
+            [
+                {"r0": None, "r1": None}, # start: mov
+                {"r0": "A", "r1": None}, # mov
+                {"r0": "A", "r1": "X"}, # exit
+            ],
+            [
+                {"r0": None, "r1": None}, # start: mov
+                {"r0": "B", "r1": None}, # mov
+                {"r0": "B", "r1": "Y"}, # exit
+            ]]
+
+        self._test(programs, ["one","two"], traces, num_registers=2, verbose=0)
 
 class RefVMTestCase(VMTestCase):
     def _make_vm(self, num_registers):
