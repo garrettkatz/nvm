@@ -31,11 +31,21 @@ class RefVM:
         self.layers["opc"] = "null"
         self.layers["op1"] = "null"
         self.layers["op2"] = "null"
-        self.layers["mf"] = 0
+        self.layers["mf"] = "0"
         self.layers["co"] = False
         self.exit = False
         # set initial activities
         self.layers.update(initial_state)
+
+    def initialize_memory(self, pointers, values):
+        for loc in pointers:
+            for reg, tok in pointers[loc].items():
+                if reg not in self.pointers: self.pointers[reg] = {}
+                self.pointers[reg][tok] = loc
+        for loc in values:
+            for reg, tok in values[loc].items():
+                if loc not in self.memory: self.memory[loc] = {}
+                self.memory[loc][reg] = tok
 
     def state_string(self):
         lines, labels = self.programs[self.active_program]
@@ -99,8 +109,8 @@ class RefVM:
                 name, l = self.labels[self.layers[op1]]
                 self.active_program, self.layers["ip"] = name, l-1
 
-        if opc == "nxt": self.layers["mf"] += 1
-        if opc == "prv": self.layers["mf"] -= 1
+        if opc == "nxt": self.layers["mf"] = str(int(self.layers["mf"]) + 1)
+        if opc == "prv": self.layers["mf"] = str(int(self.layers["mf"]) - 1)
         if opc == "mem":
             mf = self.layers["mf"]
             if mf not in self.memory: self.memory[mf] = {}

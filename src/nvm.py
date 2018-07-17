@@ -19,13 +19,16 @@ class NVM:
         act = activator(pad, layer_size)
         registers = {name: Layer(name, layer_shape, act, Coder(act))
             for name in register_names}
-        self.net = NVMNet(layer_shape, pad, activator, learning_rule, registers, shapes=shapes)
+        self.net = NVMNet(layer_shape, pad, activator, learning_rule, registers, shapes=shapes, tokens=tokens, orthogonal=orthogonal)
 
     def assemble(self, program, name, verbose=1, other_tokens=[]):
         self.net.assemble(program, name, verbose, self.orthogonal, other_tokens)
 
     def load(self, program_name, initial_state):
         self.net.load(program_name, initial_state)
+
+    def initialize_memory(self, pointers, values):
+        self.net.initialize_memory(pointers, values)
 
     def decode_state(self, layer_names=None):
         if layer_names is None:
@@ -57,7 +60,7 @@ class NVM:
             if self.net.at_start(): break
             if self.at_exit(): break
 
-def make_default_nvm(register_names, layer_shape=None, orthogonal=False, shapes={}):
+def make_default_nvm(register_names, layer_shape=None, orthogonal=False, shapes={}, tokens=[]):
     if layer_shape is None: layer_shape = (16,16) if orthogonal else (32,32)
     pad = 0.0001
     # activator, learning_rule = tanh_activator, rehebbian
@@ -65,7 +68,7 @@ def make_default_nvm(register_names, layer_shape=None, orthogonal=False, shapes=
 
     return NVM(layer_shape,
         pad, activator, learning_rule, register_names,
-        shapes=shapes, tokens=[], orthogonal=orthogonal)
+        shapes=shapes, tokens=tokens, orthogonal=orthogonal)
 
 if __name__ == "__main__":
 

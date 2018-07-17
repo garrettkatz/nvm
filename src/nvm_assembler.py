@@ -15,15 +15,15 @@ def assemble(nvmnet, program, name, verbose=False, orthogonal=False, other_token
     all_tokens = unique(
         [tok for line in lines for tok in line[1:]] + \
         other_tokens + labels.keys())
-    for layer_name in ["ci"] + registers:
-        nvmnet.layers[layer_name].encode_tokens(
-            tokens=all_tokens, orthogonal=orthogonal)
+    # for layer_name in ["ci"] + registers:
+    #     nvmnet.layers[layer_name].encode_tokens(
+    #         tokens=all_tokens, orthogonal=orthogonal)
 
     ### Encode operand tokens
-    for x in [1,2]:
-        nvmnet.layers["op"+str(x)].encode_tokens(
-            tokens=unique([line[x] for line in lines]),
-            orthogonal=orthogonal)
+    # for x in [1,2]:
+    #     nvmnet.layers["op"+str(x)].encode_tokens(
+    #         tokens=unique([line[x] for line in lines]),
+    #         orthogonal=orthogonal)
 
     ### Encode instruction pointers and labels
     index_width = str(int(np.ceil(np.log10(len(lines)))))

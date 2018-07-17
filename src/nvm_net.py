@@ -14,15 +14,15 @@ def update_add(accumulator, summand):
             accumulator[k] += v
         else: accumulator[k] = v
 
-def address_space(forward_layer, backward_layer):
+def address_space(forward_layer, backward_layer, orthogonal=False):
     # set up memory address space
     layers = {'f': forward_layer, 'b': backward_layer}
     N = layers['f'].size
     A = {}
     for d in ['f','b']:
-        A[d] = np.concatenate(
-            [layers[d].coder.encode(str(a)) for a in range(N)],
-            axis=1)
+        A[d] = layers[d].encode_tokens(
+            tokens = [str(a) for a in range(N)],
+            orthogonal=orthogonal)
     weights, biases = {}, {}
     for d_to in ['f','b']:
         for d_from in ['f','b']:
@@ -41,7 +41,7 @@ def address_space(forward_layer, backward_layer):
 
 class NVMNet:
     
-    def __init__(self, layer_shape, pad, activator, learning_rule, devices, shapes={}, orthogonal=False):
+    def __init__(self, layer_shape, pad, activator, learning_rule, devices, shapes={}, tokens=[], orthogonal=False):
         # layer_shape is default, shapes[layer_name] are overrides
         if 'gh' not in shapes: shapes['gh'] = (32,16)
         if 'm' not in shapes: shapes['m'] = (16,16)
@@ -98,7 +98,8 @@ class NVMNet:
         self.weights, self.biases = flash_instruction_set(self, verbose=False)
         for ms in 'ms':
             ms_weights, ms_biases = address_space(
-                layers[ms+'f'], layers[ms+'b'])
+                layers[ms+'f'], layers[ms+'b'],
+                orthogonal=orthogonal)
             self.weights.update(ms_weights)
             self.biases.update(ms_biases)
 
@@ -106,6 +107,8 @@ class NVMNet:
         connect_pairs = \
             [(device,'mf') for device in self.devices] + \
             [('mf',device) for device in self.devices] + \
+            [(device,'mb') for device in self.devices] + \
+            [('mb',device) for device in self.devices] + \
             [('ip','sf')] + \
             [('co','ci')]
         for (to_name, from_name) in connect_pairs:
@@ -114,9 +117,6 @@ class NVMNet:
             self.weights[(to_name, from_name)] = np.zeros((N_to, N_from))
             self.biases[(to_name, from_name)] = np.zeros((N_to, 1))
 
-        # initialize constants
-        self.constants = ["null"] #"true", "false"]
-
         # initialize learning
         self.learning_rules = {
             (to_layer, from_layer): learning_rule
@@ -124,9 +124,12 @@ class NVMNet:
         self.learning_rules[('co','ci')] = lambda w, b, x, y, ax, ay: \
             dipole(w, b, x, co_true, ax, ay)
 
-        # encode opcodes
+        # encode tokens
         self.orthogonal = orthogonal
         self.layers["opc"].encode_tokens(opcodes, orthogonal=orthogonal)
+        all_tokens = list(set(self.devices.keys() + ["null"] + tokens))
+        for name in self.devices.keys() + ["op1","op2","ci"]:
+            self.layers[name].encode_tokens(all_tokens, orthogonal=orthogonal)
 
     def set_pattern(self, layer_name, pattern):
         self.activity[layer_name] = pattern
@@ -171,6 +174,35 @@ class NVMNet:
         # user initializations
         for layer, token in activity.items():
             self.activity[layer] = self.layers[layer].coder.encode(token)
+
+    def initialize_memory(self, pointers, values):
+        # pointers = {memory location: {register name: token}} -
+        #    token in register is a reference to memory location
+        # values = {memory location: {register name: token}} -
+        #    token in register is stored at memory location
+        
+        for loc in pointers:
+            for reg, tok in pointers[loc].items():
+                for x in "fb":
+                    w, b = self.weights[('m'+x,reg)], self.biases[('m'+x,reg)]
+                    dw, db = self.learning_rules[('m'+x,reg)](w, b,
+                        self.layers[reg].coder.encode(tok),
+                        self.layers['m'+x].coder.encode(loc),
+                        self.layers[reg].activator,
+                        self.layers['m'+x].activator)
+                    self.weights[('m'+x,reg)] += dw
+                    self.biases[('m'+x,reg)] += db
+
+        for loc in values:
+            for reg, tok in values[loc].items():
+                w, b = self.weights[(reg,'mf')], self.biases[(reg,'mf')]
+                dw, db = self.learning_rules[(reg,'mf')](w, b,
+                    self.layers['mf'].coder.encode(loc),
+                    self.layers[reg].coder.encode(tok),
+                    self.layers['mf'].activator,
+                    self.layers[reg].activator)
+                self.weights[(reg,'mf')] += dw
+                self.biases[(reg,'mf')] += db
 
     def tick(self):
 

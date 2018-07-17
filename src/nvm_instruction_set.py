@@ -458,9 +458,9 @@ def flash_instruction_set(nvmnet, verbose=False):
 
     for device in devices:
 
-        # Open plasticity from device in op1 to mf
+        # Open plasticity from device in op1 to mf and mb
         g, h = gs.add_transit(
-            ungate = [('mf', device, 'l')],
+            ungate = [('m'+x, device, 'l') for x in "fb"],
             old_gates = g_ref, old_hidden = h_ref,
             op1 = device)
         g_ref_dev, h_ref_dev = g.copy(), h.copy()
@@ -483,13 +483,13 @@ def flash_instruction_set(nvmnet, verbose=False):
     gate_output.coder.encode('drf', g_drf)
 
     for drf_name, drf_device in devices.items():
-        # Open flow from device to mf
+        # Open flow from device to mf and mb
         g, h = gs.add_transit(
-            ungate = gflow("mf", drf_name),
+            ungate = gflow("mf", drf_name) + gflow("mb", drf_name),
             old_gates = g_drf, old_hidden = h_drf,
             op1 = drf_name)
         gate_hidden.coder.encode('drf_'+drf_name, h)
-        gate_output.coder.encode("mf<" + drf_name, g)
+        gate_output.coder.encode("mx<" + drf_name, g)
 
         # return to start state
         gs.add_transit(

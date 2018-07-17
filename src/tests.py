@@ -5,13 +5,15 @@ from nvm import make_default_nvm
 
 class VMTestCase(ut.TestCase):
 
-    def _test(self, programs, names, traces, num_registers=1, verbose=0):
+    def _test(self, programs, names, traces, memory=None, tokens=[], num_registers=1, verbose=0):
         """
         Assemble all programs
         run all programs in list of names
+        memory = (pointers, values)
         """
-    
-        vm = self._make_vm(num_registers)
+
+        vm = self._make_vm(num_registers, tokens=tokens)
+        if memory is not None: vm.initialize_memory(*memory)
         for name, program in programs.items():
             vm.assemble(program, name, verbose=0)
 
@@ -26,7 +28,7 @@ class VMTestCase(ut.TestCase):
                 state = vm.decode_state()
                 if verbose > 0:
                     print(t,vm.state_string())
-                    print({r: state[r] for r in vm.register_names})
+                    print({r: state[r] for r in vm.register_names+["mf"]})
                     print(trace[t])
                 self.assertTrue(
                     {r: state[r] for r in vm.register_names} == trace[t])
@@ -56,7 +58,9 @@ class VMTestCase(ut.TestCase):
             {"r0": "B"},
             {"r0": "A"}]
 
-        self._test({"test": program}, ["test"], [trace], num_registers=1, verbose=0)
+        self._test({"test": program}, ["test"], [trace],
+            tokens=["start","A","B"],
+            num_registers=1, verbose=0)
 
     # @ut.skip("")
     def test_movd(self):
@@ -71,7 +75,9 @@ class VMTestCase(ut.TestCase):
             {"r0": "A", "r1": None},
             {"r0": "A", "r1": "A"}]
 
-        self._test({"test": program}, ["test"], [trace], num_registers=2, verbose=0)
+        self._test({"test": program}, ["test"], [trace],
+            tokens=["start","A"],
+            num_registers=2, verbose=0)
 
     # @ut.skip("")
     def test_jmpv(self):
@@ -85,7 +91,9 @@ class VMTestCase(ut.TestCase):
             {"r0": None},
             {"r0": None}]
 
-        self._test({"test": program}, ["test"], [trace], num_registers=1, verbose=0)
+        self._test({"test": program}, ["test"], [trace],
+            tokens=["start","end","A"],
+            num_registers=1, verbose=0)
 
     # @ut.skip("")
     def test_jmpd(self):
@@ -101,7 +109,9 @@ class VMTestCase(ut.TestCase):
             {"r0": "end"},
             {"r0": "end"},]
 
-        self._test({"test": program}, ["test"], [trace], num_registers=1, verbose=0)
+        self._test({"test": program}, ["test"], [trace],
+            tokens=["start","end","A"],
+            num_registers=1, verbose=0)
 
     # @ut.skip("")
     def test_cmpv(self):
@@ -129,7 +139,9 @@ class VMTestCase(ut.TestCase):
             {"r0": "C"},
             {"r0": "A"},]
 
-        self._test({"test": program}, ["test"], [trace], num_registers=1, verbose=0)
+        self._test({"test": program}, ["test"], [trace],
+            tokens=["start","eq1","eq2","end","A","B","C"],
+            num_registers=1, verbose=0)
 
     # @ut.skip("")
     def test_cmpd(self):
@@ -161,7 +173,9 @@ class VMTestCase(ut.TestCase):
             {"r0": "C", "r1": "C"},
             {"r0": "A", "r1": "C"},]
 
-        self._test({"test": program}, ["test"], [trace], num_registers=2, verbose=0)
+        self._test({"test": program}, ["test"], [trace],
+            tokens=["start","eq1","eq2","end","A","B","C","D"],
+            num_registers=2, verbose=0)
 
     # @ut.skip("")
     def test_memr(self):
@@ -197,7 +211,9 @@ class VMTestCase(ut.TestCase):
             {"r0": "C"},
             ]
 
-        self._test({"test": program}, ["test"], [trace], num_registers=1, verbose=0)
+        self._test({"test": program}, ["test"], [trace],
+            tokens=["start","overw","end","A","B","C","D"],
+            num_registers=1, verbose=0)
 
     # @ut.skip("")
     def test_subv(self):
@@ -232,7 +248,9 @@ class VMTestCase(ut.TestCase):
             {"r0": "C"},
             ]
 
-        self._test({"test": program}, ["test"], [trace], num_registers=1, verbose=0)
+        self._test({"test": program}, ["test"], [trace],
+            tokens=["start","foo","bar","A","B","C","D"],
+            num_registers=1, verbose=0)
 
     # @ut.skip("")
     def test_subd(self):
@@ -269,7 +287,9 @@ class VMTestCase(ut.TestCase):
             {"r0": "C", "r1": "bar"},
             ]
 
-        self._test({"test": program}, ["test"], [trace], num_registers=2, verbose=0)
+        self._test({"test": program}, ["test"], [trace],
+            tokens=["start","foo","bar","A","B","C","D"],
+            num_registers=2, verbose=0)
 
     # @ut.skip("")
     def test_dref(self):
@@ -299,10 +319,12 @@ class VMTestCase(ut.TestCase):
             {"r0": "A", "r1": "X"}, # exit
             ]
 
-        self._test({"test": program}, ["test"], [trace], num_registers=2, verbose=0)
+        self._test({"test": program}, ["test"], [trace],
+            tokens=["start","A","X","B"],
+            num_registers=2, verbose=0)
 
     # @ut.skip("")
-    def test_multi(self):
+    def test_twop(self):
 
         programs = {
         "one": """
@@ -328,10 +350,12 @@ class VMTestCase(ut.TestCase):
                 {"r0": "B", "r1": "Y"}, # exit
             ]]
 
-        self._test(programs, ["one","two"], traces, num_registers=2, verbose=0)
+        self._test(programs, ["one","two"], traces,
+            tokens=["start1","start2","A","X","B","Y"],
+            num_registers=2, verbose=0)
 
     # @ut.skip("")
-    def test_multisub(self):
+    def test_xsub(self):
 
         programs = {
         "one": """
@@ -355,20 +379,59 @@ class VMTestCase(ut.TestCase):
             {"r0": "C", "r1": None}, # one exit
         ]
 
-        self._test(programs, ["one"], [trace], num_registers=2, verbose=0)
+        self._test(programs, ["one"], [trace],
+            tokens=["start1","sub2","A","B","C"],
+            num_registers=2, verbose=0)
+
+    # @ut.skip("")
+    def test_memi(self):
+
+        values = {"0": {"r0": "t0"}, "1": {"r0": "t1","r1":"t2"}}
+        pointers = {"1": {"r0": "p0"}}
+        memory = (pointers, values)
+
+        program = """
+        start:  drf r0
+                rem r1
+                mem r0
+                prv
+                rem r0
+                mov r0 p0
+                mov r1 t1
+                drf r0
+                rem r1
+                exit
+        """
+        trace = [
+            {"r0": "p0", "r1": None}, # start: drf r0
+            {"r0": "p0", "r1": None}, # rem r1
+            {"r0": "p0", "r1": "t2"}, # mem r0
+            {"r0": "p0", "r1": "t2"}, # prv
+            {"r0": "p0", "r1": "t2"}, # rem r0
+            {"r0": "t0", "r1": "t2"}, # mov r0 p0
+            {"r0": "p0", "r1": "t2"}, # mov r1 t1
+            {"r0": "p0", "r1": "t1"}, # drf r0
+            {"r0": "p0", "r1": "t1"}, # rem r1
+            {"r0": "p0", "r1": "t2"}, # exit
+            ]
+
+        self._test({"test": program}, ["test"], [trace],
+            memory=memory, tokens=["start","t0","t1","t2","p0"],
+            num_registers=2, verbose=0)
 
 class RefVMTestCase(VMTestCase):
-    def _make_vm(self, num_registers):
+    def _make_vm(self, num_registers, tokens):
         return RefVM(["r%d"%r for r in range(num_registers)])
 
 class NVMTestCase(VMTestCase):
-    def _make_vm(self, num_registers):
-        return make_default_nvm(["r%d"%r for r in range(num_registers)])
+    def _make_vm(self, num_registers, tokens):
+        return make_default_nvm(["r%d"%r for r in range(num_registers)],
+            tokens=tokens)
 
 class NVMOrthogonalTestCase(VMTestCase):
-    def _make_vm(self, num_registers):
+    def _make_vm(self, num_registers, tokens):
         return make_default_nvm(["r%d"%r for r in range(num_registers)],
-            orthogonal=True)
+            tokens=tokens, orthogonal=True)
 
 if __name__ == "__main__":
     test_suite = ut.TestLoader().loadTestsFromTestCase(RefVMTestCase)

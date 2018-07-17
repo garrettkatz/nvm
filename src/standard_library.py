@@ -3,7 +3,10 @@ NVM standard library routines for logic and arithmetic
 r0, r1, ... are replaced with register names in order
 """
 
-stl_template = """
+##### Boolean operations (not, and, or)
+# r0 and r1 should be names of two registers used as operands
+def logic_routines(r0, r1):
+    return """
                 exit
 
 # logical-not of r0
@@ -37,11 +40,19 @@ stl.or:         cmp {r0} true
 stl.or.true:    mov {r0} true
                 ret
 
+""".format(r0=r0, r1=r1)
 
-"""
+##### Contiguous array memory management
+# r0 is pointer register and r1 is value register
+def array_routines(r0, r1):
+    return """
+                exit
+
+stl.or.true:    mov {r0} true
+                ret
+
+""".format(r0=r0, r1=r1)
 
 if __name__ == "__main__":
     
-    register_names = ["ra", "rb"]
-    print(stl_template.format(
-        **{("r%d"%r): name for r, name in enumerate(register_names)}))
+    print(logic_routines("ra", "rb"))

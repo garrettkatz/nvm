@@ -1,13 +1,10 @@
 next steps:
-    redo randprog and update manuscript
-        variable ip size?
-        same distinct token sizes tested on all NVMs (more independent and reusable test data)
-        multiprogram in single instance
     more encapsulated callback API for IO
     bring back hypervisor + visualizer (raster and add new shape-based viewer)
     auto-infer required layer sizes
     pass activator shape, not size
     cts gates, slower smoother hidden
+    memory management+defrag
     refactor devices to registers
     asymmetric time learning, and seq/lnk commands for programming learning within/between layers
     instruction pitfalls:
