@@ -17,6 +17,8 @@ from oculomotor_nvm import build_network as build_om_network
 from oculomotor_nvm import build_environment as build_om_environment
 from oculomotor_nvm import build_bridge_connections as build_om_bridge_connections
 
+import matplotlib.pyplot as plt
+
 def build_vp_network(rows, cols):
 
     # load trained parameters
@@ -130,7 +132,12 @@ def build_emot_network():
         "tau" : 0.05,
         "decay" : 0.01,
         "rows" : 1,
-        "columns" : 1, })
+        "columns" : 1,
+        "init config": {
+            "type": "normal",
+            "mean": 0.0,
+            "std dev": 0.05
+        }})
 
     # Add vmpfc layer
     layers.append({
@@ -138,9 +145,14 @@ def build_emot_network():
         "neural model" : "oscillator",
         "tau" : 0.05,
         "decay" : 0.01,
-        "tonic" : 0.05,
+        "tonic" : 0.1,
         "rows" : 1,
-        "columns" : 1, })
+        "columns" : 1,
+        "init config": {
+            "type": "normal",
+            "mean": 0.0,
+            "std dev": 0.05
+        }})
 
     # Build main structure
     structure = {
@@ -307,27 +319,33 @@ def build_vp_environment(visualizer=False):
     
     return modules
 
-def build_emot_environment(visualizer=False, print_activ=False):
+emot_activ = []
+emot_bold = []
+
+def build_emot_environment(visualizer=False):
+    global emot_bold, emot_activ
 
     modules = []
 
-    if print_activ:
-        modules.append({
-            "type" : "csv_output",
-            "layers" : [
-                {
-                    "structure" : "visual pathway",
-                    "layer" : "class"
-                },
-                {
-                    "structure" : "emotional",
-                    "layer" : "amygdala"
-                },
-                {
-                    "structure" : "emotional",
-                    "layer" : "vmpfc"
-                },
-                ]})
+    emot_activ = [[], []]
+
+    def track_activ(ID, size, ptr):
+        global emot_activ
+        emot_activ[ID].append(sum(FloatArray(size, ptr).to_list()))
+
+    create_io_callback("track_activ", track_activ)
+
+    modules.append({
+        "type" : "callback",
+        "layers" : [
+            {
+                "layer" : layer_name,
+                "output" : True,
+                "function" : "track_activ",
+                "id" : i
+            } for i,layer_name in enumerate(("amygdala", "vmpfc"))
+        ]
+    })
 
     if visualizer:
         modules.append({
@@ -338,10 +356,32 @@ def build_emot_environment(visualizer=False, print_activ=False):
             ]
         })
 
+    emot_bold = [[], []]
+
+    def track_bold(ID, size, ptr):
+        global emot_bold
+        emot_bold[ID].append(sum(FloatArray(size, ptr).to_list()))
+
+    create_io_callback("track_bold", track_bold)
+
+    modules.append({
+        "type" : "callback",
+        "layers" : [
+            {
+                "layer" : layer_name,
+                "output" : True,
+                "function" : "track_bold",
+                "id" : i,
+                "output keys" : ["bold"]
+            } for i,layer_name in enumerate(("amygdala", "vmpfc"))
+        ]
+    })
+
     return modules
 
 
-def init_vpnet(net, nvmnet, amygdala_sensitivity=0.1):
+def init_vpnet(net, nvmnet, amygdala_sensitivity=0.1,
+        amy_vmpfc_strength=1.0, vmpfc_amy_strength=1.0):
     # load trained parameters
     vp_params = dict(**np.load("cnn2.npz"))
 
@@ -395,6 +435,22 @@ def init_vpnet(net, nvmnet, amygdala_sensitivity=0.1):
     for m in range(mat.size):
         mat.data[m] = w[m]
 
+    # amygdala to vmPFC
+    # This allows the amgydala to activate the vmPFC for reciprocal inhibition
+    mat_name = "vmpfc <- amygdala"
+    mat = net.get_weight_matrix(mat_name)
+
+    for m in range(mat.size):
+        mat.data[m] = amy_vmpfc_strength
+
+    # vmPFC to amygdala
+    # This allows the vmPFC to shut down the amygdala
+    mat_name = "amygdala <- vmpfc"
+    mat = net.get_weight_matrix(mat_name)
+
+    for m in range(mat.size):
+        mat.data[m] = vmpfc_amy_strength
+
     # amygdala to gi
     # This allows amygdala to interrupt nvm
     mat_name = "gi <- amygdala"
@@ -407,7 +463,9 @@ def init_vpnet(net, nvmnet, amygdala_sensitivity=0.1):
     for m in range(mat.size):
         mat.data[m] = w.flat[m]
 
-def main(read=True, visualizer=False, device=None, rate=0, iterations=1000000):
+def main(read=True, visualizer=False, device=None, rate=0, iterations=1000000,
+         amygdala_sensitivity=0.0, amy_vmpfc_strength=1.0,
+         vmpfc_amy_strength=1.0, filename=""):
     np.set_printoptions(linewidth=200, formatter = {'float': lambda x: '% .2f'%x})
     task = "saccade"
     rows = 340
@@ -439,7 +497,7 @@ def main(read=True, visualizer=False, device=None, rate=0, iterations=1000000):
 
     ''' Emotional network '''
     emot_structure, emot_connections = build_emot_network()
-    emot_modules = build_emot_environment(visualizer, print_activ=False)
+    emot_modules = build_emot_environment(visualizer)
 
     ''' entire network '''
     connections = nvm_connections + om_network["connections"] + vp_connections + emot_connections
@@ -452,7 +510,19 @@ def main(read=True, visualizer=False, device=None, rate=0, iterations=1000000):
     env = Environment({"modules" : nvm_modules + om_modules + vp_modules + emot_modules})
 
     init_syngen_nvm(nvmnet, net)
-    init_vpnet(net, nvmnet, amygdala_sensitivity=0.0)
+
+    # Draw amygdala sensitivity from distribution centered on parameter
+    amygdala_sensitivity = max(0.0,
+        np.random.normal(amygdala_sensitivity, amygdala_sensitivity / 4.0))
+    amy_vmpfc_strength = max(0.0,
+        np.random.normal(amy_vmpfc_strength, amy_vmpfc_strength / 4.0))
+    vmpfc_amy_strength = max(0.0,
+        np.random.normal(vmpfc_amy_strength, vmpfc_amy_strength / 4.0))
+    print("Using amygdala sensitivity: %f" % amygdala_sensitivity)
+    print("Using amygdala->vmPFC: %f" % amy_vmpfc_strength)
+    print("Using vmPFC->amygdala: %f" % vmpfc_amy_strength)
+    init_vpnet(net, nvmnet, amygdala_sensitivity,
+        amy_vmpfc_strength, vmpfc_amy_strength)
 
     ''' Run Simulation '''
     if device is None:
@@ -471,6 +541,34 @@ def main(read=True, visualizer=False, device=None, rate=0, iterations=1000000):
         return
     print(report)
 
+    report = report.to_dict()
+    print("Response latency mean: %s" % report["layer reports"][0]["Average time"])
+    print("Response latency std dev: %s" % report["layer reports"][0]["Standard deviation time"])
+
+    print("\nBOLD Response:")
+    print("Amygdala: %f" % sum(emot_bold[0]))
+    print("vmPFC:    %f" % sum(emot_bold[1]))
+
+    print("\nNeural Response:")
+    print("Amygdala: %f" % sum(emot_activ[0]))
+    print("vmPFC:    %f" % sum(emot_activ[1]))
+
+    plt.subplot(211)
+    plt.plot(emot_bold[0])
+    plt.plot(emot_bold[1])
+    plt.title("BOLD")
+    plt.legend(['amy BOLD', 'vmPFC BOLD'], loc='upper left')
+    plt.subplot(212)
+    plt.plot(emot_activ[0])
+    plt.plot(emot_activ[1])
+    plt.title("Activation")
+    plt.legend(['amy activ', 'vmPFC activ'], loc='upper left')
+
+    if filename != "":
+        plt.savefig(filename)
+    else:
+        plt.show()
+
     # Delete the objects
     del net
     del env
@@ -486,6 +584,14 @@ if __name__ == "__main__":
                         help='run on device #')
     parser.add_argument('-r', type=int, default=0,
                         help='refresh rate')
+    parser.add_argument('-a', type=float, default=0.0,
+                        help='amygdala sensitivity')
+    parser.add_argument('-av', type=float, default=1.0,
+                        help='amygdala -> vmPFC')
+    parser.add_argument('-va', type=float, default=1.0,
+                        help='vmPFC -> amygdala')
+    parser.add_argument('-f', type=str, default="",
+                        help='BOLD/activ filename')
     args = parser.parse_args()
 
     if args.host or len(get_gpus()) == 0:
@@ -499,4 +605,4 @@ if __name__ == "__main__":
 
     read = False
 
-    main(read, args.visualizer, device, args.r)
+    main(read, args.visualizer, device, args.r, 1000000, args.a, args.av, args.va, args.f)

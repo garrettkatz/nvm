@@ -282,8 +282,8 @@ def build_environment(rows=200, cols=200, scale=5, visualizer=False, task="sacca
                 "automatic" : True,
                 "shuffle" : True,
                 "num faces" : 34,
-                "cross time" : 100,
-                "face time" : 100,
+                "cross time" : 300,
+                "face time" : 300,
                 "layers" : [
                     {
                         "layer" : "peripheral_photoreceptor",

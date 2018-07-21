@@ -18,11 +18,32 @@ loop:   mov fef center
 wait:   cmp tc cross
         jie cross
         jmp wait
-cross:  jmp tc
-left:   nop
-right:  mov pef tc
-        mov fef pef
+cross:  mov pef tc
+        jmp pef
+left:   mov fef right
+        jmp look
+right:  mov fef left
+        jmp look
 look:   mov sc on
+        mov sc off
+        jmp loop
+        exit
+
+"""}
+
+aps_program = {"aps":"""
+
+loop:   mov fef center
+        mov sc on
+        mov sc off
+wait:   cmp tc cross
+        jie cross
+        jmp wait
+cross:  mov pef tc
+        jmp pef
+left:   nop
+right:  mov fef pef
+        mov sc on
         mov sc off
         jmp loop
         exit
@@ -87,18 +108,28 @@ def make_saccade_nvm(activator_label):
 
     # assemble and link programs
     for name, program in aas_program.items():
+    #for name, program in aps_program.items():
         nvmnet.assemble(program, name, verbose=1)
     nvmnet.link(verbose=2)
 
-    # redo pef/fef linkages with special learning rule
-    # pef -> ip
+    # redo pef/fef and pef/ip linkages with special learning rule
+    # pef -> fef
     X = np.concatenate([nvmnet.layers["pef"].coder.encode(tok)
         for tok in ["left","right","cross"]], axis=1)
     Y = np.concatenate([nvmnet.layers["fef"].coder.encode(tok)
-        for tok in ["right","left","cross"]], axis=1)
+        for tok in ["left","right","cross"]], axis=1)
     nvmnet.weights[("fef","pef")] = nvmnet.layers["fef"].activator.g(Y).dot(
         X.T / (X**2).sum(axis=0)[:, np.newaxis])
     nvmnet.biases[("fef","pef")][:] = 0
+
+    # pef -> ip
+    X = np.concatenate([nvmnet.layers["pef"].coder.encode(tok)
+        for tok in ["left","right","cross"]], axis=1)
+    Y = np.concatenate([nvmnet.layers["ip"].coder.encode(tok)
+        for tok in ["left","right","cross"]], axis=1)
+    nvmnet.weights[("ip","pef")] = nvmnet.layers["ip"].activator.g(Y).dot(
+        X.T / (X**2).sum(axis=0)[:, np.newaxis])
+    nvmnet.biases[("ip","pef")][:] = 0
 
     # initialize layers
     nvmnet.activity["ip"] = nvmnet.layers["ip"].coder.encode(name) # program pointer
