@@ -234,7 +234,8 @@ def build_network(rows=200, cols=200, scale=5):
 
 train_dump_index = 0
 
-def build_environment(rows=200, cols=200, scale=5, visualizer=False, task="saccade", train_dump=False):
+def build_environment(rows=200, cols=200, scale=5, visualizer=False,
+        task="saccade", train_dump=False, num_faces=34):
     # Create training data callback
     global train_dump_index
     # train_dump_index = 0
@@ -281,9 +282,9 @@ def build_environment(rows=200, cols=200, scale=5, visualizer=False, task="sacca
                 "saccade rate" : 0.75,
                 "automatic" : True,
                 "shuffle" : True,
-                "num faces" : 34,
-                "cross time" : 300,
-                "face time" : 300,
+                "num faces" : num_faces,
+                "cross time" : 1000,
+                "face time" : 500,
                 "layers" : [
                     {
                         "layer" : "peripheral_photoreceptor",

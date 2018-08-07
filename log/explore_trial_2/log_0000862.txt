@@ -1,0 +1,365 @@
+Sequencer flash residual = 0.000047
+gate sequencer residual = 0.000047
+('mf', 'mf') residuals:
+Flash residual max: 0.000000
+Flash residual mad: 0.000000
+Flash diff count: 0
+('mf', 'mb') residuals:
+Flash residual max: 0.000000
+Flash residual mad: 0.000000
+Flash diff count: 0
+('mb', 'mf') residuals:
+Flash residual max: 0.000000
+Flash residual mad: 0.000000
+Flash diff count: 0
+('mb', 'mb') residuals:
+Flash residual max: 0.000000
+Flash residual mad: 0.000000
+Flash diff count: 0
+('sf', 'sf') residuals:
+Flash residual max: 0.000000
+Flash residual mad: 0.000000
+Flash diff count: 0
+('sf', 'sb') residuals:
+Flash residual max: 0.000000
+Flash residual mad: 0.000000
+Flash diff count: 0
+('sb', 'sf') residuals:
+Flash residual max: 0.000000
+Flash residual mad: 0.000000
+Flash diff count: 0
+('sb', 'sb') residuals:
+Flash residual max: 0.000000
+Flash residual mad: 0.000000
+Flash diff count: 0
+assembler diff count = 0
+Linking op2 -> fef
+Flash residual max: 0.045547
+Flash residual mad: 0.000261
+Flash diff count: 0
+Linking op2 -> sc
+Flash residual max: 0.010723
+Flash residual mad: 0.000263
+Flash diff count: 0
+Linking op2 -> pef
+Flash residual max: 0.059858
+Flash residual mad: 0.000263
+Flash diff count: 0
+Linking op2 -> tc
+Flash residual max: 0.051357
+Flash residual mad: 0.000258
+Flash diff count: 0
+Linking fef -> sc
+Flash residual max: 0.999900
+Flash residual mad: 0.031983
+Flash diff count: 23
+Linking fef -> pef
+Flash residual max: 0.999900
+Flash residual mad: 0.002468
+Flash diff count: 99
+Linking fef -> tc
+Flash residual max: 0.999900
+Flash residual mad: 0.033903
+Flash diff count: 956
+Linking sc -> fef
+Flash residual max: 0.999900
+Flash residual mad: 0.199135
+Flash diff count: 9899
+Linking sc -> pef
+Flash residual max: 0.999900
+Flash residual mad: 0.197878
+Flash diff count: 9865
+Linking sc -> tc
+Flash residual max: 0.999900
+Flash residual mad: 0.197334
+Flash diff count: 6137
+Linking pef -> fef
+Flash residual max: 0.999900
+Flash residual mad: 0.002517
+Flash diff count: 93
+Linking pef -> sc
+Flash residual max: 0.999900
+Flash residual mad: 0.032943
+Flash diff count: 25
+Linking pef -> tc
+Flash residual max: 0.999900
+Flash residual mad: 0.034296
+Flash diff count: 1010
+Linking tc -> fef
+Flash residual max: 0.054056
+Flash residual mad: 0.000288
+Flash diff count: 0
+Linking tc -> sc
+Flash residual max: 0.012378
+Flash residual mad: 0.000312
+Flash diff count: 0
+Linking tc -> pef
+Flash residual max: 0.105107
+Flash residual mad: 0.000296
+Flash diff count: 0
+Linking fef -> ci
+Flash residual max: 0.999900
+Flash residual mad: 0.035104
+Flash diff count: 1016
+Linking sc -> ci
+Flash residual max: 0.999900
+Flash residual mad: 0.196880
+Flash diff count: 6152
+Linking pef -> ci
+Flash residual max: 0.999900
+Flash residual mad: 0.035431
+Flash diff count: 1025
+Linking tc -> ci
+Flash residual max: 0.041069
+Flash residual mad: 0.000296
+Flash diff count: 0
+Linking op2 -> ci
+Flash residual max: 0.049629
+Flash residual mad: 0.000258
+Flash diff count: 0
+Linking fef -> ip
+Flash residual max: 0.999900
+Flash residual mad: 0.032849
+Flash diff count: 926
+Linking sc -> ip
+Flash residual max: 0.999900
+Flash residual mad: 0.194184
+Flash diff count: 6055
+Linking pef -> ip
+Flash residual max: 0.999900
+Flash residual mad: 0.033931
+Flash diff count: 1007
+Linking tc -> ip
+Flash residual max: 0.085037
+Flash residual mad: 0.000332
+Flash diff count: 0
+Linking op1 -> ip
+Flash residual max: 0.070837
+Flash residual mad: 0.000342
+Flash diff count: 0
+linker diff count = 44288
+Using amygdala sensitivity: 0.834563
+Using amygdala->vmPFC: 0.582359
+Using vmPFC->amygdala: 2.360141
+
+Built network.
+  - neurons     :     534330
+  - layers      :         40
+  - connections :        256
+  - weights     :   38803308
+
+Structure: nvm (12559 neurons in 19 layers)
+  fef                                       | n=      1632
+  ci                                        | n=      1024
+  mf                                        | n=       256
+  co                                        | n=      1024
+  op1                                       | n=      1024
+  op2                                       | n=      1024
+  mb                                        | n=       256
+  ip                                        | n=      1024
+  tc                                        | n=      1024
+  go                                        | n=       884
+  opc                                       | n=      1024
+  sc                                        | n=        25
+  sb                                        | n=        64
+  pef                                       | n=      1632
+  sf                                        | n=        64
+  gi                                        | n=        64
+  gh                                        | n=       512
+  bias                                      | n=         1
+  csom                                      | n=         1
+
+
+Structure: visual pathway (90409 neurons in 8 layers)
+  conv-0                                    | n=     18080
+  conv-1                                    | n=     18080
+  conv-2                                    | n=     18080
+  conv-3                                    | n=     18080
+  conv-4                                    | n=     18080
+  max                                       | n=         5
+  class-bias                                | n=         1
+  class                                     | n=         3
+
+
+Structure: emotional (2 neurons in 2 layers)
+  amygdala                                  | n=         1
+  vmpfc                                     | n=         1
+
+
+Structure: oculomotor (19584 neurons in 3 layers)
+  sc_sup                                    | n=      6528
+  sc_deep                                   | n=      6528
+  gating                                    | n=      6528
+
+
+Structure: retina (411776 neurons in 8 layers)
+  peripheral_photoreceptor                  | n=    163200
+  peripheral_photoreceptor_inverse          | n=    163200
+  peripheral_retina_on                      | n=      6528
+  peripheral_retina_off                     | n=      6528
+  central_photoreceptor                     | n=     18080
+  central_photoreceptor_inverse             | n=     18080
+  central_retina_on                         | n=     18080
+  central_retina_off                        | n=     18080
+
+Device 0 memory usage:
+  used  :  2353463296    2244.44 MB
+  free  :  6157238272    5872.00 MB
+  total :  8510701568    8116.44 MB
+Device 1 memory usage:
+  proc  :   167512488     159.75 MB
+  used  :   552599552     527.00 MB
+  free  :  7961378816    7592.56 MB
+  total :  8513978368    8119.56 MB
+Device 2 memory usage:
+  proc  :      801476       0.76 MB
+  used  : 18205327360   17361.95 MB
+  free  : 15430721536   14715.88 MB
+  total : 33636048896   32077.84 MB
+
+Launching multithreaded...
+
+Measured refresh rate: 27.53 fps
+Setting face to neutral right 3
+Looked left (172, 107)  correct=1  time=161
+Looked center (171, 198)
+Setting face to neutral left 3
+Looked right (172, 375)  correct=1  time=161
+Looked center (174, 285)
+Setting face to fear right 3
+Looked left (172, 107)  correct=1  time=159
+Looked center (171, 198)
+Setting face to neutral left 4
+Looked right (172, 375)  correct=1  time=161
+Looked center (173, 285)
+Setting face to neutral left 0
+Looked right (172, 375)  correct=1  time=159
+Looked center (170, 287)
+Interrupting engine...
+
+
+* Engine Report:
+
+Total time: 275.485992s
+Time averaged over 7601 iterations: 0.036243s ( 27.59fps)
+Network state size:    165179808 bytes    (  157.527740 MB)
+State  buffer size:      2137320 bytes    (    2.038307 MB)
+Engine buffer size:       801476 bytes    (    0.764347 MB)
+
+Report for [Layer: sc_deep (oculomotor)]
+           Module -> saccade
+        Structure -> oculomotor
+            Layer -> sc_deep
+            Total -> 5
+          Correct -> 5
+     Average time -> 160.199997
+  Standard deviation time -> 0.979796
+
+Report for [Layer: peripheral_photoreceptor (retina)]
+           Module -> saccade
+        Structure -> retina
+            Layer -> peripheral_photoreceptor
+            Total -> 5
+          Correct -> 5
+     Average time -> 160.199997
+  Standard deviation time -> 0.979796
+
+Report for [Layer: central_photoreceptor (retina)]
+           Module -> saccade
+        Structure -> retina
+            Layer -> central_photoreceptor
+            Total -> 5
+          Correct -> 5
+     Average time -> 160.199997
+  Standard deviation time -> 0.979796
+
+Shutting down thread pool (total inst : 9008402).
+  Completed: 2251462
+  Completed: 2249282
+  Completed: 2247144
+  Completed: 2260514
+Total: 9008402
+
+{
+    "iterations": "7601", 
+    "total time": "275.485992", 
+    "average time": "0.036243", 
+    "fps": "27.591240", 
+    "network bytes": "165179808", 
+    "state buffer bytes": "2137320", 
+    "engine buffer bytes": "801476", 
+    "args": {
+        "verbose": "true", 
+        "refresh rate": "0", 
+        "devices": "1", 
+        "worker threads": "4", 
+        "multithreaded": "true", 
+        "iterations": "1000000", 
+        "learning flag": "true"
+    }, 
+    "layer reports": [
+        {
+            "Module": "saccade", 
+            "Structure": "retina", 
+            "Layer": "peripheral_photoreceptor", 
+            "Total": "5", 
+            "Correct": "5", 
+            "Average time": "160.199997", 
+            "Standard deviation time": "0.979796"
+        }, 
+        {
+            "Module": "saccade", 
+            "Structure": "retina", 
+            "Layer": "central_photoreceptor", 
+            "Total": "5", 
+            "Correct": "5", 
+            "Average time": "160.199997", 
+            "Standard deviation time": "0.979796"
+        }, 
+        {
+            "Module": "saccade", 
+            "Structure": "oculomotor", 
+            "Layer": "sc_deep", 
+            "Total": "5", 
+            "Correct": "5", 
+            "Average time": "160.199997", 
+            "Standard deviation time": "0.979796"
+        }
+    ], 
+    "memory usage": [
+        {
+            "device id": "0", 
+            "device type": "gpu", 
+            "proc": "0.000000", 
+            "used": "2244.437500", 
+            "free": "5872.000000", 
+            "total": "8116.437500"
+        }, 
+        {
+            "device id": "1", 
+            "device type": "gpu", 
+            "proc": "159.752350", 
+            "used": "527.000000", 
+            "free": "7592.562500", 
+            "total": "8119.562500"
+        }, 
+        {
+            "device id": "2", 
+            "device type": "host", 
+            "proc": "0.764347", 
+            "used": "17361.953125", 
+            "free": "14715.882812", 
+            "total": "32077.835938"
+        }
+    ]
+}
+Response latency mean: 160.199997
+Response latency std dev: 0.979796
+
+BOLD Amygdala: 11832.777936
+BOLD vmPFC:    102.836359
+
+Activation Amygdala: 176.613845
+Activation vmPFC:    1741.080505
+Max Activation Amygdala: 0.242108
+Max Activation vmPFC:    0.365187

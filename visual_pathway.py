@@ -121,7 +121,7 @@ def build_vp_network(rows, cols):
 
     return structure, connections
 
-def build_emot_network():
+def build_emot_network(noise=True):
     layers = []
     connections = []
 
@@ -129,30 +129,36 @@ def build_emot_network():
     layers.append({
         "name" : "amygdala",
         "neural model" : "oscillator",
-        "tau" : 0.05,
-        "decay" : 0.01,
+        "tau" : 0.025,
+        "decay" : 0.025,
         "rows" : 1,
-        "columns" : 1,
-        "init config": {
+        "columns" : 1
+    })
+
+    if noise:
+        layers[-1]["init config"] = {
             "type": "normal",
             "mean": 0.0,
-            "std dev": 0.05
-        }})
+            "std dev": 0.025
+        }
 
     # Add vmpfc layer
     layers.append({
         "name" : "vmpfc",
         "neural model" : "oscillator",
-        "tau" : 0.05,
-        "decay" : 0.01,
-        "tonic" : 0.1,
+        "tau" : 0.025,
+        "decay" : 0.00125,
+#        "tonic" : 0.1,
         "rows" : 1,
-        "columns" : 1,
-        "init config": {
+        "columns" : 1
+    })
+
+    if noise:
+        layers[-1]["init config"] = {
             "type": "normal",
             "mean": 0.0,
-            "std dev": 0.05
-        }})
+            "std dev": 0.025
+        }
 
     # Build main structure
     structure = {
@@ -352,7 +358,8 @@ def build_emot_environment(visualizer=False):
             "type" : "visualizer",
             "layers" : [
                 {"layer" : "vmpfc" },
-                {"layer" : "amygdala" }
+                {"layer" : "amygdala" },
+                {"layer" : "class" }
             ]
         })
 
@@ -465,7 +472,7 @@ def init_vpnet(net, nvmnet, amygdala_sensitivity=0.1,
 
 def main(read=True, visualizer=False, device=None, rate=0, iterations=1000000,
          amygdala_sensitivity=0.0, amy_vmpfc_strength=1.0,
-         vmpfc_amy_strength=1.0, filename=""):
+         vmpfc_amy_strength=1.0, filename="", num_faces=34, noise=True):
     np.set_printoptions(linewidth=200, formatter = {'float': lambda x: '% .2f'%x})
     task = "saccade"
     rows = 340
@@ -474,7 +481,8 @@ def main(read=True, visualizer=False, device=None, rate=0, iterations=1000000,
 
     ''' Build oculomotor '''
     om_network = build_om_network(rows, cols, scale)
-    om_modules = build_om_environment(rows, cols, scale, visualizer, task=task, train_dump=False)
+    om_modules = build_om_environment(rows, cols, scale, visualizer, task=task,
+        train_dump=False, num_faces=num_faces)
 
     ''' Build NVM '''
     nvmnet = make_saccade_nvm("logistic")
@@ -496,7 +504,7 @@ def main(read=True, visualizer=False, device=None, rate=0, iterations=1000000,
     vp_modules = build_vp_environment(visualizer)
 
     ''' Emotional network '''
-    emot_structure, emot_connections = build_emot_network()
+    emot_structure, emot_connections = build_emot_network(noise)
     emot_modules = build_emot_environment(visualizer)
 
     ''' entire network '''
@@ -512,12 +520,6 @@ def main(read=True, visualizer=False, device=None, rate=0, iterations=1000000,
     init_syngen_nvm(nvmnet, net)
 
     # Draw amygdala sensitivity from distribution centered on parameter
-    amygdala_sensitivity = max(0.0,
-        np.random.normal(amygdala_sensitivity, amygdala_sensitivity / 4.0))
-    amy_vmpfc_strength = max(0.0,
-        np.random.normal(amy_vmpfc_strength, amy_vmpfc_strength / 4.0))
-    vmpfc_amy_strength = max(0.0,
-        np.random.normal(vmpfc_amy_strength, vmpfc_amy_strength / 4.0))
     print("Using amygdala sensitivity: %f" % amygdala_sensitivity)
     print("Using amygdala->vmPFC: %f" % amy_vmpfc_strength)
     print("Using vmPFC->amygdala: %f" % vmpfc_amy_strength)
@@ -545,13 +547,15 @@ def main(read=True, visualizer=False, device=None, rate=0, iterations=1000000,
     print("Response latency mean: %s" % report["layer reports"][0]["Average time"])
     print("Response latency std dev: %s" % report["layer reports"][0]["Standard deviation time"])
 
-    print("\nBOLD Response:")
-    print("Amygdala: %f" % sum(emot_bold[0]))
-    print("vmPFC:    %f" % sum(emot_bold[1]))
+    print("")
+    print("BOLD Amygdala: %f" % sum(emot_bold[0]))
+    print("BOLD vmPFC:    %f" % sum(emot_bold[1]))
 
-    print("\nNeural Response:")
-    print("Amygdala: %f" % sum(emot_activ[0]))
-    print("vmPFC:    %f" % sum(emot_activ[1]))
+    print("")
+    print("Activation Amygdala: %f" % sum(emot_activ[0]))
+    print("Activation vmPFC:    %f" % sum(emot_activ[1]))
+    print("Max Activation Amygdala: %f" % max(emot_activ[0]))
+    print("Max Activation vmPFC:    %f" % max(emot_activ[1]))
 
     plt.subplot(211)
     plt.plot(emot_bold[0])
@@ -565,6 +569,7 @@ def main(read=True, visualizer=False, device=None, rate=0, iterations=1000000,
     plt.legend(['amy activ', 'vmPFC activ'], loc='upper left')
 
     if filename != "":
+        plt.tight_layout()
         plt.savefig(filename)
     else:
         plt.show()
@@ -592,6 +597,10 @@ if __name__ == "__main__":
                         help='vmPFC -> amygdala')
     parser.add_argument('-f', type=str, default="",
                         help='BOLD/activ filename')
+    parser.add_argument('-n', type=int, default=34,
+                        help='Number of faces to present')
+    parser.add_argument('-noise', action='store_true', default=False,
+                        help='amygdala/vmPFC noise')
     args = parser.parse_args()
 
     if args.host or len(get_gpus()) == 0:
@@ -605,4 +614,5 @@ if __name__ == "__main__":
 
     read = False
 
-    main(read, args.visualizer, device, args.r, 1000000, args.a, args.av, args.va, args.f)
+    main(read, args.visualizer, device, args.r, 1000000,
+        args.a, args.av, args.va, args.f, args.n, args.noise)
