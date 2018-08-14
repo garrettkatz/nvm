@@ -155,8 +155,9 @@ def build_network(rows=200, cols=200, scale=5):
 
     # Create connections
     receptive_field = 5
-    sc_input_strength = 0.1
+    sc_input_strength = 1.0
     sc_to_motor_strength = 1.0
+    gate_strength = 5.0
     connections = [
         # ON/OFF -> SC
         {
@@ -223,10 +224,10 @@ def build_network(rows=200, cols=200, scale=5):
             "plastic" : False,
             "weight config" : {
                 "type" : "flat",
-                "weight" : 5.0,
+                "weight" : gate_strength
             }
         }
-        ]
+    ]
 
     # Create network
     return {"structures" : [sc_structure, retina_structure],

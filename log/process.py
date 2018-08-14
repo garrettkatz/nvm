@@ -21,8 +21,13 @@ class Sample:
         self.va = va
         self.mean_latency = mean_latency
         self.stdev_latency = stdev_latency
+
+        # Add recurrent activity to BOLD?
         self.bold_amy = bold_amy + ((1.0 - 0.025) * activ_amy)
         self.bold_vmpfc = bold_vmpfc + ((1.0 - 0.00125) * activ_vmpfc)
+        #self.bold_amy = bold_amy
+        #self.bold_vmpfc = bold_vmpfc
+
         self.activ_amy = activ_amy
         self.activ_vmpfc = activ_vmpfc
         self.max_activ_amy = max_activ_amy
@@ -34,7 +39,7 @@ class Sample:
         return num_faces == self.num_responses
 
     def clipped(self, threshold):
-        return self.mean_latency == threshold
+        return self.mean_latency <= threshold
 
     def to_3d(self):
         return (self.s, self.av, self.va)
@@ -66,13 +71,14 @@ class Sample:
             and self.num_responses == other.num_responses
 
 samples = []
-max_samples = 99999
+max_samples = 500
 
-#for d in ("explore_trial_2",): #"healthy", "ptsd"):
-for d in ("explore_trial_2", "explore"):
+directories = ["explore"] + ["explore_trial_%d" % i for i in [1, 2, 3, 4, 5]]
+
+for d in directories:
+    count = 1
     for f in sorted(os.listdir(d)):
         if f.endswith(".txt"):
-            count = len(tuple(l for l in open("%s/%s" % (d, f)) if "correct" in l))
 
             s = 0.0
             av = 0.0
@@ -85,7 +91,7 @@ for d in ("explore_trial_2", "explore"):
             activ_vmpfc = 0.0
             max_activ_amy = 0.0
             max_activ_vmpfc = 0.0
-            num_responses = count
+            num_responses = len(tuple(l for l in open("%s/%s" % (d, f)) if "correct" in l))
 
             for line in open("%s/%s" % (d, f)):
                 if line.startswith("Using amygdala sensitivity:"):
@@ -112,10 +118,11 @@ for d in ("explore_trial_2", "explore"):
                     max_activ_vmpfc = (float(line.split(":")[1].strip()))
 
             if mean_latency != 0.0:
+                count += 1
                 samples.append(Sample(f, s, av, va, mean_latency, stdev_latency,
                     bold_amy, bold_vmpfc, activ_amy, activ_vmpfc, max_activ_amy,
                     max_activ_vmpfc, num_responses))
-                if len(samples) == max_samples:
+                if count == max_samples:
                     break
 
 
@@ -157,7 +164,6 @@ stdev_stdev = np.std(tuple(sample.stdev_latency for sample in good))
 # ms per timestep
 scale_factor = (440.0 - 120.0) / mean_mean_latency
 
-print("\n%s condition:" % d)
 print("Mean Amygdala sensitivity:")
 print(mean_s)
 print("")
@@ -191,6 +197,7 @@ fig = plt.figure()
 
 mean_latencies = tuple(sample.mean_latency for sample in good)
 bold_vmpfcs = tuple(sample.bold_vmpfc for sample in good)
+bold_amys = tuple(sample.bold_amy for sample in good)
 max_activ_amys = tuple(sample.max_activ_amy for sample in good)
 max_activ_vmpfcs = tuple(sample.max_activ_vmpfc for sample in good)
 
@@ -207,7 +214,52 @@ plt.hist(max_activ_amys)
 plt.subplot(224)
 plt.title("Max vmPFC Activations")
 plt.hist(max_activ_vmpfcs)
-plt.show()
+
+try:
+    plt.show()
+except: pass
+
+# Plot steady state estimates for valid and invalid samples
+plt.subplot(131)
+
+data = []
+for i in range(3):
+    data.append(tuple(s.steady for s in samples
+        if s.activ_bounded(0.5) and s.cls(5, 67.0) == i))
+plt.title("Amygdala steady state estimate (low max activity)")
+plt.hist(data, 100, (0.0, 0.2), normed=1, histtype='bar', stacked=True)
+plt.legend(["good", "invalid", "clipped"])
+
+
+plt.subplot(132)
+
+for i,color in enumerate(["green", "red", "yellow"]):
+    data = tuple((s.steady, s.max_activ_amy, s.mean_latency)
+        for s in samples
+            if s.cls(5, 67.0) == i and s.steady < 1.0 and s.max_activ_amy < 0.9)
+
+    x = [d[0] for d in data]
+    y = [d[1] for d in data]
+    plt.scatter(x, y)
+plt.legend(["good", "invalid", "clipped"])
+plt.title("Amygdala steady state estimate")
+
+plt.subplot(133)
+data = tuple((s.steady, s.max_activ_amy, s.mean_latency)
+    for s in samples
+        if s.steady < 1.0 and s.max_activ_amy < 0.9)
+
+x = [d[0] for d in data]
+y = [d[1] for d in data]
+colors = [d[2] for d in data]
+plt.scatter(x, y, c=colors, cmap='gist_heat')
+plt.colorbar()
+plt.title("Amygdala steady state estimate")
+
+try:
+    plt.show()
+except: pass
+
 
 fig = plt.figure()
 
@@ -217,10 +269,9 @@ labels = mean_latencies
 
 model = LinearRegression()
 model.fit(data, labels)
-print("Latency model",
-    model.coef_, model.intercept_,
-    model.score(data, labels),
-    model.predict([(0.4, 1.0, 1.0), (0.6, 0.25, 2.5)]))
+print("%30s : %f %s %f %s" % ("Latency model",
+    model.score(data, labels), model.coef_, model.intercept_,
+    model.predict([(0.4, 1.0, 1.0), (0.6, 0.25, 2.5)])))
 
 # Plot data points by class
 ax = fig.add_subplot(131, projection='3d')
@@ -239,16 +290,46 @@ ax.scatter(x, y, z, c='green')
 ax.scatter([0.4, 0.6], [1.0, 0.25], [1.0, 2.5], s=1000, c='cyan')
 
 
-# Perform linear regression to predict latencies in good samples
+# Perform linear regression to predict vmPFC BOLD in good samples
 data = [s.to_3d() for s in good]
 labels = bold_vmpfcs
 
 model = LinearRegression()
 model.fit(data, labels)
-print("vmPFC BOLD coefficients",
-    model.coef_, model.intercept_,
-    model.score(data, labels),
-    model.predict([(0.4, 1.0, 1.0), (0.6, 0.25, 2.5)]))
+print("%30s : %f %s %f" % ("vmPFC BOLD",
+    model.score(data, labels), model.coef_, model.intercept_))
+
+# Perform linear regression to predict amygdala BOLD in good samples
+data = [s.to_3d() for s in good]
+labels = bold_amys
+
+model = LinearRegression()
+model.fit(data, labels)
+print("%30s : %f %s %f" % ("Amygdala BOLD",
+    model.score(data, labels), model.coef_, model.intercept_))
+
+# Perform linear regression to predict latency from steady state
+data = []
+labels = []
+for s,lat in zip(good, mean_latencies):
+    if s.activ_bounded(0.5):
+        data.append((s.steady,))
+        labels.append(lat)
+
+model = LinearRegression()
+model.fit(data, labels)
+print("%30s : %f %s %f" % (
+    "Latency < steady state < 0.5",
+    model.score(data, labels), model.coef_, model.intercept_))
+
+data = [(s.steady,) for s in good]
+labels = mean_latencies
+
+model = LinearRegression()
+model.fit(data, labels)
+print("%30s : %f %s %f" % (
+    "Latency < steady state < 1.0",
+    model.score(data, labels), model.coef_, model.intercept_))
 
 # Perform logistic regression to separate valid, invalid, and clipped
 data = tuple(s.to_3d() for s in samples)
@@ -259,17 +340,17 @@ x_train, x_test, y_train, y_test = \
 
 model = LogisticRegression()
 model.fit(x_train, y_train)
-print("Logistic model:",
-    model.coef_, model.intercept_, model.n_iter_,
-    model.score(x_test, y_test))
+print("%30s : %f\n%s\n%s" % (
+    "Logistic model",
+    model.score(data, labels), model.coef_, model.intercept_))
 
-print("Confusion matrix (good, invalid, clipped):")
+print("Confusion matrix")
 print(confusion_matrix(
     np.array(y_test),
     np.array(model.predict(x_test))))
 
 for i in (1,2):
-    xx, yy, zz = np.mgrid[0:2:.05, 0:5:.05, 0:5:.05]
+    xx, yy, zz = np.mgrid[0:5:.05, 0:5:.05, 0:5:.05]
     grid = np.c_[xx.ravel(), yy.ravel(), zz.ravel()]
     probs = model.predict_proba(grid)[:, i]
     grid = [grid[i] for i in xrange(len(probs)) if probs[i] > 0.499 and probs[i] < 0.501]
@@ -278,6 +359,7 @@ for i in (1,2):
     xx, yy, zz = zip(*grid)
     #ax.scatter(xx, yy, zz)
     ax.plot_trisurf(xx, yy, zz)
+
 
 
 # Plot latency of good data points using heatmap
@@ -308,25 +390,94 @@ fig.colorbar(p)
 ax.scatter([0.4, 0.6], [1.0, 0.25], [1.0, 2.5], s=1000, c='cyan')
 
 plt.tight_layout()
-plt.show()
+
+try:
+    plt.show()
+except: pass
+
 
 
 # SEARCH PARAMS
-vmpfc_activ_bound = 0.5
-bins = 25
+restricted = True
+if restricted:
+    # Matches BOLD data
+    latency_min = 67.0
+    vmpfc_activ_bound = 0.75
+    bins = 10
 
-latency_deviation_cutoff = 0.05
-bold_ratio_min = 0.25
-bold_ratio_max = 0.75
+    latency_deviation_cutoff = 0.05
+    vmpfc_bold_ratio_min = 0.0
+    vmpfc_bold_ratio_max = 0.95
+    amy_bold_ratio_min = 1.05
+    amy_bold_ratio_max = 999.0
+    wm_min = 0.0
+    wm_max = 0.95
 
-param_ratio_filter = False
-param_ratio_min = 0.25
-param_ratio_max = 4.0
+    # One candidate found for True, 0.5, 2.0
+    # Support:   2   4
+    #      0.3905      4.3801      0.4338     86.6000   5356.6968   5481.0843 
+    #      0.5278      2.2265      0.6790    138.3000   4214.3106   7544.8573 
+    #      --------------------------------------------------------------------------------
+    #      1.3514      0.5083      1.5653      1.5970      0.7867      1.3765 
+    #
+    # One candidate found for vmPFC < 0.9, True, 0.5, 2.0
+    # Support:   1   1
+    #      0.9263      4.4987      2.7756     68.6000   1911.0284  13632.7362 
+    #      1.3148      2.7078      4.1572    105.0000   1809.1418  19314.4489 
+    #      --------------------------------------------------------------------------------
+    #      1.4195      0.6019      1.4978      1.5306      0.9467      1.4168 
+    #
+    # One candidate found for vmPFC < 0.75, True, 0.5, 2.0
+    # Support:   1   1
+    #      0.3832      4.3156      0.5117     73.0000   4089.6016   5214.8041 
+    #      0.5453      2.8845      0.8856    117.0000   3373.3101   7677.4128 
+    #      --------------------------------------------------------------------------------
+    #      1.4230      0.6684      1.7306      1.6027      0.8249      1.4722 
+    #
+    #
+    # Two candidates found for vmPFC < 0.5, True, 0.5, 2.0
+    # ================================================================================
+    # Support:   1   1
+    #      0.9263      4.4987      2.7756     68.6000   1911.0284  13632.7362 
+    #      1.2552      2.2556      4.1704    107.0000   1710.7959  18454.6608 
+    #      --------------------------------------------------------------------------------
+    #      1.3552      0.5014      1.5025      1.5598      0.8952      1.3537 
+    #
+    # ================================================================================
+    # Support:   1   1
+    #      0.9263      4.4987      2.7756     68.6000   1911.0284  13632.7362 
+    #      1.3148      2.7078      4.1572    105.0000   1809.1418  19314.4489 
+    #      --------------------------------------------------------------------------------
+    #      1.4195      0.6019      1.4978      1.5306      0.9467      1.4168 
+    param_ratio_filter = False
+    param_ratio_min = 0.5
+    param_ratio_max = 2.0
+else:
+    # Full range
+    latency_min = 67.0
+    vmpfc_activ_bound = 1.0
+    bins = 10
+
+    latency_deviation_cutoff = 0.05
+    vmpfc_bold_ratio_min = 0.0
+    vmpfc_bold_ratio_max = 999.0
+    amy_bold_ratio_min = 0.0
+    amy_bold_ratio_max = 999.0
+    wm_min = 0.0
+    wm_max = 999.9
+
+    param_ratio_filter = False
+    param_ratio_min = 0.5
+    param_ratio_max = 2.0
+
 
 
 # Bin the data and search for increased latency and decreased vmPFC bold
 # Use only data where max vmPFC activation stays below upper bound
-bounded = [s for s in good if s.activ_bounded(vmpfc_activ_bound)]
+bounded = [s for s in good
+    if s.activ_bounded(vmpfc_activ_bound) and s.mean_latency > latency_min]
+print("\nConsidering %d parameter sets..." % len(bounded))
+
 data = np.array([[sample.s, sample.av, sample.va]
     for sample in bounded]).reshape(len(bounded), 3)
 hist, binedges = np.histogramdd(data, normed=False, bins=bins)
@@ -334,6 +485,7 @@ bins_s, bins_av, bins_va = binedges
 
 # Place each sample into a bin
 indices = set()
+binned = dict((index, []) for index in indices)
 for sample in bounded:
     i_s = 0
     i_av = 0
@@ -351,19 +503,33 @@ for sample in bounded:
         if sample.va > b:
             i_va = i
 
-    indices.add((i_s, i_av, i_va))
+    index = (i_s, i_av, i_va)
+    indices.add(index)
+    if index in binned:
+        binned[index].append(sample)
+    else:
+        binned[index] = [sample]
 
-#good = [c for c in good if c.mean_latency > 100]
-binned = dict((index, []) for index in indices)
-for sample,index in zip(bounded, indices):
-    binned[index].append(sample)
+# Compute mean of latencies, BOLD, count, and center for each bin
+latencies = dict()
+vmpfc_bolds = dict()
+amy_bolds = dict()
+counts = dict()
+centers = dict()
+for key,val in binned.iteritems():
+    if len(val) > 0:
+        latencies[key] = sum(x.mean_latency for x in val) / len(val)
+        vmpfc_bolds[key] = sum(x.bold_vmpfc for x in val) / len(val)
+        amy_bolds[key] = sum(x.bold_amy for x in val) / len(val)
+        counts[key] = len(val)
+        centers[key] = (
+            np.mean([x.s for x in val]),
+            np.mean([x.av for x in val]),
+            np.mean([x.va for x in val]))
 
 # Functions for processing parameters
 def get_params(i):
-    return(
-        (bins_s[i[0]+1] + bins_s[i[0]]) / 2,
-        (bins_av[i[1]+1] + bins_av[i[1]]) / 2,
-        (bins_va[i[2]+1] + bins_va[i[2]]) / 2)
+    return centers[i]
 def get_param_ratios(l, r):
     l_s, l_av, l_va = get_params(l)
     r_s, r_av, r_va = get_params(r)
@@ -374,14 +540,9 @@ def polarize_ratios(ratios):
     b_adj = b - 1.0 if b > 1.0 else -(1.0 / b - 1.0)
     c_adj = c - 1.0 if c > 1.0 else -(1.0 / c - 1.0)
     return a_adj, b_adj, c_adj
+def get_wm_change(l, r):
+    return (get_params(r)[1] + get_params(r)[2]) / (get_params(l)[1] + get_params(l)[2])
 
-# Compute mean of latencies and vmPFC BOLD for each bin
-latencies = dict()
-bolds = dict()
-for key,val in binned.iteritems():
-    if len(val) > 0:
-        latencies[key] = sum(x.mean_latency for x in val) / len(val)
-        bolds[key] = sum(x.bold_vmpfc for x in val) / len(val)
 
 # Find parameter set pairs where:
 # 1. Amygdala sensitivity increases
@@ -392,10 +553,11 @@ for l in indices:
     for r in indices:
         sensitivity_ratio = get_params(r)[0] / get_params(l)[0]
         latency_ratio = latencies[r] / latencies[l]
-        bold_ratio = bolds[r] / bolds[l]
+        vmpfc_bold_ratio = vmpfc_bolds[r] / vmpfc_bolds[l]
+        amy_bold_ratio = amy_bolds[r] / amy_bolds[l]
 
-        if sensitivity_ratio > 1.0 and latency_ratio > 1.0 and bold_ratio < 1.0:
-            candidates.append((l,r, latency_ratio, bold_ratio))
+        if latency_ratio > 1.0:
+            candidates.append((l,r, latency_ratio, vmpfc_bold_ratio, amy_bold_ratio))
 
 print("\nFound %d / %d candidate parameter pairs" % \
     (len(candidates), len(indices) ** 2 / 2 - len(indices)))
@@ -404,43 +566,58 @@ print("\nFound %d / %d candidate parameter pairs" % \
 # Filter out candidates by deviation from ideal latency
 target = 1.603125
 candidates = [c for c in candidates if abs(target - c[2]) / target < latency_deviation_cutoff]
-print("    ... %d within one percent of target latency ratio" % len(candidates))
+print("    ... %d within %f of target latency ratio" % (len(candidates), latency_deviation_cutoff))
+
+# Filter out candidates with white matter increases
+candidates = [c for c in candidates
+    if get_wm_change(c[0], c[1]) < wm_max
+        and get_wm_change(c[0], c[1]) > wm_min]
+print("    ... %d with net white matter change %f < r < %f" % (
+    len(candidates), wm_min, wm_max))
 
 # Filter out candidates by BOLD ratio cutoff
-candidates = [c for c in candidates if c[3] > bold_ratio_min and c[3] < bold_ratio_max]
-print("    ... %d with < 0.5 vmPFC BOLD ratio" % len(candidates))
+candidates = [c for c in candidates
+    if c[3] > vmpfc_bold_ratio_min and c[3] < vmpfc_bold_ratio_max
+        and c[4] > amy_bold_ratio_min and c[4] < amy_bold_ratio_max]
+print("    ... %d within BOLD ratio ranges" % len(candidates))
 
 # Filter out any candidates < 0.5 or > 2.0 parameter ratios
 if param_ratio_filter:
     candidates = [c for c in candidates
         if all(r > param_ratio_min and r < param_ratio_max
                 for r in get_param_ratios(c[0], c[1]))]
-    print("    ... %d with 0.5 < r < 2.0 for all parameter ratios" % len(candidates))
+    print("    ... %d within %f < r < %f for all parameter ratios" % (
+        len(candidates), param_ratio_min, param_ratio_max))
+
+raw_input("Continue...")
 
 # Sort by BOLD ratio
 candidates = sorted(candidates, key = lambda x: x[3])
 
-print("\nParameter set candidates:")
-for l,r,lat_rat,bold_rat in candidates:
+print("\nParameter set candidates (%d/%d):" % (min(25, len(candidates)), len(candidates)))
+for l,r,lat_rat,vmpfc_bold_rat,amy_bold_rat in candidates[:25]:
     print("=" * 80)
+    print("Support: %3d %3d" % (counts[l], counts[r]))
     l_s, l_av, l_va = get_params(l)
-    print(("%9.4f " * 5) % (l_s, l_av, l_va, latencies[l], bolds[l]))
+    print(("%11.4f " * 6) % (l_s, l_av, l_va, latencies[l], vmpfc_bolds[l], amy_bolds[l]))
 
     r_s, r_av, r_va = get_params(r)
-    print(("%9.4f " * 5) % (r_s, r_av, r_va, latencies[r], bolds[r]))
+    print(("%11.4f " * 6) % (r_s, r_av, r_va, latencies[r], vmpfc_bolds[r], amy_bolds[r]))
 
     print("-" * 80)
-    print(("%9.4f " * 5) % (r_s / l_s, r_av / l_av, r_va / l_va, lat_rat, bold_rat))
+    print(("%11.4f " * 6) % (r_s / l_s, r_av / l_av, r_va / l_va, lat_rat, vmpfc_bold_rat, amy_bold_rat))
     print("")
 
 print("\nTotal candidates: %d" % len(candidates))
 
 # Plot parameter ratios colored by BOLD ratios
 param_ratios = []
-bold_ratios = []
-for l,r,lat_rat,bold_rat in candidates:
+vmpfc_bold_ratios = []
+amy_bold_ratios = []
+for l,r,lat_rat,vmpfc_bold_rat,amy_bold_rat in candidates:
     param_ratios.append(get_param_ratios(l, r))
-    bold_ratios.append(bold_rat)
+    vmpfc_bold_ratios.append(vmpfc_bold_rat)
+    amy_bold_ratios.append(amy_bold_rat)
 
 fig = plt.figure()
 
@@ -448,7 +625,7 @@ ax = fig.add_subplot(121, projection='3d')
 ax.set_title("Candidate Parameter Ratios")
 
 x, y, z = zip(*param_ratios)
-p = ax.scatter(x, y, z, c=bold_ratios, cmap='gist_heat')
+p = ax.scatter(x, y, z, c=vmpfc_bold_ratios, cmap='gist_heat')
 fig.colorbar(p)
 
 # Add sphere for mean
@@ -460,16 +637,18 @@ ax.scatter([x], [y], [z], s=1000, c='cyan')
 
 # Plot parameter ratios colored by polarized BOLD ratios
 param_ratios = []
-bold_ratios = []
-for l,r,lat_rat,bold_rat in candidates:
+vmpfc_bold_ratios = []
+amy_bold_ratios = []
+for l,r,lat_rat,vmpfc_bold_rat,amy_bold_rat in candidates:
     param_ratios.append(polarize_ratios(get_param_ratios(l, r)))
-    bold_ratios.append(bold_rat)
+    vmpfc_bold_ratios.append(vmpfc_bold_rat)
+    amy_bold_ratios.append(amy_bold_rat)
 
 ax = fig.add_subplot(122, projection='3d')
 ax.set_title("Polarized Ratios")
 
 x, y, z = zip(*param_ratios)
-p = ax.scatter(x, y, z, c=bold_ratios, cmap='gist_heat')
+p = ax.scatter(x, y, z, c=vmpfc_bold_ratios, cmap='gist_heat')
 fig.colorbar(p)
 
 # Add sphere for mean
@@ -479,44 +658,65 @@ z = np.mean([r[2] for r in param_ratios])
 print("Ratio mean (polarized): %9.4f %9.4f %9.4f" % (x,y,z))
 ax.scatter([x], [y], [z], s=1000, c='cyan')
 
-plt.show()
+
+try:
+    plt.show()
+except: pass
 
 
 # Divide ratios by greater than or less than one (8 bins)
 quadrants = dict()
-for (a,b,c),br in zip(param_ratios, bold_ratios):
+for ((a,b,c),vmpfc_br),amy_br in zip(zip(param_ratios, vmpfc_bold_ratios), amy_bold_ratios):
     key = []
     for k in a,b,c:
-        if k < -0.1:
+        if k < -0.05:
             key.append(0)
-        elif k > 0.1:
+        elif k > 0.05:
             key.append(2)
         else:
             key.append(1)
 
     try:
-        quadrants[tuple(key)].append((a,b,c,br))
+        quadrants[tuple(key)].append((a,b,c,vmpfc_br,amy_br))
     except KeyError:
-        quadrants[tuple(key)] = [(a,b,c,br)]
+        quadrants[tuple(key)] = [(a,b,c,vmpfc_br,amy_br)]
 
-print("\ns/av/va <=>  Count    sens        av        va      BOLD      mean")
+print("\ns/av/va <=>  Count    sens        av        va     vmPFC       amy      mean")
 for k,v in sorted(quadrants.iteritems(), key = lambda x: len(x[1])):
-    a, b, c, br = zip(*v)
-    ma, mb, mc, mbr = np.mean(a), np.mean(b), np.mean(c), np.mean(br)
-    print(("%s %6d " + "%9.4f " * 5) % (k, len(v), ma, mb, mc, mbr, np.linalg.norm((ma, mb, mc))))
+    a, b, c, vmpfc_br, amy_br = zip(*v)
+    ma, mb, mc, mvbr, mabr = np.mean(a), np.mean(b), np.mean(c), np.mean(vmpfc_br), np.mean(amy_br)
+    print(("%s %6d " + "%9.4f " * 6) % (k, len(v), ma, mb, mc, mvbr, mabr, np.linalg.norm((ma, mb, mc))))
 
 
 # Plot vectors for candidate pairs
 vectors = []
-for l,r,lat_rat,bold_rat in candidates:
+for l,r,lat_rat,vmpfc_bold_rat,amy_bold_rat in candidates:
     vectors.append(get_params(l) + \
         tuple(x - y for x,y in zip(get_params(r), get_params(l))))
 
 fig = plt.figure()
 
-ax = fig.add_subplot(111, projection='3d')
+ax = fig.add_subplot(121, projection='3d')
 ax.set_title("Candidate Parameter Vectors")
 
 x, y, z, u, v, w = zip(*vectors)
 ax.quiver(x, y, z, u, v, w, arrow_length_ratio=0.05)
-plt.show()
+
+# Plot vectors for candidate pairs
+vectors = []
+for l,r,lat_rat,vmpfc_bold_rat,amy_bold_rat in candidates:
+    vectors.append(get_params(l) + \
+        tuple(x - y for x,y in zip(get_params(r), get_params(l))))
+
+ax = fig.add_subplot(122, projection='3d')
+ax.set_title("Candidate Parameter Vectors")
+
+x, y, z, u, v, w = zip(*vectors)
+ax.quiver([0.0 for _ in x], [0.0 for _ in y], [0.0 for _ in z], u, v, w, arrow_length_ratio=0.05)
+ax.set_xlim(-2.5, 2.5)
+ax.set_ylim(-2.5, 2.5)
+ax.set_zlim(-2.5, 2.5)
+
+try:
+    plt.show()
+except: pass

@@ -1,14 +1,14 @@
 from os import system, path
 import numpy as np
 
-num_tests = 2500
+num_tests = 500
 num_faces = 5
 
 #min_params = (0.0, 0.0, 0.0)
 #max_params = (1.0, 5.0, 5.0)
 
-min_params = (1.0, 0.0, 0.0)
-max_params = (2.0, 5.0, 5.0)
+min_params = (4.0, 0.0, 0.0)
+max_params = (5.0, 5.0, 5.0)
 
 tonic = 0.0                                                                     
 Ra = 1.0                                                                        

@@ -585,7 +585,7 @@ if __name__ == "__main__":
                         help='run the visualizer')
     parser.add_argument('-host', action='store_true', default=False,
                         help='run on host CPU')
-    parser.add_argument('-d', type=int, default=1,
+    parser.add_argument('-d', type=int, default=0,
                         help='run on device #')
     parser.add_argument('-r', type=int, default=0,
                         help='refresh rate')
