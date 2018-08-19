@@ -18,11 +18,13 @@ class RefVM:
         self.exit = False
         self.error = None
 
-    def assemble(self, program, name, verbose=0, other_tokens=[]):
-        lines, labels = preprocess(program, self.register_names)
-        self.programs[name] = (lines, labels)
-        self.labels.update({
-            label: (name, l) for label, l in labels.items()})
+    def assemble(self, programs, verbose=0, other_tokens=[]):
+        lines, labels, _ = preprocess(programs, self.register_names)
+
+        for name in programs:
+            self.programs[name] = (lines[name], labels[name])
+            self.labels.update({
+                label: (name, l) for label, l in labels[name].items()})
 
     def load(self, program_name, initial_state):
         # set program pointer

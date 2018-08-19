@@ -21,8 +21,8 @@ class NVM:
             for name in register_names}
         self.net = NVMNet(layer_shape, pad, activator, learning_rule, registers, shapes=shapes, tokens=tokens, orthogonal=orthogonal)
 
-    def assemble(self, program, name, verbose=1, other_tokens=[]):
-        self.net.assemble(program, name, verbose, self.orthogonal, other_tokens)
+    def assemble(self, programs, verbose=1, other_tokens=[]):
+        self.net.assemble(programs, verbose, self.orthogonal, other_tokens)
 
     def load(self, program_name, initial_state):
         self.net.load(program_name, initial_state)
@@ -69,6 +69,16 @@ def make_default_nvm(register_names, layer_shape=None, orthogonal=False, shapes=
     return NVM(layer_shape,
         pad, activator, learning_rule, register_names,
         shapes=shapes, tokens=tokens, orthogonal=orthogonal)
+
+def make_scaled_nvm(register_names, programs, memory_writes=None, capacity_factor=.138, scale_factor=1.0):
+    """
+    Create an NVM wth auto-scaled layer sizes based on programs that will be learned
+    memory_writes: expected number of writes (defaults to number of distinct tokens)
+    capacity_factor: assumes pattern capacity is at most this fraction of layer size
+    scale_factor: scales layer sizes to this amount of what target capacity requires
+    """
+    
+    
 
 if __name__ == "__main__":
 

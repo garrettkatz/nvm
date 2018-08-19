@@ -5,35 +5,29 @@ from preprocessing import preprocess
 def unique(x):
     return list(set(x))
 
-def assemble(nvmnet, program, name, verbose=False, orthogonal=False, other_tokens=[]):
+def assemble(nvmnet, programs, verbose=False, orthogonal=False, other_tokens=[]):
 
-    ### Preprocess program string
-    lines, labels = preprocess(program, nvmnet.devices.keys())
-
-    ### Encode all tokens in devices and ci (including labels for device jumps)
     registers = nvmnet.devices.keys()
-    all_tokens = unique(
-        [tok for line in lines for tok in line[1:]] + \
-        other_tokens + labels.keys())
-    # for layer_name in ["ci"] + registers:
-    #     nvmnet.layers[layer_name].encode_tokens(
-    #         tokens=all_tokens, orthogonal=orthogonal)
 
-    ### Encode operand tokens
-    # for x in [1,2]:
-    #     nvmnet.layers["op"+str(x)].encode_tokens(
-    #         tokens=unique([line[x] for line in lines]),
-    #         orthogonal=orthogonal)
+    ### Preprocess program strings
+    lines, labels, tokens = preprocess(programs, registers)
+    all_tokens = list(tokens.union(other_tokens).union(labels.keys()))
 
     ### Encode instruction pointers and labels
-    index_width = str(int(np.ceil(np.log10(len(lines)))))
-    ip_patterns = nvmnet.layers["ip"].encode_tokens(
-        tokens=[name] + \
-            [("%s.%0"+index_width+"d") % (name,l) for l in range(len(lines))],
-        orthogonal=orthogonal)
-    for label, line_index in labels.items():
-        # index is + 1 for leading program pointer, but - 1 for ip -> opx step
-        nvmnet.layers["ip"].coder.encode(label, ip_patterns[:,[line_index]])
+    ip_tokens = []
+    name_offsets = {}
+    for name in lines:
+        name_offsets[name] = len(ip_tokens)
+        index_width = str(int(np.ceil(np.log10(len(lines[name])))))
+        ip_tokens.extend(
+            [name] + [("%s.%0"+index_width+"d") % (name,l) for l in range(len(lines[name]))])
+
+    ip_patterns = nvmnet.layers["ip"].encode_tokens(tokens=ip_tokens, orthogonal=orthogonal)
+    for name in lines:
+        for label, line_index in labels[name].items():
+            # index is + 1 for leading program name pointer, but - 1 for ip -> opx step
+            nvmnet.layers["ip"].coder.encode(label,
+                ip_patterns[:,[name_offsets[name]+line_index]])
 
     ### Track total number of errors
     weights, biases = {}, {}
@@ -54,17 +48,21 @@ def assemble(nvmnet, program, name, verbose=False, orthogonal=False, other_token
     ### Link instructions to ip
     for i,x in enumerate("c12"):
         if verbose: print("Linking ip -> op"+x)
-        encodings = nvmnet.layers["op"+x].encode_tokens(
-            [line[i] for line in lines])
-        weights[("op"+x,"ip")], biases[("op"+x,"ip")], dc = flash_mem(
-            np.zeros((encodings.shape[0], ip_patterns.shape[0])),
-            np.zeros((encodings.shape[0], 1)),
-            ip_patterns[:,:-1], encodings,
-            nvmnet.layers["ip"].activator,
-            nvmnet.layers["op"+x].activator,
-            nvmnet.learning_rules[("op"+x,"ip")],
-            verbose=verbose)
-        diff_count += dc
+        weights[("op"+x,"ip")] = np.zeros((nvmnet.layers["op"+x].size, nvmnet.layers["ip"].size))
+        biases[("op"+x,"ip")] = np.zeros((nvmnet.layers["op"+x].size, 1))
+        for name in programs:
+            encodings = nvmnet.layers["op"+x].encode_tokens(
+                [line[i] for line in lines[name]])
+            ip_patterns = nvmnet.layers["ip"].encode_tokens(
+                ip_tokens[name_offsets[name]:name_offsets[name]+len(lines[name])])
+            weights[("op"+x,"ip")], biases[("op"+x,"ip")], dc = flash_mem(
+                weights[("op"+x,"ip")], biases[("op"+x,"ip")],
+                ip_patterns, encodings,
+                nvmnet.layers["ip"].activator,
+                nvmnet.layers["op"+x].activator,
+                nvmnet.learning_rules[("op"+x,"ip")],
+                verbose=verbose)
+            diff_count += dc
 
     ### Link tokens across pathways
     pathways = [(r1, r2) for r1 in registers for r2 in registers] # for movd

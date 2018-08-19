@@ -2,39 +2,44 @@
 Preprocessor for VM assembly
 """
 
-def preprocess(program, register_names):
+def preprocess(programs, register_names):
 
-    labels = dict() # map label to line number
-
-    # split up lines and remove blanks and full line comments
-    lines = [line.strip() for line in program.splitlines()
-        if len(line.strip()) > 0 and line.strip()[0] != "#"]
-
-    for l in range(len(lines)):
-
-        # remove comments
-        comment = lines[l].find("#")
-        if comment > -1: lines[l] = lines[l][:comment]
-
-        # split out tokens
-        lines[l] = lines[l].split()
-
-        # check for label
-        if lines[l][0][-1] == ":":
-            # remove and save label
-            labels[lines[l][0][:-1]] = l
-            lines[l] = lines[l][1:]
-
-        # pad with nulls
-        while len(lines[l]) < 3:
-            lines[l].append("null")
-
-        # replace generic instructions with value/device distinctions
-        if lines[l][0] in ["mov", "cmp"]:
-            if lines[l][2] in register_names: lines[l][0] += "d"
-            else: lines[l][0] += "v"
-        if lines[l][0] in ["jmp","sub"]:
-            if lines[l][1] in register_names: lines[l][0] += "d"
-            else: lines[l][0] += "v"
-
-    return lines, labels
+    lines, labels, tokens = {}, {}, set()
+    for name, program in programs.items():
+    
+        labels[name] = {} # map label to line number
+    
+        # split up lines and remove blanks and full line comments
+        lines[name] = [line.strip() for line in program.splitlines()
+            if len(line.strip()) > 0 and line.strip()[0] != "#"]
+    
+        for l in range(len(lines[name])):
+    
+            # remove comments
+            comment = lines[name][l].find("#")
+            if comment > -1: lines[name][l] = lines[name][l][:comment]
+    
+            # split out tokens
+            lines[name][l] = lines[name][l].split()
+    
+            # check for label
+            if lines[name][l][0][-1] == ":":
+                # remove and save label
+                labels[name][lines[name][l][0][:-1]] = l
+                lines[name][l] = lines[name][l][1:]
+    
+            # pad with nulls
+            while len(lines[name][l]) < 3:
+                lines[name][l].append("null")
+    
+            # replace generic instructions with value/device distinctions
+            if lines[name][l][0] in ["mov", "cmp"]:
+                if lines[name][l][2] in register_names: lines[name][l][0] += "d"
+                else: lines[name][l][0] += "v"
+            if lines[name][l][0] in ["jmp","sub"]:
+                if lines[name][l][1] in register_names: lines[name][l][0] += "d"
+                else: lines[name][l][0] += "v"
+    
+        tokens = tokens.union([tok for line in lines[name] for tok in line])
+    
+    return lines, labels, tokens

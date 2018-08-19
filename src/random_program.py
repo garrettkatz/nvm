@@ -89,6 +89,7 @@ def generate_random_program(register_names, num_tokens, num_subroutines, num_lin
     
     program = "\n".join(lines)
     initial_activity = {r: np.random.choice(tokens) for r in register_names}
+    tokens += labels.keys()
 
     return program, tokens, initial_activity
 
@@ -101,11 +102,11 @@ def print_random_program(register_names, num_tokens, num_subroutines, num_lines)
     print(list(distinct_tokens))
     print("%d distinct tokens"%len(distinct_tokens))
 
-def run_random_program(vm, program, tokens, initial_activity, max_steps, verbose=0):
+def run_program(vm, program, name, initial_activity, max_steps, verbose=0):
 
     # Load and run
-    vm.assemble(program, "rand", verbose=0, other_tokens=tokens)
-    vm.load("rand", initial_activity)
+    vm.assemble(program, name, verbose=0, other_tokens=tokens)
+    vm.load(name, initial_activity)
 
     trace = []
     for t in range(max_steps):
@@ -119,39 +120,45 @@ def run_random_program(vm, program, tokens, initial_activity, max_steps, verbose
 
 def match_trial(
     register_names,
-    num_tokens,
-    num_subroutines,
-    num_lines,
+    program_load,
     layer_shape,
+    shapes,
     orthogonal,
     max_steps,
     verbose=0):
 
-    # Generate program
-    program, tokens, initial_activity = generate_random_program(
-        register_names, num_tokens, num_subroutines, num_lines)
-
-    # NVM run
+    # Make vms and assemble
+    all_tokens = []
+    for _, tokens, _ in program_load:
+        all_tokens += tokens
     nvm = make_default_nvm(
         register_names, layer_shape=layer_shape, orthogonal=orthogonal,
-        shapes = {"ip": (max(
-            layer_shape[0], 2**int(np.ceil(np.log2(num_lines+1)))),1) })
-    nvm_trace = run_random_program(nvm,
-        program, tokens, initial_activity, max_steps=max_steps, verbose=0)
-
-    # RVM run
+        # shapes = {"ip": (max(
+        #     layer_shape[0], 2**int(np.ceil(np.log2(num_lines+1)))),1) },
+        tokens = all_tokens)
     rvm = RefVM(register_names)
-    rvm_trace = run_random_program(rvm,
-        program, tokens, initial_activity, max_steps=max_steps, verbose=0)
 
-    for t in range(len(rvm_trace)):
-        if t >= len(nvm_trace): break
-        if nvm_trace[t] != rvm_trace[t]: break
+    leading_match_counts, trial_step_counts, nvm_traces, rvm_traces = [], [], [], []
+    for p, (program, tokens, initial_activity) in program_load:
     
-    leading_match_count = t+1
-    trial_step_count = len(rvm_trace)
+        name = "rand%d"%p
+        nvm_trace = run_program(nvm,
+            program, name, initial_activity, max_steps=max_steps, verbose=0)
+        rvm_trace = run_program(rvm,
+            program, name, initial_activity, max_steps=max_steps, verbose=0)
     
-    return program, leading_match_count, trial_step_count, nvm_trace, rvm_trace
+        for t in range(len(rvm_trace)):
+            if t >= len(nvm_trace): break
+            if nvm_trace[t] != rvm_trace[t]: break
+        
+        leading_match_count = t+1
+        trial_step_count = len(rvm_trace)
+        leading_match_counts.append(leading_match_count)
+        trial_step_counts.append(trial_step_count)
+        nvm_traces.append(nvm_trace)
+        rvm_traces.append(rvm_trace)
+    
+    return leading_match_counts, trial_step_counts, nvm_traces, rvm_traces
 
 def match_trial_caller(args):
     try:
@@ -181,14 +188,17 @@ def run_match_trial_pool(args_list, num_procs=0):
 
     return results
 
-def plot_trial_complexities(args_list, results):
+def plot_trial_complexities(register_names, program_loads):
     line_counts, token_counts = [], []
-    for a in range(len(args_list)):
-        if results[a] is None: continue
-        register_names, program = args_list[a][0], results[a][0]
-        lines, labels = preprocess(program, register_names)
-        num_tokens = len(set([tok for line in lines for tok in line] + labels.keys()))
-        line_counts.append(len(lines))
+    for program_load in program_loads:
+        tokens = []
+        num_lines = 0
+        for program, _, _ in program_load:
+            lines, labels = preprocess(program, register_names)
+            tokens += [tok for line in lines for tok in line] + labels.keys()
+            num_lines += len(lines)
+        num_tokens = len(set(tokens))
+        line_counts.append(num_lines)
         token_counts.append(num_tokens)
     lc = np.array(line_counts)
     tc = np.array(token_counts)
@@ -537,100 +547,136 @@ if __name__ == "__main__":
     num_tokens = 2
     max_steps = 100
     verbose = 0
-    program_sizes = {False: # not orth
-        [ # num_subroutines, num_lines
-        (1, 8-1),
-        (1, 16-1),
-        (2, 32-1),
-        (2, 48-1),
-        (2, 64-1),
-        (2, 96-1),
-        (3, 128-1),
-        (4, 256-1),
+    program_load_sizes = {False: # not orth
+        [ # (num_subroutines, num_lines) ... for each program to be stored
+        ((1, 8), (1, 4)),
+        ((1, 8), (1, 8)),
+        ((2, 16), (2, 8)),
+        ((2, 16), (2, 16)),
+        ((2, 32), (2, 8)),
+        ((2, 32), (2, 16)),
+        ((2, 32), (2, 16), (1, 8)),
+        ((3, 64), (2, 16), (2, 16)),
+        ((3, 64), (2, 32), (2, 32)),
         ], True: [# orth
-        (1, 8-1),
-        (1, 64-1),
-        (2, 256-1),
-        (3, 512-1),
-        (4, 768-1),
-        (5, 1024-1),
-        (4, 1023-1), # must be layer_size-1 for ip layer encoding
+        ((1, 8), (1, 4)),
+        ((1, 8), (1, 8)),
+        ((2, 16), (2, 8)),
+        ((2, 16), (2, 16)),
+        ((2, 32), (2, 8)),
+        ((2, 32), (2, 16)),
+        ((2, 32), (2, 16), (1, 8)),
+        ((3, 64), (2, 16), (2, 16)),
+        ((4, 128), (3, 64), (2, 32)),
+        ((5, 256), (4, 128), (3, 64)),
+        ((8, 512), (5, 256), (5, 256)),
         ]}
-    layer_shapes = {False: [# not orth
-        (16, 1),
-        (32, 1),
-        (64, 1),
-        (128, 1),
-        (256, 1),
-        (512, 1),
-        (1024, 1),
-        ], True: [ # orth
-        (16, 1),
-        (32, 1),
-        (64, 1),
-        (256, 1),
-        (512, 1),
-        (1024, 1),
-        ]}
-    layer_shape_colors = {k:
-        {s: np.arange(0, len(layer_shapes[k]), dtype=float)[::-1][i]/len(layer_shapes[k])
-            for i,s in enumerate(layer_shapes[k])}
-        for k in [False, True]}
-    # layer_shape_colors = {
-    #     (16, 1): .8,
-    #     (32, 1): .6,
-    #     (64, 1): .4,
-    #     (128,1): .2,
-    #     (256,1): .0,
-    #     # (512,1): .0,
-    # }
+    
+    scaling = {
+        False: np.array([.5]), # not orth
+        True: np.array([]), #  orth
+    }
+        
+    
+    # layer_shapes = {False: [# not orth
+    #     (16, 1),
+    #     (32, 1),
+    #     (64, 1),
+    #     (128, 1),
+    #     (256, 1),
+    #     (512, 1),
+    #     (1024, 1),
+    #     ], True: [ # orth
+    #     (16, 1),
+    #     (32, 1),
+    #     (64, 1),
+    #     (256, 1),
+    #     (512, 1),
+    #     (1024, 1),
+    #     ]}
+    # layer_shape_colors = {k:
+    #     {s: np.arange(0, len(layer_shapes[k]), dtype=float)[::-1][i]/len(layer_shapes[k])
+    #         for i,s in enumerate(layer_shapes[k])}
+    #     for k in [False, True]}
+    # # layer_shape_colors = {
+    # #     (16, 1): .8,
+    # #     (32, 1): .6,
+    # #     (64, 1): .4,
+    # #     (128,1): .2,
+    # #     (256,1): .0,
+    # #     # (512,1): .0,
+    # # }
     num_repetitions = 50
     
-    args_list = [(
-        register_names, num_tokens, num_subroutines, num_lines,
-        layer_shape, orthogonal, max_steps, verbose)
-        for orthogonal in [False, True]
-            for ((num_subroutines, num_lines), layer_shape, _) in it.product(
-                program_sizes[orthogonal],
-                layer_shapes[orthogonal],
-                range(num_repetitions))]
+    program_loads = {}
+    for orth in [False, True]:
+        program_loads[orth] = []
+        for program_load_size in program_load_sizes[orth]:
+            program_load = []
+            for (num_subroutines, num_lines) in program_load_size:
+                program, tokens, initial_activity = generate_random_program(
+                        register_names, num_tokens, num_subroutines, num_lines)
+                program_load.append((program, tokens, initial_activity))
+            program_loads[orth].append(program_load)
+
+    # args:
+    # register_names, program_load, layer_shape, shapes, orthogonal, max_steps, verbose=0
+    args_list = []
+    for orth in [False, True]:
+        for program_load in program_loads[orth]:
+            for scale in scaling[orth]:
+                args_list.append((
+                    register_names, program_load, layer_shape, shapes, orth))
+
+    # args_list = [(register_names, program_load),it.product(program_loads[orth], layer_shapes[orth])
+
+    # args_list = [(
+    #     register_names, program_loads,
+    #     layer_shape, orthogonal, max_steps, verbose)
+    #     for orthogonal in [False, True]
+    #         for ((num_subroutines, num_lines), layer_shape, _) in it.product(
+    #             program_sizes[orthogonal],
+    #             layer_shapes[orthogonal],
+    #             range(num_repetitions))]
+
+    plot_trial_complexities(register_names, program_loads[False] + program_loads[True])
 
     # print_random_program(register_names, num_tokens=num_tokens, num_subroutines=2, num_lines=12)
 
-    # results = run_match_trial_pool(args_list, num_procs=0)
-    # with open('tmp.pkl','w') as f: pk.dump((args_list, results), f)
+    # # results = run_match_trial_pool(args_list, num_procs=0)
+    # # with open('tmp.pkl','w') as f: pk.dump((args_list, results), f)
 
-    # with open('tmp.pkl','r') as f: args_list, results = pk.load(f)
-    with open('big_randprog.pkl','r') as f: args_list, results = pk.load(f)
+    # # with open('tmp.pkl','r') as f: args_list, results = pk.load(f)
+    # # with open('big_randprog.pkl','r') as f: args_list, results = pk.load(f)
     
-    for a, res in enumerate(results):
-        if res is None:
-            print("crashed")
-            continue
-        (_, leading_match_count, trial_step_count, _, _) = res
-        print("|prog|=%d, N=%d, %s: %d of %d"%(
-            args_list[a][3], args_list[a][4][0],
-            "orth" if args_list[a][5] else "rand",
-            leading_match_count, trial_step_count))
+    # # for a, res in enumerate(results):
+    # #     if res is None:
+    # #         print("crashed")
+    # #         continue
+    # #     (_, leading_match_count, trial_step_count, _, _) = res
+    # #     print("|prog|=%d, N=%d, %s: %d of %d"%(
+    # #         args_list[a][3], args_list[a][4][0],
+    # #         "orth" if args_list[a][5] else "rand",
+    # #         leading_match_count, trial_step_count))
 
-    # plot_trial_complexities(args_list, results)
-    plot_match_trials(args_list, results, layer_shape_colors)
-    # plot_match_trials_tokens(args_list, results, layer_shape_colors)
+    # # # plot_trial_complexities(args_list, results)
+    # # plot_match_trials(args_list, results, layer_shape_colors)
+    # # # plot_match_trials_tokens(args_list, results, layer_shape_colors)
 
-    # num_registers = 3
-    # register_names = ["r%d"%r for r in range(num_registers)]
-    # num_tokens = 1
-    # num_subroutines = 2
-    # num_lines = 10
-    # layer_shape = (32,32)
-    # orthogonal=True
-    # max_steps = 5
+    # # num_registers = 3
+    # # register_names = ["r%d"%r for r in range(num_registers)]
+    # # num_tokens = 1
+    # # num_subroutines = 2
+    # # num_lines = 10
+    # # layer_shape = (32,32)
+    # # orthogonal=True
+    # # max_steps = 5
 
-    # program, leading_match_count, trial_step_count, nvm_trace, rvm_trace = match_trial(
-    #     register_names, num_tokens, num_subroutines, num_lines,
-    #     layer_shape, orthogonal, max_steps, verbose=0)
+    # # program, leading_match_count, trial_step_count, nvm_trace, rvm_trace = match_trial(
+    # #     register_names, num_tokens, num_subroutines, num_lines,
+    # #     layer_shape, orthogonal, max_steps, verbose=0)
 
-    # for t in nvm_trace: print(t)
-    # print(program)
-    # for t in rvm_trace: print(t)
-    # print("matched leading %d of %d"%(leading_match_count, trial_step_count))
+    # # for t in nvm_trace: print(t)
+    # # print(program)
+    # # for t in rvm_trace: print(t)
+    # # print("matched leading %d of %d"%(leading_match_count, trial_step_count))

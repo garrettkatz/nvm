@@ -14,8 +14,8 @@ class VMTestCase(ut.TestCase):
 
         vm = self._make_vm(num_registers, tokens=tokens)
         if memory is not None: vm.initialize_memory(*memory)
-        for name, program in programs.items():
-            vm.assemble(program, name, verbose=0)
+        
+        vm.assemble(programs, verbose=0)
 
         for name, trace in zip(names, traces):
             vm.load(name, trace[0])

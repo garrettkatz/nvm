@@ -1,8 +1,8 @@
 next steps:
+    auto-infer required layer sizes for randprog (then rand-prog scales them)
     empirically test attractor basins in learning rule
     more encapsulated callback API for IO
     bring back hypervisor + visualizer (raster and add new shape-based viewer)
-    auto-infer required layer sizes
     pass activator shape, not size
     cts gates, slower smoother hidden
     memory management+defrag
