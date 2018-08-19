@@ -161,12 +161,11 @@ def match_trial(
     return leading_match_counts, trial_step_counts, nvm_traces, rvm_traces
 
 def match_trial_caller(args):
-    return match_trial(*args)
-    # try:
-    #     return match_trial(*args)
-    # except Exception as e:
-    #     print(e.message)
-    #     return None
+    try:
+        return match_trial(*args)
+    except Exception as e:
+        print(e.message)
+        return None
 
 def run_match_trial_pool(args_list, num_procs=0):
 
