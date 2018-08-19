@@ -1,6 +1,9 @@
 import itertools as it
 import numpy as np
 
+def nearest_power_of_2(i):
+    return 2**int(np.ceil(np.log2(i)))
+
 def _expand_hadamard(N):
     """
     Expand to NxN Hadamard matrix using Sylvester construction.

@@ -153,6 +153,11 @@ class RefVM:
                 name, l = self.labels[self.layers[op1]]
                 self.active_program, self.layers["ip"] = name, l-1
         if opc == "ret":
+            if len(self.stack) == 0:
+                print('empty stack:')
+                print(lines)
+                print(labels)
+                print(self.layers["ip"])                
             self.active_program, self.layers["ip"] = self.stack.pop()
 
         if self.error is not None:

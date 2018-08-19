@@ -6,6 +6,7 @@ from activator import *
 from learning_rules import *
 from nvm_instruction_set import opcodes, flash_instruction_set
 from nvm_assembler import assemble
+from orthogonal_patterns import nearest_power_of_2
 # from nvm_linker import link
 
 def update_add(accumulator, summand):
@@ -46,7 +47,6 @@ class NVMNet:
         if 'gh' not in shapes: shapes['gh'] = (32,16)
         if 'm' not in shapes: shapes['m'] = (16,16)
         if 's' not in shapes: shapes['s'] = (8,8)
-        if 'c' not in shapes: shapes['c'] = (16,16)
 
         # Save padding
         self.pad = pad
@@ -65,9 +65,10 @@ class NVMNet:
         for s in ['sf','sb']: layers[s] = Layer(s, shapes['s'], acts, Coder(acts))
 
         # set up comparison layers
-        NC = shapes['c'][0]*shapes['c'][1]
+        c_shape = shapes.get('c', layer_shape)
+        NC = c_shape[0]*c_shape[1]
         actc = activator(pad, NC)
-        for c in ['ci','co']: layers[c] = Layer(c, shapes['c'], actc, Coder(actc))
+        for c in ['ci','co']: layers[c] = Layer(c, c_shape, actc, Coder(actc))
         co_true = layers['co'].coder.encode('true')
         layers['co'].coder.encode('false', np.array([
             [actc.on if tf == actc.off else actc.off]
@@ -93,6 +94,13 @@ class NVMNet:
         self.w_gain, self.b_gain = {}, {}
         for layer_name, layer in layers.items():
             self.w_gain[layer_name], self.b_gain[layer_name] = layer.activator.gain()
+
+        # encode tokens
+        self.orthogonal = orthogonal
+        self.layers["opc"].encode_tokens(opcodes, orthogonal=orthogonal)
+        all_tokens = list(tokens | set(self.devices.keys() + ["null"]))
+        for name in self.devices.keys() + ["op1","op2","ci"]:
+            self.layers[name].encode_tokens(all_tokens, orthogonal=orthogonal)
 
         # set up connection matrices
         self.weights, self.biases = flash_instruction_set(self, verbose=False)
@@ -123,13 +131,6 @@ class NVMNet:
             for to_layer in self.layers for from_layer in self.layers}
         self.learning_rules[('co','ci')] = lambda w, b, x, y, ax, ay: \
             dipole(w, b, x, co_true, ax, ay)
-
-        # encode tokens
-        self.orthogonal = orthogonal
-        self.layers["opc"].encode_tokens(opcodes, orthogonal=orthogonal)
-        all_tokens = list(set(self.devices.keys() + ["null"] + tokens))
-        for name in self.devices.keys() + ["op1","op2","ci"]:
-            self.layers[name].encode_tokens(all_tokens, orthogonal=orthogonal)
 
     def set_pattern(self, layer_name, pattern):
         self.activity[layer_name] = pattern

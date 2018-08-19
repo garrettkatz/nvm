@@ -40,6 +40,6 @@ def preprocess(programs, register_names):
                 if lines[name][l][1] in register_names: lines[name][l][0] += "d"
                 else: lines[name][l][0] += "v"
     
-        tokens = tokens.union([tok for line in lines[name] for tok in line])
+        tokens = tokens.union([tok for line in lines[name] for tok in line[1:]])
     
     return lines, labels, tokens
