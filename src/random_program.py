@@ -612,7 +612,8 @@ if __name__ == "__main__":
                 args_list.append((
                     register_names, program_load, scale_factor, orthogonal, max_steps))
 
-    results = run_match_trial_pool(args_list, num_procs=10)
+    num_procs = 0
+    results = run_match_trial_pool(args_list, num_procs=num_procs)
     with open('tmp.pkl','w') as f: pk.dump((args_list, results), f)
 
     # with open('tmp.pkl','r') as f: args_list, results = pk.load(f)
