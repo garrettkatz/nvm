@@ -6,7 +6,7 @@ from learning_rules import *
 from layer import Layer
 from coder import Coder
 from nvm_net import NVMNet
-from preprocessing import preprocess
+from preprocessing import *
 from orthogonal_patterns import nearest_power_of_2
 
 class NVM:
@@ -71,26 +71,23 @@ def make_default_nvm(register_names, layer_shape=None, orthogonal=False, shapes=
         pad, activator, learning_rule, register_names,
         shapes=shapes, tokens=tokens, orthogonal=orthogonal)
 
-def make_scaled_nvm(register_names, programs, orthogonal=False, capacity_factor=.138, scale_factor=1.0, tokens=[]):
+def make_scaled_nvm(register_names, programs, orthogonal=False, capacity_factor=.138, scale_factor=1.0, extra_tokens=[]):
     """
     Create an NVM with auto-scaled layer sizes based on programs that will be learned
     capacity_factor: assumes pattern capacity is at most this fraction of layer size
     scale_factor: scales layer sizes to this amount of what target capacity requires
     """
     
-    lines, labels, all_tokens = preprocess(programs, register_names)
-    all_tokens |= set(tokens)
-    num_tokens = len(all_tokens)
-    num_lines = sum([len(lines[name]) for name in lines])
+    num_lines, num_patterns, all_tokens = measure_programs(
+        programs, register_names, extra_tokens=extra_tokens)
     
-    layer_shape = (
-        int(nearest_power_of_2(scale_factor * num_tokens) if orthogonal else
-        scale_factor * num_tokens / capacity_factor),
-        1)
-    shapes = {'ip': (
-        int(nearest_power_of_2(scale_factor * num_lines) if orthogonal else
-        scale_factor * num_lines/capacity_factor),
-        1)}
+    layer_size = int(nearest_power_of_2(scale_factor * num_patterns)
+        if orthogonal else scale_factor * num_patterns / capacity_factor)
+    ip_size = int(nearest_power_of_2(scale_factor * num_lines)
+        if orthogonal else scale_factor * num_lines/capacity_factor)
+    
+    layer_shape = (layer_size, 1)
+    shapes = {'ip': (ip_size, 1)}
 
     pad = 0.0001
     activator, learning_rule = tanh_activator, rehebbian
@@ -98,7 +95,7 @@ def make_scaled_nvm(register_names, programs, orthogonal=False, capacity_factor=
 
     return NVM(layer_shape,
         pad, activator, learning_rule, register_names,
-        shapes=shapes, tokens=all_tokens, orthogonal=orthogonal)    
+        shapes=shapes, tokens=all_tokens, orthogonal=orthogonal)
 
 if __name__ == "__main__":
 

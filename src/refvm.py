@@ -64,7 +64,9 @@ class RefVM:
 
     def decode_state(self, layer_names=None):
         if layer_names is None: layer_names = self.layers.keys()
-        return {name: self.layers[name] for name in layer_names}
+        decoded = {name: self.layers[name] for name in layer_names}
+        decoded['co'] = 'true' if decoded['co'] else 'false'
+        return decoded
 
     def at_exit(self):
         # lines, labels = self.programs[self.active_program]

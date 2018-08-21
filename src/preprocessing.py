@@ -43,3 +43,12 @@ def preprocess(programs, register_names):
         tokens = tokens.union([tok for line in lines[name] for tok in line[1:]])
     
     return lines, labels, tokens
+
+def measure_programs(programs, register_names, extra_tokens=[]):
+    lines, labels, tokens = preprocess(programs, register_names)
+    all_tokens = tokens | set(register_names + ["null"] + extra_tokens)
+    for name in labels:
+        all_tokens |= set(labels[name].keys())
+    num_lines = sum([len(lines[name]) for name in lines])
+    num_patterns = len(tokens | set(extra_tokens))
+    return num_lines, num_patterns, all_tokens

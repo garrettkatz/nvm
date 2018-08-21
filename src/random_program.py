@@ -24,7 +24,7 @@ from matplotlib.lines import Line2D
 import multiprocessing as mp
 import itertools as it
 from nvm import make_scaled_nvm
-from preprocessing import preprocess
+from preprocessing import *
 from refvm import RefVM
 
 hr_opcodes = np.array([
@@ -88,13 +88,10 @@ def generate_random_program(name, register_names, num_tokens, num_subroutines, n
         lines[l] = label + ":" + lines[l][len(label)+1:]
     
     program = "\n".join(lines)
-    initial_activity = {r: np.random.choice(tokens) for r in register_names}
-    tokens += labels.keys()
-
-    return program, tokens, initial_activity
+    return program
 
 def print_random_program(register_names, num_tokens, num_subroutines, num_lines):
-    program, _, _ = generate_random_program("rand",register_names, num_tokens, num_subroutines, num_lines)
+    program = generate_random_program("rand",register_names, num_tokens, num_subroutines, num_lines)
     lines, labels, tokens = preprocess({"rand": program}, register_names)
     lines, labels = lines["rand"], labels["rand"]
     distinct_tokens = list(tokens) + labels.keys()
@@ -115,37 +112,37 @@ def run_program(vm, program, name, initial_activity, max_steps, verbose=0):
         if verbose > 0: print("step %d: %s"%(t, vm.state_string()))
         vm.step(verbose=0, max_ticks=20)
         trace.append(vm.decode_state(layer_names=[
-            "opc","op1","op2"] + vm.register_names))
+            "opc","op1","op2","co"] + vm.register_names))
     
     return trace
 
 def match_trial(
     register_names,
-    program_load,
+    programs,
+    initial_activities,
+    extra_tokens,
     scale_factor,
     orthogonal,
     max_steps,
     verbose=0):
 
     # Make vms and assemble
-    programs = {"rand%d"%p: program
-        for p, (program, _, _) in enumerate(program_load)}
-
     nvm = make_scaled_nvm(
-        register_names, programs, orthogonal=orthogonal, scale_factor=scale_factor)
+        register_names, programs, orthogonal=orthogonal,
+        scale_factor=scale_factor, extra_tokens=extra_tokens)
     rvm = RefVM(register_names)
 
-    nvm.assemble(programs, verbose=verbose)
-    rvm.assemble(programs, verbose=verbose)
+    nvm.assemble(programs, other_tokens=extra_tokens, verbose=verbose)
+    rvm.assemble(programs, other_tokens=extra_tokens, verbose=verbose)
 
+    # Load and run programs
     leading_match_counts, trial_step_counts, nvm_traces, rvm_traces = [], [], [], []
-    for p, (program, tokens, initial_activity) in enumerate(program_load):
+    for name, program in programs.items():
     
-        name = "rand%d"%p
         nvm_trace = run_program(nvm,
-            program, name, initial_activity, max_steps=max_steps, verbose=0)
+            program, name, initial_activities[name], max_steps=max_steps, verbose=0)
         rvm_trace = run_program(rvm,
-            program, name, initial_activity, max_steps=max_steps, verbose=0)
+            program, name, initial_activities[name], max_steps=max_steps, verbose=0)
     
         for t in range(len(rvm_trace)):
             if t >= len(nvm_trace): break
@@ -158,7 +155,10 @@ def match_trial(
         nvm_traces.append(nvm_trace)
         rvm_traces.append(rvm_trace)
     
-    return leading_match_counts, trial_step_counts, nvm_traces, rvm_traces
+    layer_size = nvm.net.layers[register_names[0]].size
+    ip_size = nvm.net.layers['ip'].size
+    
+    return leading_match_counts, trial_step_counts, nvm_traces, rvm_traces, layer_size, ip_size
 
 def match_trial_caller(args):
     try:
@@ -338,122 +338,124 @@ def plot_match_trials(args_list, results, layer_shape_colors):
     pt.tight_layout()
     pt.show()
 
-def plot_match_trials_tokens(args_list, results, layer_shape_colors):
-    sizes = {k: set() for k in [False, True]}
-    token_counts = {k: set() for k in [False, True]}
-    all_token_counts = []
-    successes = {}
-    failures = {}
-    for a in range(len(args_list)):
-        if results[a] is None: continue
-        register_names, program = args_list[a][0], results[a][0]
-        num_lines, layer_shape, orthogonal = args_list[a][3:6]
-        leading_match_count, trial_step_count = results[a][1:3]
-        lines, labels = preprocess(program, register_names)
-        num_tokens = len(set([tok for line in lines for tok in line] + labels.keys()))
-        success = (leading_match_count == trial_step_count)
+def plot_match_trials_tokens(args_list, results):
+
+    # args: register_names, programs, initial_activities, extra_tokens, scale_factor, orthogonal, max_steps
+    # res: leading_match_counts, trial_step_counts, nvm_traces, rvm_traces, layer_size, ip_size
+    
+    data = {orth:{} for orth in [True, False]}
+
+    for args, res in zip(args_list, results):
+        if res is None: continue
         
-        sizes[orthogonal].add(layer_shape[0])
-        token_counts[orthogonal].add(num_tokens)
-        all_token_counts.append(num_tokens)
-        k = (layer_shape[0], num_tokens, orthogonal)
-        if success: successes[k] = successes.get(k, 0) + 1
-        else: failures[k] = failures.get(k, 0) + 1
+        register_names, programs, _, extra_tokens, scale_factor, orthogonal, _ = args
+        leading_match_counts, trial_step_counts, _, _, layer_size, ip_size = res
+        
+        _, num_patterns, _ = measure_programs(
+            programs, register_names, extra_tokens=extra_tokens)
 
-    sizes = {k: np.sort(list(sizes[k])) for k in [False, True]}
-    sizes[True] = sizes[True][[0, 2, -1]] # less cluttered figure
-    token_counts = {k: np.sort(list(token_counts[k])) for k in [False, True]}
-    x, y = {}, {}
-    for orth in [False, True]:
-        x[orth], y[orth] = {}, {}
-        for size in sizes[orth]:
-            x[orth][size], y[orth][size] = [], []
-            for count in token_counts[orth]:
-                k = (size, count, orth)
-                success_count = float(successes.get(k,0))
-                total_count = successes.get(k,0)+failures.get(k,0)
-                if total_count == 0: continue
-                x[orth][size].append(count)
-                y[orth][size].append(success_count/total_count)
+        success = all([(lc == tc) for lc, tc in zip(
+            leading_match_counts, trial_step_counts)])
 
-    xmx = max(token_counts[True].max(), token_counts[False].max())
+        if scale_factor not in data[orthogonal]:
+            data[orthogonal][scale_factor] = {}
+        if num_patterns not in data[orthogonal][scale_factor]:
+            data[orthogonal][scale_factor][num_patterns] = []
+
+        data[orthogonal][scale_factor][num_patterns].append(success)
+
     pt.figure(figsize=(7,5))
-    pt.subplot(2,1,1)
-    print("rand")
-    h = []
-    shades = np.linspace(0,0.5,len(sizes[False]))[::-1]
-    for s, size in enumerate(sizes[False]):
-        print(size, ["%d:%.2f"%tup for tup in zip(x[False][size], y[False][size])])
-        h.append(pt.plot(x[False][size], y[False][size], '-o', color=3*[shades[s]])[0])
-    pt.legend(h, ["N=%d"%s for s in sizes[False]])
-    pt.ylabel("Success rate")
-    pt.xlim([0, xmx])
-    pt.title("Random Encodings")
-    pt.subplot(2,1,2)
-    print("orth")
-    h = []
-    shades = np.linspace(0,0.5,len(sizes[True]))[::-1]
-    for s,size in enumerate(sizes[True]):
-        print(size, ["%d:%.2f"%tup for tup in zip(x[True][size], y[True][size])])
-        h.append(pt.plot(x[True][size], y[True][size], '-o', color=3*[shades[s]])[0])
-    pt.legend(h, ["N=%d"%s for s in sizes[True]], loc='center')
-    pt.ylabel("Success rate")
-    pt.xlabel("Distinct token counts")
-    pt.xlim([0, xmx])
-    pt.title("Orthogonal Encodings")
-    pt.tight_layout()
-    pt.show()
-
-    # To assess whether relationship between prog size and required nvm size linear, log, poly, etc:
-    # for each line count, find smallest nvm size with perfect success rate.
-    # then plot that line count vs required nvm size.
-    h = []
-    # rates = [.5, .8, .95, 1.]
-    rates = [1.]
-    shades = np.linspace(0, .5, len(rates))[::-1]
-    pt.figure(figsize=(7,5))
-    pt.subplot(2,1,1)
-    for orth in [False, True]:
-        mk = 's' if orth else 'o'
-        for r,rate in enumerate(rates):
+    for o, orthogonal in enumerate([True, False]):
+        pt.subplot(2,1,o+1)
+        for scale_factor in data[orthogonal]:
             x, y = [], []
-            for count in token_counts[orth]:
-                x.append(count)
-                best_size = np.inf
-                for size in sizes[orth]:
-                    k = (size, count, orth)
-                    success_count = float(successes.get(k,0))
-                    total_count = successes.get(k,0)+failures.get(k,0)
-                    print(k, success_count, total_count)
-                    if total_count == 0: continue
-                    success_rate = success_count/total_count
-                    # if success_rate == 1.0 and size < best_size: best_size = size
-                    if success_rate >= rate and size < best_size: best_size = size
-                y.append(best_size)
-            # h.append(pt.plot(x, y, '-', marker=mk, color=3*[shades[r]],markerfacecolor='none')[0])
-            col = 0. if orth else .5
-            h.append(pt.plot(x, y, '-', marker=mk, color=3*[col],markerfacecolor='none')[0])
-    pt.legend(h, ["Random Encodings", "Orthogonal Encodings"])
-    # pt.legend([
-    #     Line2D([0],[0], marker='o', color='none',markeredgecolor='k', linestyle='none'),
-    #     Line2D([0],[0], marker='s', color='none',markeredgecolor='k', linestyle='none')] + [
-    #         Line2D([0],[0], linestyle='-', color = 3*[shades[r]])
-    #         for r in range(len(rates))],
-    #     ["Random Encodings", "Orthogonal Encodings"] + [
-    #         "Success rate $\geq$ %.2f"%r for r in rates])
-    pt.xlabel("Distinct token count")
-    pt.ylabel("Smallest perfect network size")
+            for num_patterns, successes in data[orthogonal][scale_factor].items():
+                x.append(num_patterns)
+                y.append(float(sum(successes))/len(successes))
+            print(orthogonal, scale_factor)
+            print(y)
+            pt.plot(x, y, '+', color=3*[scale_factor/2.])
 
-    pt.subplot(2,1,2)
-    distinct_token_counts = np.sort(list(set(all_token_counts)))
-    count_frequencies = {tc: 0 for tc in distinct_token_counts}
-    for tc in all_token_counts: count_frequencies[tc] += 1
-    count_frequencies = [count_frequencies[tc] for tc in distinct_token_counts]
-    pt.bar(distinct_token_counts, count_frequencies, color='k')
-    pt.xlabel("Distinct token count")
-    pt.ylabel("Frequency")
-    pt.tight_layout()
     pt.show()
+    
+    # xmx = max(token_counts[True].max(), token_counts[False].max())
+    # pt.figure(figsize=(7,5))
+    # pt.subplot(2,1,1)
+    # print("rand")
+    # h = []
+    # shades = np.linspace(0,0.5,len(sizes[False]))[::-1]
+    # for s, size in enumerate(sizes[False]):
+    #     print(size, ["%d:%.2f"%tup for tup in zip(x[False][size], y[False][size])])
+    #     h.append(pt.plot(x[False][size], y[False][size], '-o', color=3*[shades[s]])[0])
+    # pt.legend(h, ["N=%d"%s for s in sizes[False]])
+    # pt.ylabel("Success rate")
+    # pt.xlim([0, xmx])
+    # pt.title("Random Encodings")
+    # pt.subplot(2,1,2)
+    # print("orth")
+    # h = []
+    # shades = np.linspace(0,0.5,len(sizes[True]))[::-1]
+    # for s,size in enumerate(sizes[True]):
+    #     print(size, ["%d:%.2f"%tup for tup in zip(x[True][size], y[True][size])])
+    #     h.append(pt.plot(x[True][size], y[True][size], '-o', color=3*[shades[s]])[0])
+    # pt.legend(h, ["N=%d"%s for s in sizes[True]], loc='center')
+    # pt.ylabel("Success rate")
+    # pt.xlabel("Distinct token counts")
+    # pt.xlim([0, xmx])
+    # pt.title("Orthogonal Encodings")
+    # pt.tight_layout()
+    # pt.show()
+
+    # # To assess whether relationship between prog size and required nvm size linear, log, poly, etc:
+    # # for each line count, find smallest nvm size with perfect success rate.
+    # # then plot that line count vs required nvm size.
+    # h = []
+    # # rates = [.5, .8, .95, 1.]
+    # rates = [1.]
+    # shades = np.linspace(0, .5, len(rates))[::-1]
+    # pt.figure(figsize=(7,5))
+    # pt.subplot(2,1,1)
+    # for orth in [False, True]:
+    #     mk = 's' if orth else 'o'
+    #     for r,rate in enumerate(rates):
+    #         x, y = [], []
+    #         for count in token_counts[orth]:
+    #             x.append(count)
+    #             best_size = np.inf
+    #             for size in sizes[orth]:
+    #                 k = (size, count, orth)
+    #                 success_count = float(successes.get(k,0))
+    #                 total_count = successes.get(k,0)+failures.get(k,0)
+    #                 print(k, success_count, total_count)
+    #                 if total_count == 0: continue
+    #                 success_rate = success_count/total_count
+    #                 # if success_rate == 1.0 and size < best_size: best_size = size
+    #                 if success_rate >= rate and size < best_size: best_size = size
+    #             y.append(best_size)
+    #         # h.append(pt.plot(x, y, '-', marker=mk, color=3*[shades[r]],markerfacecolor='none')[0])
+    #         col = 0. if orth else .5
+    #         h.append(pt.plot(x, y, '-', marker=mk, color=3*[col],markerfacecolor='none')[0])
+    # pt.legend(h, ["Random Encodings", "Orthogonal Encodings"])
+    # # pt.legend([
+    # #     Line2D([0],[0], marker='o', color='none',markeredgecolor='k', linestyle='none'),
+    # #     Line2D([0],[0], marker='s', color='none',markeredgecolor='k', linestyle='none')] + [
+    # #         Line2D([0],[0], linestyle='-', color = 3*[shades[r]])
+    # #         for r in range(len(rates))],
+    # #     ["Random Encodings", "Orthogonal Encodings"] + [
+    # #         "Success rate $\geq$ %.2f"%r for r in rates])
+    # pt.xlabel("Distinct token count")
+    # pt.ylabel("Smallest perfect network size")
+
+    # pt.subplot(2,1,2)
+    # distinct_token_counts = np.sort(list(set(all_token_counts)))
+    # count_frequencies = {tc: 0 for tc in distinct_token_counts}
+    # for tc in all_token_counts: count_frequencies[tc] += 1
+    # count_frequencies = [count_frequencies[tc] for tc in distinct_token_counts]
+    # pt.bar(distinct_token_counts, count_frequencies, color='k')
+    # pt.xlabel("Distinct token count")
+    # pt.ylabel("Frequency")
+    # pt.tight_layout()
+    # pt.show()
 
 
 # def plot_match_trials(args_list, results, layer_shape_colors):
@@ -552,6 +554,7 @@ if __name__ == "__main__":
     num_registers = 3
     register_names = ["r%d"%r for r in range(num_registers)]
     num_tokens = 2
+    extra_tokens = ["t%d"%r for t in range(num_tokens)]
 
     max_steps = 100
     verbose = 0
@@ -580,36 +583,37 @@ if __name__ == "__main__":
         ((8, 512), (5, 256), (5, 256)),
         ]}
     
-    num_repetitions = 50
+    num_repetitions = 30
     
-    program_loads = {}
-    for orth in [False, True]:
-        program_loads[orth] = []
-        for program_load_size in program_load_sizes[orth]:
-            for rep in range(num_repetitions):
-                program_load = []
-                for p,(num_subroutines, num_lines) in enumerate(program_load_size):
-                    program, tokens, initial_activity = generate_random_program(
-                        "rand%d"%p, register_names, num_tokens, num_subroutines, num_lines)
-                    program_load.append((program, tokens, initial_activity))
-                program_loads[orth].append(program_load)
-
     # print_random_program(register_names, num_tokens=num_tokens, num_subroutines=2, num_lines=12)
     # plot_trial_complexities(register_names, program_loads[False] + program_loads[True])
 
     scaling = {
-        False: np.array([.5, 1, 1.5, 2]), # not orth
-        True: np.array([.5, 1, 1.5, 2]), #  orth
+        False: np.array([.8, .9, 1., 1.1, 1.2]), # not orth
+        True: np.array([.8, .9, 1., 1.1, 1.2]), #  orth
+        # False: np.array([1, 1.5]), # not orth
+        # True: np.array([.5, 1]), #  orth
     }
         
     # args:
-    # register_names, program_load, scale_factor, orthogonal, max_steps, verbose=0
+    # register_names, programs, initial_activities, extra_tokens, scale_factor, orthogonal, max_steps
     args_list = []
     for orthogonal in [False, True]:
-        for program_load in program_loads[orthogonal]:
-            for scale_factor in scaling[orthogonal]:
-                args_list.append((
-                    register_names, program_load, scale_factor, orthogonal, max_steps))
+        for program_load_size in program_load_sizes[orthogonal]:
+            for rep in range(num_repetitions):
+
+                programs, initial_activities = {}, {}
+                for p,(num_subroutines, num_lines) in enumerate(program_load_size):
+                    name = "rand%d"%p
+                    programs[name] = generate_random_program(
+                        name, register_names, num_tokens, num_subroutines, num_lines)
+                    initial_activities[name] = {
+                        r: np.random.choice(extra_tokens) for r in register_names}
+            
+                for scale_factor in scaling[orthogonal]:
+                    args_list.append((
+                        register_names, programs, initial_activities,
+                        extra_tokens, scale_factor, orthogonal, max_steps))
 
     num_procs = 0
     results = run_match_trial_pool(args_list, num_procs=num_procs)
@@ -617,38 +621,36 @@ if __name__ == "__main__":
 
     # with open('tmp.pkl','r') as f: args_list, results = pk.load(f)
     # with open('big_randprog.pkl','r') as f: args_list, results = pk.load(f)
+    # with open('big_new.pkl','r') as f: args_list, results = pk.load(f)
     
-    # # args:
-    # # register_names, program_load, scale_factor, orthogonal, max_steps, verbose=0
-    # for a, res in enumerate(results):
-    #     if res is None:
-    #         print("crashed")
-    #         continue
+    # args: register_names, programs, initial_activities, extra_tokens, scale_factor, orthogonal, max_steps
+    # res: leading_match_counts, trial_step_counts, nvm_traces, rvm_traces, layer_size, ip_size
+    for args, res in zip(args_list, results):
 
-    #     leading_match_counts, trial_step_counts, _, _ = res
-    #     register_names, program_load, scale_factor, orthogonal, _ = args_list[a]
-    #     programs = {"rand%d"%p: program
-    #         for p, (program, _, _) in enumerate(program_load)}
-    #     lines, labels, tokens = preprocess(programs, register_names)
-    #     num_lines = sum([len(lines[name]) for name in lines])
-    #     all_labels = set()
-    #     for name in labels:
-    #         all_labels = all_labels | set(labels[name].keys())
-    #     num_tokens = len(tokens | all_labels | set(register_names))
+        register_names, programs, initial_activities, extra_tokens, scale_factor, orthogonal, _ = args
+        num_lines, num_patterns, _ = measure_programs(programs, register_names, extra_tokens)
 
-    #     print(
-    #         "%d lines, %d tokens, %f scale, %s: "%(
-    #             num_lines, num_tokens, scale_factor, "orth" if orthogonal else "rand") + \
-    #         ", ".join(["%d of %d"%count for count in zip(leading_match_counts, trial_step_counts)]))
+        if res is None:
+            print(
+                "%d lines, %d tokens, %f scale, %s: crashed"%(
+                    num_lines, num_patterns, scale_factor, "orth" if orthogonal else "rand"))
+            continue
+
+        leading_match_counts, trial_step_counts, _, _, layer_size, ip_size = res
+        print(
+            "%d lines, %d tokens, %f scale, %s: "%(
+                num_lines, num_patterns, scale_factor, "orth" if orthogonal else "rand") + \
+            ", ".join(["%d of %d"%count for count in zip(leading_match_counts, trial_step_counts)]))
         
-    #     fail = False
-    #     for p,count in enumerate(zip(leading_match_counts, trial_step_counts)):
-    #         if orthogonal and count[0] != count[1]: fail = True
+        fail = False
+        for p,count in enumerate(zip(leading_match_counts, trial_step_counts)):
+            if orthogonal and count[0] != count[1]: fail = True
 
-    #     if fail:
-    #         for p in range(len(programs)):
-    #             print(p)
-    #             print(programs["rand%d"%p])
+        if fail:
+            for p in range(len(programs)):
+                pass
+                # # print(p)
+                # print(programs["rand%d"%p])
 
     # # plot_trial_complexities(args_list, results)
     # # plot_match_trials(args_list, results, layer_shape_colors)

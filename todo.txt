@@ -1,4 +1,5 @@
 next steps:
+    two assemblies could double-down program-independent linkages (e.g. reg<->reg)
     auto-infer required layer sizes for randprog (then rand-prog scales them)
     empirically test attractor basins in learning rule
     more encapsulated callback API for IO

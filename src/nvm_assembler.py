@@ -11,7 +11,9 @@ def assemble(nvmnet, programs, verbose=False, orthogonal=False, other_tokens=[])
 
     ### Preprocess program strings
     lines, labels, tokens = preprocess(programs, registers)
-    all_tokens = list(tokens.union(other_tokens).union(labels.keys()))
+    all_labels = set()
+    for name in labels: all_labels |= set(labels[name].keys())
+    all_tokens = list(tokens.union(other_tokens).union(all_labels))
 
     ### Encode instruction pointers and labels
     ip_tokens = []
