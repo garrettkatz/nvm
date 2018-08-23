@@ -27,6 +27,8 @@ from nvm import make_scaled_nvm
 from preprocessing import *
 from refvm import RefVM
 
+np.set_printoptions(formatter={'float': (lambda x: '%.3f'%x)}, linewidth=200)
+
 hr_opcodes = np.array([
     "mov","jmp",
     "cmp","jie",
@@ -367,13 +369,14 @@ def plot_match_trials_tokens(args_list, results):
     pt.figure(figsize=(7,5))
     for o, orthogonal in enumerate([True, False]):
         pt.subplot(2,1,o+1)
+        pt.title('Orth' if orthogonal else 'Rand')
         for scale_factor in data[orthogonal]:
             x, y = [], []
             for num_patterns, successes in data[orthogonal][scale_factor].items():
                 x.append(num_patterns)
                 y.append(float(sum(successes))/len(successes))
             print(orthogonal, scale_factor)
-            print(y)
+            print(np.array([x,y]))
             pt.plot(x, y, '+', color=3*[scale_factor/2.])
 
     pt.show()
@@ -589,7 +592,7 @@ if __name__ == "__main__":
     # plot_trial_complexities(register_names, program_loads[False] + program_loads[True])
 
     scaling = {
-        False: np.array([.8, .9, 1., 1.1, 1.2]), # not orth
+        False: np.array([.8, 1., 1.25, 1.5, 2]), # not orth
         True: np.array([.8, .9, 1., 1.1, 1.2]), #  orth
         # False: np.array([1, 1.5]), # not orth
         # True: np.array([.5, 1]), #  orth
@@ -615,7 +618,7 @@ if __name__ == "__main__":
                         register_names, programs, initial_activities,
                         extra_tokens, scale_factor, orthogonal, max_steps))
 
-    num_procs = 0
+    num_procs = 4
     results = run_match_trial_pool(args_list, num_procs=num_procs)
     with open('tmp.pkl','w') as f: pk.dump((args_list, results), f)
 
@@ -636,11 +639,26 @@ if __name__ == "__main__":
                     num_lines, num_patterns, scale_factor, "orth" if orthogonal else "rand"))
             continue
 
-        leading_match_counts, trial_step_counts, _, _, layer_size, ip_size = res
-        print(
-            "%d lines, %d tokens, %f scale, %s: "%(
-                num_lines, num_patterns, scale_factor, "orth" if orthogonal else "rand") + \
-            ", ".join(["%d of %d"%count for count in zip(leading_match_counts, trial_step_counts)]))
+        leading_match_counts, trial_step_counts, nvm_traces, rvm_traces, layer_size, ip_size = res
+        if not orthogonal:
+            print(
+                "%d lines, %d tokens, %f scale, %d layer, %d ip, %s: "%(
+                    num_lines, num_patterns, scale_factor,
+                    layer_size, ip_size, "orth" if orthogonal else "rand") + \
+                ", ".join(["%d of %d"%count for count in zip(leading_match_counts, trial_step_counts)]))
+            for p in range(len(leading_match_counts)):
+                t = leading_match_counts[p]
+                if t < trial_step_counts[p]:
+                    print(t)
+                    if t > 1:
+                        print('nvm-1', 'rvm-1')
+                        print(nvm_traces[p][t-2])
+                        print(rvm_traces[p][t-2])
+                    print('nvm', 'rvm')
+                    if t < len(nvm_traces[p]):                    
+                        print(nvm_traces[p][t-1])
+                    else: print('nvm stopped')
+                    print(rvm_traces[p][t-1])
         
         fail = False
         for p,count in enumerate(zip(leading_match_counts, trial_step_counts)):
