@@ -592,8 +592,8 @@ if __name__ == "__main__":
     # plot_trial_complexities(register_names, program_loads[False] + program_loads[True])
 
     scaling = {
-        False: np.array([.8, 1., 1.25, 1.5, 2]), # not orth
-        True: np.array([.8, .9, 1., 1.1, 1.2]), #  orth
+        False: np.array([.8, .9, 1., 1.1, 1.2]), # not orth
+        True: np.array([.5, 1., 2.]), #  orth
         # False: np.array([1, 1.5]), # not orth
         # True: np.array([.5, 1]), #  orth
     }
@@ -618,7 +618,7 @@ if __name__ == "__main__":
                         register_names, programs, initial_activities,
                         extra_tokens, scale_factor, orthogonal, max_steps))
 
-    num_procs = 4
+    num_procs = 6
     results = run_match_trial_pool(args_list, num_procs=num_procs)
     with open('tmp.pkl','w') as f: pk.dump((args_list, results), f)
 

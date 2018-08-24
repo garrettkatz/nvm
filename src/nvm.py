@@ -71,7 +71,7 @@ def make_default_nvm(register_names, layer_shape=None, orthogonal=False, shapes=
         pad, activator, learning_rule, register_names,
         shapes=shapes, tokens=tokens, orthogonal=orthogonal)
 
-def make_scaled_nvm(register_names, programs, orthogonal=False, capacity_factor=.138, scale_factor=1.0, extra_tokens=[]):
+def make_scaled_nvm(register_names, programs, orthogonal=False, capacity_factor=.05, scale_factor=1.0, extra_tokens=[]):
     """
     Create an NVM with auto-scaled layer sizes based on programs that will be learned
     capacity_factor: assumes pattern capacity is at most this fraction of layer size
