@@ -345,6 +345,7 @@ def plot_match_trials_tokens(args_list, results):
     # args: register_names, programs, initial_activities, extra_tokens, scale_factor, orthogonal, max_steps
     # res: leading_match_counts, trial_step_counts, nvm_traces, rvm_traces, layer_size, ip_size
     
+    # data[orth][scale_factor][num_patterns] = 0/1 list of successful trials with that orth, scale, count
     data = {orth:{} for orth in [True, False]}
 
     for args, res in zip(args_list, results):
@@ -355,6 +356,7 @@ def plot_match_trials_tokens(args_list, results):
         
         _, num_patterns, _ = measure_programs(
             programs, register_names, extra_tokens=extra_tokens)
+        scale_factor = float(layer_size)/num_patterns
 
         success = all([(lc == tc) for lc, tc in zip(
             leading_match_counts, trial_step_counts)])
@@ -370,6 +372,7 @@ def plot_match_trials_tokens(args_list, results):
     for o, orthogonal in enumerate([True, False]):
         pt.subplot(2,1,o+1)
         pt.title('Orth' if orthogonal else 'Rand')
+        max_scale = np.max(data[orthogonal].keys())
         for scale_factor in data[orthogonal]:
             x, y = [], []
             for num_patterns, successes in data[orthogonal][scale_factor].items():
@@ -377,9 +380,89 @@ def plot_match_trials_tokens(args_list, results):
                 y.append(float(sum(successes))/len(successes))
             print(orthogonal, scale_factor)
             print(np.array([x,y]))
-            pt.plot(x, y, '+', color=3*[scale_factor/2.])
+            pt.plot(x, y, '-+', color=3*[scale_factor/(1.5*max_scale)])
 
     pt.show()
+    
+    # scatter plot: scale factor vs success rate
+    pt.figure(figsize=(7,5))
+    for o, orthogonal in enumerate([True, False]):
+        pt.subplot(2,1,o+1)
+        pt.title('Orth' if orthogonal else 'Rand')
+        max_scale = np.max(data[orthogonal].keys())
+        x, y = [], []
+        for scale_factor in data[orthogonal]:
+            for num_patterns, successes in data[orthogonal][scale_factor].items():
+                success_rate = float(sum(successes))/len(successes)
+                x.append(scale_factor)
+                y.append(success_rate)
+        pt.plot(x, y, 'o')
+    pt.show()
+    
+    # To assess relationship between prog size and required nvm size:
+    # for each token count, find smallest nvm size with perfect success rate.
+    # then plot that pattern count vs required nvm size.
+    # data[orth][line_count][layer_size] = 0/1 list of successful trials with that orth, count, size
+    # data = {orth:{} for orth in [True, False]}
+    # for args, res in zip(args_list, results):
+    #     if res is None: continue
+        
+    #     register_names, programs, _, extra_tokens, scale_factor, orthogonal, _ = args
+    #     leading_match_counts, trial_step_counts, _, _, layer_size, ip_size = res
+        
+    #     _, num_patterns, _ = measure_programs(
+    #         programs, register_names, extra_tokens=extra_tokens)
+    #     scale_factor = float(layer_size)/num_patterns
+
+    #     success = all([(lc == tc) for lc, tc in zip(
+    #         leading_match_counts, trial_step_counts)])
+
+    #     if scale_factor not in data[orthogonal]:
+    #         data[orthogonal][scale_factor] = {}
+    #     if num_patterns not in data[orthogonal][scale_factor]:
+    #         data[orthogonal][scale_factor][num_patterns] = []
+
+    #     data[orthogonal][scale_factor][num_patterns].append(success)                 
+    
+    # rates = [.5, .8, .95, 1.]
+    # shades = [.7, .6, .1, 0] #np.linspace(0, .5, len(rates))[::-1]
+    # h = []
+    # pt.figure(figsize=(7,3.5))
+    # for orth in [False, True]:
+    #     mk = 's' if orth else 'o'
+    #     for r,rate in enumerate(rates):
+    #         x, y = [], []
+    #         for scale_factor in data[orth]:
+    #             for num_patterns in data[orth][scale_factor]:
+    #                 x.append(num_patterns)
+    #                 best_size = np.inf
+    #                 for size in sizes[orth]:
+    #                     k = (size, count, orth)
+    #                     success_count = float(successes.get(k,0))
+    #                     total_count = successes.get(k,0)+failures.get(k,0)
+    #                     print(k, success_count, total_count)
+    #                     if total_count == 0: continue
+    #                     success_rate = success_count/total_count
+    #                     # if success_rate == 1.0 and size < best_size: best_size = size
+    #                     if success_rate >= rate and size < best_size: best_size = size
+    #                 y.append(best_size)
+    #         h.append(pt.plot(x, y, '-', marker=mk, color=3*[shades[r]],markerfacecolor='none')[0])
+    # # fit logarithm: C log2(256) = 256 -> C = 256/log2(256) = 256/8 = 32
+    # # fit sqrt: C sqrt(256) = 256 -> C = 256/sqrt(256) = 16
+    # pt.plot(np.arange(1,1000), 32*np.log2(np.arange(1,1000)), '--k')
+    # # pt.plot(np.arange(1,1000), 16*np.sqrt(np.arange(1,1000)), '--k')
+    # pt.legend([
+    #     Line2D([0],[0], marker='o', color='none',markeredgecolor='k', linestyle='none'),
+    #     Line2D([0],[0], marker='s', color='none',markeredgecolor='k', linestyle='none')] + [
+    #         Line2D([0],[0], linestyle='-', color = 3*[shades[r]])
+    #         for r in range(len(rates))] + [Line2D([0],[0], color='k',linestyle='--')],
+    #     ["Random Encodings", "Orthogonal Encodings"] + [
+    #         "Success rate $\geq$ %.2f"%r for r in rates] + ["Heuristic"],
+    #     loc='upper right')
+    # pt.xlabel("Line count")
+    # pt.ylabel("Network size")
+    # pt.tight_layout()
+    # pt.show()
     
     # xmx = max(token_counts[True].max(), token_counts[False].max())
     # pt.figure(figsize=(7,5))
@@ -572,6 +655,8 @@ if __name__ == "__main__":
         ((2, 32), (2, 16), (1, 8)),
         ((3, 64), (2, 16), (2, 16)),
         ((3, 64), (2, 32), (2, 32)),
+        ((4, 128), (3, 32), (2, 16)),
+        ((4, 128), (3, 32), (2, 32)),
         ], True: [# orth
         ((1, 8), (1, 4)),
         ((1, 8), (1, 8)),
@@ -592,7 +677,7 @@ if __name__ == "__main__":
     # plot_trial_complexities(register_names, program_loads[False] + program_loads[True])
 
     scaling = {
-        False: np.array([.8, .9, 1., 1.1, 1.2]), # not orth
+        False: np.array([.75, 1., 1.25, 1.5]), # not orth
         True: np.array([.5, 1., 2.]), #  orth
         # False: np.array([1, 1.5]), # not orth
         # True: np.array([.5, 1]), #  orth
