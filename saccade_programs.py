@@ -99,11 +99,11 @@ def make_saccade_nvm(activator_label):
     
     devices = {
         "tc": Layer("tc", layer_shape, act, Coder(act)),
-        "fef": make_ef("fef", pad, activator, 34, 48),
-        "pef": make_ef("pef", pad, activator, 34, 48),
+        "fef": make_ef("fef", pad, activator, 17, 24),
+        "pef": make_ef("pef", pad, activator, 17, 24),
         "sc": make_sc(pad, activator, 5, 5)}
 
-    shapes = {"gh": (32,16)}
+    shapes = {"gh": (32,16), "c": (16,16)}
     nvmnet = NVMNet(layer_shape, pad, activator, learning_rule, devices, shapes=shapes)
 
     # assemble and link programs

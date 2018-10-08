@@ -4,6 +4,7 @@ from syngen import set_suppress_output, set_warnings, set_debug
 from syngen import FloatArray
 from syngen import create_io_callback
 
+from math import ceil
 from os import path
 import sys
 import argparse
@@ -21,6 +22,12 @@ import matplotlib.pyplot as plt
 
 def build_vp_network(rows, cols):
 
+    center_rows = rows/3
+    center_cols = cols/3
+    inter_reduction = 11
+    inter_rows = int(ceil(float(center_rows)/inter_reduction))
+    inter_cols = int(ceil(float(center_cols)/inter_reduction))
+
     # load trained parameters
     vp_params = dict(**np.load("cnn2.npz"))
 
@@ -33,12 +40,19 @@ def build_vp_network(rows, cols):
             "name" : "conv-%d"%feature,
             "neural model" : "relay",
             "ramp" : False,
-            "rows" : rows/3,
-            "columns" : cols/3,
+            "rows" : center_rows,
+            "columns" : center_cols,
             "init config": {
                 "type": "flat",
                 "value": vp_params["cb"].astype(np.float64)[feature]
             }})
+
+        # Add intermediate max layer
+        layers.append({
+            "name" : "inter_max-%d"%feature,
+            "neural model" : "vp_max",
+            "rows" : inter_rows,
+            "columns" : inter_cols, })
 
     # Add max layer
     layers.append({
@@ -63,8 +77,21 @@ def build_vp_network(rows, cols):
         "neural model" : "nvm_logistic",
         "rows" : 1,
         "columns" : 3, })
-    
+
     # create internal connection factories
+    def build_inter_max_weights(from_layer, to_layer, props):
+        props["name"] = "%s <- %s"%(to_layer, from_layer)
+        props["from layer"] = from_layer
+        props["to layer"] = to_layer
+        props["type"] = "convergent"
+        props["convolutional"] = True
+        props["opcode"] = "pool"
+        max_index = int(from_layer[-1])
+        props["arborized config"] = {
+            "field size" : inter_reduction,
+            "offset" : 0,
+            "stride" : inter_reduction,
+            "wrap" : False }
     def build_max_weights(from_layer, to_layer, props):
         props["name"] = "%s <- %s"%(to_layer, from_layer)
         props["from layer"] = from_layer
@@ -74,9 +101,9 @@ def build_vp_network(rows, cols):
         max_index = int(from_layer[-1])
         props["subset config"] = {
             "from row start" : 0,
-            "from row end" : rows/3,
+            "from row end" : inter_rows,
             "from column start" : 0,
-            "from column end" : cols/3,
+            "from column end" : inter_cols,
             "to row start" : 0,
             "to row end" : 1,
             "to column start" : max_index,
@@ -99,14 +126,18 @@ def build_vp_network(rows, cols):
         "plastic" : False, "sparse" : False,
         "weight config": {"type" : "flat", "weight" : 1 }}
     max_weights_factory = ConnectionFactory(defaults, build_max_weights)
+    inter_max_weights_factory = ConnectionFactory(defaults, build_inter_max_weights)
     class_weights_factory = ConnectionFactory(defaults, build_class_weights)
     class_biases_factory = ConnectionFactory(defaults, build_class_biases)
 
     # Build connections
     connections = []
     for feature in range(5):
-        connections.append(max_weights_factory.build(
+        connections.append(inter_max_weights_factory.build(
             "conv-%d"%(feature),
+            "inter_max-%d"%feature))
+        connections.append(max_weights_factory.build(
+            "inter_max-%d"%(feature),
             "max"))
     connections.append(class_weights_factory.build(
         "max","class"))
@@ -515,7 +546,12 @@ def main(read=True, visualizer=False, device=None, rate=0, iterations=1000000,
     net = Network({
         "structures" : [nvm_structure, vp_structure, emot_structure] + om_network["structures"],
         "connections" : connections})
-    env = Environment({"modules" : nvm_modules + om_modules + vp_modules + emot_modules})
+
+    ''' Filter empty modules '''
+    modules = [m
+        for m in nvm_modules + om_modules + vp_modules + emot_modules
+            if len(m["layers"]) > 0]
+    env = Environment({"modules" : modules})
 
     init_syngen_nvm(nvmnet, net)
 

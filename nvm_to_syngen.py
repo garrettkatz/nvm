@@ -1,6 +1,6 @@
 import numpy as np
 from saccade_programs import make_saccade_nvm
-from syngen import Network, Environment, ConnectionFactory, create_io_callback, FloatArray, set_debug
+from syngen import Network, Environment, ConnectionFactory, create_io_callback, FloatArray, set_debug, VoidArray
 
 # Builds a name for a connection or dendrite
 def build_name(from_name, to_name, suffix=""):
@@ -312,6 +312,69 @@ def make_syngen_network(nvmnet):
         conn["from structure"] = "nvm"
         conn["to structure"] = "nvm"
 
+
+    # Remove unused memory connections
+    exclude = ["mf", "mb", "sf", "sb"]
+    connections = [conn for conn in connections
+        if conn["to layer"] not in exclude and conn["from layer"] not in exclude]
+
+    exclude = ["op2", "fef", "tc"]
+    connections = [conn for conn in connections
+        if conn["to layer"] != "ip" or conn["from layer"] not in exclude]
+
+    # Remove unused device connections
+    devices = ["tc", "fef", "pef", "sc"]
+    include = [("pef", "tc")]
+    connections = [conn for conn in connections
+        if conn["to layer"] not in devices or \
+           conn["from layer"] not in devices or \
+           conn["from layer"] == conn["to layer"] or \
+           (conn["to layer"], conn["from layer"]) in include]
+
+    # Remove unused op2 -> device connections
+    include = ["fef", "sc"]
+    connections = [conn for conn in connections
+        if conn["from layer"] != "op2" or \
+           conn["to layer"] not in devices or \
+           conn["to layer"] in include]
+
+    # Removed unused device -> ip connections
+    include = ["pef"]
+    connections = [conn for conn in connections
+        if conn["to layer"] != "ip" or \
+           conn["from layer"] not in devices or \
+           conn["from layer"] in include]
+
+    # Removed unused device -> ci connections
+    include = ["tc"]
+    connections = [conn for conn in connections
+        if conn["to layer"] != "ci" or \
+           conn["from layer"] not in devices or \
+           conn["from layer"] in include]
+
+    # Remove corresponding bias connections
+    biases = [conn["name"].replace("input", "biases")
+        for conn in connections if conn["name"].endswith("input")]
+    connections = [conn for conn in connections
+        if not conn["name"].endswith("biases") or conn["name"] in biases]
+
+    # Remove unnecessary dendrites
+    dendrites = [(conn["to layer"], conn["dendrite"])
+        for conn in connections
+            if "dendrite" in conn and conn["from layer"] != "go"]
+
+    for layer in layer_configs:
+        if "dendrites" in layer:
+            layer["dendrites"] = [d
+                for d in layer["dendrites"]
+                    if d["name"] == "gain" or (layer["name"], d["name"]) in dendrites]
+
+    # Remove unnecessary gates
+    connections = [conn for conn in connections
+        if "dendrite" not in conn or \
+            "gain" in conn["dendrite"] or \
+            (conn["to layer"], conn["dendrite"]) in dendrites]
+
     return structure, connections
 
 tick = 0
@@ -478,22 +541,25 @@ def init_syngen_nvm(nvmnet, syngen_net):
             # weights
             mat_name = build_name(from_name, to_name, "-input")
             mat = syngen_net.get_weight_matrix(mat_name)
-            for m in range(mat.size):
-                mat.data[m] = w.flat[m]
+            if not isinstance(mat, VoidArray):
+                for m in range(mat.size):
+                    mat.data[m] = w.flat[m]
 
             # biases
             b = nvmnet.biases[(to_name, from_name)]
             mat_name = build_name(from_name, to_name, "-biases")
             mat = syngen_net.get_weight_matrix(mat_name)
-            for m in range(mat.size):
-                mat.data[m] = b.flat[m]
+            if not isinstance(mat, VoidArray):
+                for m in range(mat.size):
+                    mat.data[m] = b.flat[m]
+
 
 if __name__ == "__main__":
 
     np.set_printoptions(linewidth=200, formatter = {'float': lambda x: '% .2f'%x})
 
-    nvmnet = make_saccade_nvm("tanh")
-    # nvmnet = make_saccade_nvm("logistic")
+    # nvmnet = make_saccade_nvm("tanh")
+    nvmnet = make_saccade_nvm("logistic")
 
     print(nvmnet.layers["gh"].activator.off)
     print(nvmnet.w_gain, nvmnet.b_gain)

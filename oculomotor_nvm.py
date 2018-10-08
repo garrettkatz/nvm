@@ -371,13 +371,13 @@ def build_bridge_connections():
             "plastic" : False,
             "weight config" : {
                 "type" : "flat",
-                "weight" : 0.1,
-                "from spacing" : 2,
+                "weight" : 0.2,
+                "from spacing" : 4,
                 "distance callback" : "gaussian",
             },
             "arborized config" : {
                 "field size" : 5,
-                "stride" : 2,
+                "stride" : 4,
                 "wrap" : False
             }
         },
@@ -393,13 +393,13 @@ def build_bridge_connections():
             "plastic" : False,
             "weight config" : {
                 "type" : "flat",
-                "weight" : 2.0,
-                "from spacing" : 2,
+                "weight" : 4.0,
+                "from spacing" : 4,
                 "distance callback" : "gaussian",
             },
             "arborized config" : {
                 "field size" : 5,
-                "stride" : 2,
+                "stride" : 4,
                 "wrap" : False
             }
         },
