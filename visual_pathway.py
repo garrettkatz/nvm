@@ -144,10 +144,10 @@ def build_vp_network(rows, cols):
     connections.append(class_biases_factory.build(
         "class-bias","class"))
 
-    # Build main structure (feedforward engine)
+    # Build main structure
     structure = {
         "name" : "visual pathway",
-        "type" : "feedforward",
+        "type" : "parallel",
         "layers" : layers}
 
     return structure, connections
@@ -567,8 +567,10 @@ def main(read=True, visualizer=False, device=None, rate=0, iterations=1000000,
         gpus = get_gpus()
         device = gpus[len(gpus)-1] if len(gpus) > 0 else get_cpu()
 
+    worker_threads = 4 if device == get_cpu() else 0
+
     report = net.run(env, {"multithreaded" : True,
-                               "worker threads" : "4",
+                               "worker threads" : worker_threads,
                                "devices" : device,
                                "iterations" : iterations,
                                "refresh rate" : rate,
