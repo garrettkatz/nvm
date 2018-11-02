@@ -151,7 +151,7 @@ if __name__ == "__main__":
 
     history = []
     start_t = []
-    int_sched = [20, 20]
+    int_sched = [100,150]
     tc_sched = [60, 110, 200]
     for t in range(tc_sched[2]):
 
@@ -172,8 +172,8 @@ if __name__ == "__main__":
             nvmnet.activity["tc"] = nvmnet.layers["tc"].coder.encode(tok) # maybe face appears
 
         ### show state and tick
-        # if True:
-        if t % 2 == 0 or nvmnet.at_exit():
+        if True:
+        # if t % 2 == 0 or nvmnet.at_exit():
         # if nvmnet.at_start() or nvmnet.at_exit():
             if nvmnet.at_start(): start_t.append(t)
             print('t = %d'%t)

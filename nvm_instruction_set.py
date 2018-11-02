@@ -33,17 +33,43 @@ def sequence_instruction_set(nvmnet):
     g_int, h_int = g.copy(), h.copy()
     
     # Hang on pause interrupt
-    gs.add_transit(
-        new_gates = g_int, new_hidden = h_int,
+    g, h = gs.add_transit(
+        ungate = [('gh','gi','u'),("di","di","u")],
         old_gates = g_int, old_hidden = h_int, gi = 'pause')
+    gate_output.coder.encode('pause', g)
+    gate_hidden.coder.encode('pause', h)
+    g_pause, h_pause = g.copy(), h.copy()
+
+    di_gates = gs.make_gate_output([("di","di","u")])
+    gate_output.coder.encode('di', di_gates)
+
+    gs.add_transit(
+        new_gates = g_pause, new_hidden = h_pause,
+        intermediate_gates = di_gates,
+        old_gates = g_pause, old_hidden = h_pause, gi = 'pause')
+
+    _, h = gs.add_transit(
+        new_gates = g_pause,
+        intermediate_gates = di_gates,
+        old_gates = g_pause, old_hidden = h_pause, gi = 'quiet')
+    gate_hidden.coder.encode('resume', h)
+    h_resume = h.copy()
+
+    g, h = gs.add_transit(
+        ungate = gprog(),
+        old_gates = g_pause, old_hidden = h_resume, gi = 'quiet')
+    gate_output.coder.encode('load', g)
+    gate_hidden.coder.encode('load', h)
+    g_load, h_load = g.copy(), h.copy()
     
     # If no interrupt, load operands and step instruction pointer
-    g, h = gs.add_transit(ungate = gprog(),
+    gs.add_transit(
+        new_gates = g_load, new_hidden = h_load,
         old_gates = g_int, old_hidden=h_int, gi = 'quiet')
     
     # Let opcode bias the gate layer
     g, h = gs.add_transit(ungate = [('gh','opc','u')],
-        old_gates = g, old_hidden=h)
+        old_gates = g_load, old_hidden=h_load)
 
     # Ready to execute instruction
     g_ready, h_ready = g.copy(), h.copy()

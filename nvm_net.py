@@ -83,16 +83,19 @@ class NVMNet:
         self.w_gain, self.b_gain = act.gain()
 
         # set up gates
-        NL = len(layers) + 3 # +3 for gate out/hidden/interrupt
+        NL = len(layers) + 4 # +4 for gate out/hidden/interrupt/dummy
         NG = NL + 3*NL**2 # number of gates (d + u + l + f)
         NH = shapes['gh'][0]*shapes['gh'][1] # number of hidden units
         NI = shapes['gi'][0]*shapes['gi'][1] # number of interrupt units
+        ND = 1 # number of dummy units
         acto = heaviside_activator(NG)
         acth = activator(pad,NH)
         acti = heaviside_activator(NI)
+        actd = activator(pad,ND)
         layers['go'] = Layer('go', (1,NG), acto, Coder(acto))
         layers['gh'] = Layer('gh', shapes['gh'], acth, Coder(acth))
         layers['gi'] = Layer('gi', shapes['gi'], acti, Coder(acti))
+        layers['di'] = Layer('di', (1,ND), actd, Coder(actd)) # dummy layer for persistent interrupt signal
         self.gate_map = make_nvm_gate_map(layers.keys())        
 
         # Encode interrupts
@@ -102,6 +105,10 @@ class NVMNet:
         layers['gi'].coder.encode('pause',
             # layers['gi'].activator.on * np.ones((layers['gi'].size,1)))
             1. * np.ones((layers['gi'].size,1)))
+        layers['di'].coder.encode('quiet',
+            0. * np.ones((layers['di'].size,1)))
+        layers['di'].coder.encode('pause',
+            1. * np.ones((layers['di'].size,1)))
 
         # set up connection matrices
         gs = sequence_instruction_set(self)
@@ -131,6 +138,7 @@ class NVMNet:
         self.activity['go'] = self.layers['go'].coder.encode('start')
         self.activity['gh'] = self.layers['gh'].coder.encode('start')
         self.activity['gi'] = self.layers['gi'].coder.encode('quiet')
+        self.activity['di'] = self.layers['di'].coder.encode('quiet')
         for ms in 'ms':
             self.activity[ms+'f'] = self.layers[ms+'f'].coder.encode('0')
             self.activity[ms+'b'] = self.layers[ms+'b'].coder.encode('0')

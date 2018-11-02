@@ -12,6 +12,7 @@ class GateSequencer(Sequencer, object):
         self.gate_hidden = self.sequence_layer
         self.gate_interrupt = gate_interrupt
         self.transit_outputs = []
+        self.intermediate_outputs = []
 
     def make_gate_output(self, ungate=[]):
         """Make gate output pattern where specified gate key units are on"""
@@ -34,7 +35,7 @@ class GateSequencer(Sequencer, object):
 
         return pattern
 
-    def add_transit(self, ungate=[], new_gates=None, new_hidden=None, old_gates=None, old_hidden=None, **input_states):
+    def add_transit(self, ungate=[], intermediate_ungate=[], new_gates=None, new_hidden=None, intermediate_gates=None, old_gates=None, old_hidden=None, **input_states):
 
         # Default to random hidden patterns
         if old_hidden is None: old_hidden = self.gate_hidden.activator.make_pattern()
@@ -76,6 +77,9 @@ class GateSequencer(Sequencer, object):
         if new_gates is None: new_gates = self.make_gate_output(ungate)
         self.transit_outputs.append(new_gates)
 
+        if intermediate_gates is None: intermediate_gates = self.make_gate_output(intermediate_ungate)
+        self.intermediate_outputs.append(intermediate_gates)
+
         return new_gates, new_hidden
 
     def stabilize(self, hidden, num_iters=1):
@@ -94,7 +98,7 @@ class GateSequencer(Sequencer, object):
         X = X[:self.gate_hidden.size + 1,:] # hidden layer portion with bias
         Z = Z[:self.gate_hidden.size + 1,:] # hidden layer portion with bias
         Y = np.concatenate((
-            self.make_gate_output()*np.ones((1, X.shape[1])), # intermediate output
+            np.concatenate(self.intermediate_outputs, axis=1), # intermediate output
             np.concatenate(self.transit_outputs, axis=1), # transit output
         ),axis=1)
 
