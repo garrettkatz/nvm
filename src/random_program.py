@@ -340,6 +340,95 @@ def plot_match_trials(args_list, results, layer_shape_colors):
     pt.tight_layout()
     pt.show()
 
+def plot_asymptotic_scaling(args_list, results):
+    # args: register_names, programs, initial_activities, extra_tokens, scale_factor, orthogonal, max_steps
+    # res: leading_match_counts, trial_step_counts, nvm_traces, rvm_traces, layer_size, ip_size
+    
+    # plot pattern counts against the lowest scale factors with perfect (or near) success rate
+    # need to get all success rates for all scale factors at each pattern count, then aggregate
+    success_flags = {True:{}, False:{}}
+    for args, res in zip(args_list, results):
+        if res is None: continue
+        
+        register_names, programs, _, extra_tokens, scale_factor, orthogonal, _ = args
+        leading_match_counts, trial_step_counts, _, _, layer_size, ip_size = res
+        
+        _, prog_size, _ = measure_programs(
+            programs, register_names, extra_tokens=extra_tokens)
+        scale_factor = float(layer_size)/prog_size
+        # prog_size, _, _ = measure_programs(
+        #     programs, register_names, extra_tokens=extra_tokens)
+        # scale_factor = float(ip_size)/prog_size
+
+        success = all([(lc == tc) for lc, tc in zip(
+            leading_match_counts, trial_step_counts)])
+
+        if prog_size not in success_flags[orthogonal]:
+            success_flags[orthogonal][prog_size] = {}
+        if scale_factor not in success_flags[orthogonal][prog_size]:
+            success_flags[orthogonal][prog_size][scale_factor] = []
+
+        success_flags[orthogonal][prog_size][scale_factor].append(success)
+    
+    success_rates = {}
+    for orthogonal in success_flags:
+        success_rates[orthogonal] = {}
+        for prog_size in success_flags[orthogonal]:
+            success_rates[orthogonal][prog_size] = {}
+            for scale_factor in success_flags[orthogonal][prog_size]:
+                flags = success_flags[orthogonal][prog_size][scale_factor]
+                rate = float(sum(flags))/len(flags)
+                success_rates[orthogonal][prog_size][scale_factor] = rate
+                
+    rate_bounds = [0.9, 1.]
+    lowest_scales = {}
+    for orthogonal in success_rates:
+        lowest_scales[orthogonal] = {}
+        for rate_bound in rate_bounds:
+            lowest_scales[orthogonal][rate_bound] = {}
+            for prog_size in success_rates[orthogonal]:
+                low_scale = np.inf
+                for scale, rate in success_rates[orthogonal][prog_size].items():
+                    if rate >= rate_bound and scale < low_scale:
+                        low_scale = scale
+                lowest_scales[orthogonal][rate_bound][prog_size] = low_scale
+    
+    pt.figure()
+    pt.subplot(1,2,1)
+    h, leg = [], []
+    for orthogonal in lowest_scales:
+        marker = '+' if orthogonal else 'o'
+        for rate_bound in rate_bounds:
+            x, y = zip(*lowest_scales[orthogonal][rate_bound].items())
+            c = .75*(rate_bound - min(rate_bounds))/(max(rate_bounds)-min(rate_bounds))
+            # c = 0
+            h.append( pt.plot(x, y, marker, color=3*[c])[0] )
+            leg.append( ("Orthogonal" if orthogonal else "Bernoulli") + "$\geq %.3f$"%rate_bound )
+    pt.legend(h, leg)
+    pt.plot([0, 256],[1, 1],'--k')
+    pt.plot([0, 256],[20, 20],'--k')
+    pt.xlabel("Program size")
+    pt.ylabel("Scale factor")
+
+    # plot pattern counts against the lowest layer sizes with perfect (or near) success rate
+    pt.subplot(1,2,2)
+    h, leg = [], []
+    for orthogonal in lowest_scales:
+        marker = '+' if orthogonal else 'o'
+        for rate_bound in rate_bounds:
+            x, y = zip(*lowest_scales[orthogonal][rate_bound].items())
+            y = np.array(y) * np.array(x)
+            c = .75*(rate_bound - min(rate_bounds))/(max(rate_bounds)-min(rate_bounds))
+            # c = 0
+            h.append( pt.plot(x, y, marker, color=3*[c])[0] )
+            leg.append( ("Orthogonal" if orthogonal else "Bernoulli") + "$\geq %.3f$"%rate_bound )
+    pt.legend(h, leg)
+    pt.xlabel("Program size")
+    pt.ylabel("Region size")
+
+    pt.show()
+
+
 def plot_match_trials_tokens(args_list, results):
 
     # args: register_names, programs, initial_activities, extra_tokens, scale_factor, orthogonal, max_steps
@@ -704,12 +793,12 @@ if __name__ == "__main__":
                         extra_tokens, scale_factor, orthogonal, max_steps))
 
     num_procs = 6
-    results = run_match_trial_pool(args_list, num_procs=num_procs)
-    with open('tmp.pkl','w') as f: pk.dump((args_list, results), f)
+    # results = run_match_trial_pool(args_list, num_procs=num_procs)
+    # with open('tmp.pkl','w') as f: pk.dump((args_list, results), f)
 
     # with open('tmp.pkl','r') as f: args_list, results = pk.load(f)
     # with open('big_randprog.pkl','r') as f: args_list, results = pk.load(f)
-    # with open('big_new.pkl','r') as f: args_list, results = pk.load(f)
+    with open('big_new.pkl','r') as f: args_list, results = pk.load(f)
     
     # args: register_names, programs, initial_activities, extra_tokens, scale_factor, orthogonal, max_steps
     # res: leading_match_counts, trial_step_counts, nvm_traces, rvm_traces, layer_size, ip_size
@@ -758,7 +847,8 @@ if __name__ == "__main__":
     # # plot_trial_complexities(args_list, results)
     # # plot_match_trials(args_list, results, layer_shape_colors)
     # plot_match_trials_tokens(args_list, results)
-
+    plot_asymptotic_scaling(args_list, results)
+    
     # # # num_registers = 3
     # # # register_names = ["r%d"%r for r in range(num_registers)]
     # # # num_tokens = 1
