@@ -340,7 +340,7 @@ def plot_match_trials(args_list, results, layer_shape_colors):
     pt.tight_layout()
     pt.show()
 
-def plot_asymptotic_scaling(args_list, results):
+def plot_asymptotic_scaling(args_list, results, use_ip=False):
     # args: register_names, programs, initial_activities, extra_tokens, scale_factor, orthogonal, max_steps
     # res: leading_match_counts, trial_step_counts, nvm_traces, rvm_traces, layer_size, ip_size
     
@@ -353,12 +353,18 @@ def plot_asymptotic_scaling(args_list, results):
         register_names, programs, _, extra_tokens, scale_factor, orthogonal, _ = args
         leading_match_counts, trial_step_counts, _, _, layer_size, ip_size = res
         
-        _, prog_size, _ = measure_programs(
-            programs, register_names, extra_tokens=extra_tokens)
-        scale_factor = float(layer_size)/prog_size
-        # prog_size, _, _ = measure_programs(
+        if use_ip:
+            prog_size, _, _ = measure_programs(
+                programs, register_names, extra_tokens=extra_tokens)
+            scale_factor = float(ip_size)/prog_size
+        else:
+            _, prog_size, _ = measure_programs(
+                programs, register_names, extra_tokens=extra_tokens)
+            scale_factor = float(layer_size)/prog_size
+        # num_lines, num_tokens, _ = measure_programs(
         #     programs, register_names, extra_tokens=extra_tokens)
-        # scale_factor = float(ip_size)/prog_size
+        # scale_factor = float(layer_size)/num_tokens
+        # prog_size = (num_lines, num_tokens)
 
         success = all([(lc == tc) for lc, tc in zip(
             leading_match_counts, trial_step_counts)])
@@ -380,7 +386,8 @@ def plot_asymptotic_scaling(args_list, results):
                 rate = float(sum(flags))/len(flags)
                 success_rates[orthogonal][prog_size][scale_factor] = rate
                 
-    rate_bounds = [0.9, 1.]
+    # rate_bounds = [0.9, 1.]
+    rate_bounds = [1., .9]
     lowest_scales = {}
     for orthogonal in success_rates:
         lowest_scales[orthogonal] = {}
@@ -393,39 +400,47 @@ def plot_asymptotic_scaling(args_list, results):
                         low_scale = scale
                 lowest_scales[orthogonal][rate_bound][prog_size] = low_scale
     
-    pt.figure()
+    pt.figure(figsize=(9,4))
     pt.subplot(1,2,1)
     h, leg = [], []
     for orthogonal in lowest_scales:
-        marker = '+' if orthogonal else 'o'
+        marker = 'd' if orthogonal else 'o'
         for rate_bound in rate_bounds:
             x, y = zip(*lowest_scales[orthogonal][rate_bound].items())
             c = .75*(rate_bound - min(rate_bounds))/(max(rate_bounds)-min(rate_bounds))
             # c = 0
-            h.append( pt.plot(x, y, marker, color=3*[c])[0] )
+            h.append( pt.plot(x, y, marker, color=3*[c], mfc='none')[0] )
             leg.append( ("Orthogonal" if orthogonal else "Bernoulli") + "$\geq %.3f$"%rate_bound )
     pt.legend(h, leg)
     pt.plot([0, 256],[1, 1],'--k')
     pt.plot([0, 256],[20, 20],'--k')
-    pt.xlabel("Program size")
+    if use_ip:
+        pt.xlabel("Number of lines")
+    else:
+        pt.xlabel("Number of distinct symbols")
     pt.ylabel("Scale factor")
 
     # plot pattern counts against the lowest layer sizes with perfect (or near) success rate
     pt.subplot(1,2,2)
     h, leg = [], []
     for orthogonal in lowest_scales:
-        marker = '+' if orthogonal else 'o'
+        marker = 'd' if orthogonal else 'o'
         for rate_bound in rate_bounds:
             x, y = zip(*lowest_scales[orthogonal][rate_bound].items())
             y = np.array(y) * np.array(x)
             c = .75*(rate_bound - min(rate_bounds))/(max(rate_bounds)-min(rate_bounds))
             # c = 0
-            h.append( pt.plot(x, y, marker, color=3*[c])[0] )
+            h.append( pt.plot(x, y, marker, color=3*[c], mfc='none')[0] )
             leg.append( ("Orthogonal" if orthogonal else "Bernoulli") + "$\geq %.3f$"%rate_bound )
     pt.legend(h, leg)
-    pt.xlabel("Program size")
-    pt.ylabel("Region size")
+    if use_ip:
+        pt.xlabel("Number of lines")
+        pt.ylabel("ip size")
+    else:
+        pt.xlabel("Number of distinct symbols")
+        pt.ylabel("Register size")
 
+    pt.tight_layout()
     pt.show()
 
 
@@ -814,7 +829,8 @@ if __name__ == "__main__":
             continue
 
         leading_match_counts, trial_step_counts, nvm_traces, rvm_traces, layer_size, ip_size = res
-        if not orthogonal:
+        # if not orthogonal:
+        if True:
             print(
                 "%d lines, %d tokens, %f scale, %d layer, %d ip, %s: "%(
                     num_lines, num_patterns, scale_factor,
@@ -844,10 +860,10 @@ if __name__ == "__main__":
                 # # print(p)
                 # print(programs["rand%d"%p])
 
-    # # plot_trial_complexities(args_list, results)
+    # plot_trial_complexities(register_names, results)
     # # plot_match_trials(args_list, results, layer_shape_colors)
     # plot_match_trials_tokens(args_list, results)
-    plot_asymptotic_scaling(args_list, results)
+    plot_asymptotic_scaling(args_list, results, use_ip=True)
     
     # # # num_registers = 3
     # # # register_names = ["r%d"%r for r in range(num_registers)]
