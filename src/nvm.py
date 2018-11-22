@@ -31,6 +31,9 @@ class NVM:
     def initialize_memory(self, pointers, values):
         self.net.initialize_memory(pointers, values)
 
+    def decode_layer(self, layer_name):
+        return self.net.layers[layer_name].coder.decode(self.net.activity[layer_name])
+
     def decode_state(self, layer_names=None):
         if layer_names is None:
             layer_names = self.net.layers.keys()
@@ -47,6 +50,8 @@ class NVM:
             ",".join([
                 "%s:%s"%(r,state[r]) for r in self.net.devices])
 
+    def at_start(self):
+        return self.net.at_start()
 
     def at_exit(self):
         return self.net.at_exit()
