@@ -323,7 +323,7 @@ def make_syngen_network(nvmnet):
         if conn["to layer"] != "ip" or conn["from layer"] not in exclude]
 
     # Remove unused device connections
-    devices = ["tc", "fef", "pef", "sc"]
+    devices = ["tc", "fef", "pef", "sc", "lpfc"]
     include = [("pef", "tc")]
     connections = [conn for conn in connections
         if conn["to layer"] not in devices or \
@@ -374,6 +374,10 @@ def make_syngen_network(nvmnet):
         if "dendrite" not in conn or \
             "gain" in conn["dendrite"] or \
             (conn["to layer"], conn["dendrite"]) in dendrites]
+
+    # Remove dummy 'di' connections (only necessary to instantiate gate)
+    connections = [conn for conn in connections
+        if conn["to layer"] != "di" and conn["from layer"] != "di"]
 
     return structure, connections
 
@@ -535,6 +539,8 @@ def make_syngen_environment(nvmnet, initial_patterns={}, run_nvm=False,
     return modules
 
 def init_syngen_nvm(nvmnet, syngen_net):
+    connections = []
+
     for (to_name, from_name), w in nvmnet.weights.items():
         # Skip comparison circuitry
         if to_name != 'co' and from_name != 'ci':
@@ -544,6 +550,7 @@ def init_syngen_nvm(nvmnet, syngen_net):
             if not isinstance(mat, VoidArray):
                 for m in range(mat.size):
                     mat.data[m] = w.flat[m]
+                connections.append((mat_name, np.size(w)))
 
             # biases
             b = nvmnet.biases[(to_name, from_name)]
@@ -552,6 +559,11 @@ def init_syngen_nvm(nvmnet, syngen_net):
             if not isinstance(mat, VoidArray):
                 for m in range(mat.size):
                     mat.data[m] = b.flat[m]
+                connections.append((mat_name, np.size(w)))
+
+    connections = sorted(connections, key = lambda x : x[1])
+    for name,size in connections:
+        print("%20s %10d" % (name, size))
 
 
 if __name__ == "__main__":

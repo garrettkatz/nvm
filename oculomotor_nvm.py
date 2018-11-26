@@ -285,7 +285,7 @@ def build_environment(rows=200, cols=200, scale=5, visualizer=False,
                 "shuffle" : True,
                 "num faces" : num_faces,
                 "cross time" : 1000,
-                "face time" : 500,
+                "face time" : 1000,
                 "layers" : [
                     {
                         "layer" : "peripheral_photoreceptor",

@@ -8,6 +8,7 @@ from math import ceil
 from os import path
 import sys
 import argparse
+from math import ceil
 
 import numpy as np
 from saccade_programs import make_saccade_nvm
@@ -160,8 +161,8 @@ def build_emot_network(noise=True):
     layers.append({
         "name" : "amygdala",
         "neural model" : "oscillator",
-        "tau" : 0.025,
-        "decay" : 0.025,
+        "tau" : 0.04,
+        "decay" : 0.04,
         "rows" : 1,
         "columns" : 1
     })
@@ -177,11 +178,15 @@ def build_emot_network(noise=True):
     layers.append({
         "name" : "vmpfc",
         "neural model" : "oscillator",
-        "tau" : 0.025,
-        "decay" : 0.00125,
-#        "tonic" : 0.1,
+        "tau" : 0.01,
+        "decay" : 0.01,
         "rows" : 1,
-        "columns" : 1
+        "columns" : 1,
+        "dendrites" : [
+            {
+                "name" : "gated",
+            }
+        ]
     })
 
     if noise:
@@ -191,6 +196,17 @@ def build_emot_network(noise=True):
             "std dev": 0.025
         }
 
+    # Gating node for LPFC -> vmPFC
+    layers.append({
+        "name" : "emot-gate",
+        "neural model" : "oscillator",
+        "tau" : 0.01,
+        "decay" : 0.01,
+        "tonic" : 0.1,
+        "rows" : 1,
+        "columns" : 1,
+    })
+
     # Build main structure
     structure = {
         "name" : "emotional",
@@ -198,13 +214,13 @@ def build_emot_network(noise=True):
         "layers" : layers}
 
     # amygdala -> vmpfc
-    # Implements amygdala -> vmpfc mapping for emotional regulation activation
+    # Implements amygdala -> vmpfc mapping for cognitive suppression
     connections.append({
         "name" : "vmpfc <- amygdala",
         "from layer" : "amygdala",
         "to layer" : "vmpfc",
         "type" : "fully connected",
-        "opcode" : "add",
+        "opcode" : "sub",
         "plastic" : False,
         "weight config" : {
             "type" : "flat",
@@ -227,7 +243,7 @@ def build_emot_network(noise=True):
 
     return structure, connections
 
-def build_vp_bridge_connections():
+def build_vp_bridge_connections(gi_gate):
 
     # Retina -> convolutional
     connections = []
@@ -300,6 +316,80 @@ def build_vp_bridge_connections():
             "weight" : 0,
         }})
 
+    # class -> vmPFC
+    # Implements class -> vmPFC mapping for emotional regulation activation
+    connections.append({
+        "name" : "vmpfc <- class",
+        "from structure" : "visual pathway",
+        "from layer" : "class",
+        "to structure" : "emotional",
+        "to layer" : "vmpfc",
+        #"dendrite" : "gated",
+        "type" : "fully connected",
+        "opcode" : "add",
+        "plastic" : False,
+        "weight config" : {
+            "type" : "flat",
+            "weight" : 0,
+        }})
+
+    # ip -> vmPFC
+    # Implements lPFC -> vmPFC mapping for emotional regulation activation
+    connections.append({
+        "name" : "vmpfc <- ip",
+        "from structure" : "nvm",
+        "from layer" : "ip",
+        "to structure" : "emotional",
+        "to layer" : "vmpfc",
+        "dendrite" : "gated",
+        "type" : "fully connected",
+        "opcode" : "add",
+        "plastic" : False,
+        "weight config" : {
+            "type" : "flat",
+            "weight" : 0,
+        }})
+
+    # vmPFC input gating
+    connections.append({
+        "name" : "vmpfc <- emot-gate",
+        "from layer" : "emot-gate",
+        "to layer" : "vmpfc",
+        "dendrite" : "gated",
+        "type" : "one to one",
+        "opcode" : "mult",
+        "plastic" : False,
+        "weight config" : {
+            "type" : "flat",
+            "weight" : 1,
+        }})
+
+    # go -> vmPFC
+    # Implements lpfc -> vmpfc gating to shut down amygdala interrupt
+    connections.append({
+        "name" : "emot-gate <- go",
+        "from structure" : "nvm",
+        "from layer" : "go",
+        "to structure" : "emotional",
+        "to layer" : "emot-gate",
+        "type" : "subset",
+        "opcode" : "add",
+        "plastic" : False,
+        "subset config" : {
+            "from row start" : 0,
+            "from row end" : 1,
+            "from column start" : gi_gate,
+            "from column end" : gi_gate+1,
+            "to row start" : 0,
+            "to row end" : 1,
+            "to column start" : 0,
+            "to column end" : 1
+        },
+        "weight config" : {
+            "type" : "flat",
+            "weight" : 1
+        }})
+
     # amygdala -> gi
     # Implements amygdala -> gi mapping for nvm interrupt
     connections.append({
@@ -364,7 +454,8 @@ def build_emot_environment(visualizer=False):
 
     modules = []
 
-    emot_activ = [[], []]
+    track = ("amygdala", "vmpfc", "emot-gate")
+    emot_activ = [[] for _ in xrange(len(track))]
 
     def track_activ(ID, size, ptr):
         global emot_activ
@@ -380,7 +471,7 @@ def build_emot_environment(visualizer=False):
                 "output" : True,
                 "function" : "track_activ",
                 "id" : i
-            } for i,layer_name in enumerate(("amygdala", "vmpfc"))
+            } for i,layer_name in enumerate(track)
         ]
     })
 
@@ -394,7 +485,7 @@ def build_emot_environment(visualizer=False):
             ]
         })
 
-    emot_bold = [[], []]
+    emot_bold = [[] for _ in xrange(len(track))]
 
     def track_bold(ID, size, ptr):
         global emot_bold
@@ -411,15 +502,15 @@ def build_emot_environment(visualizer=False):
                 "function" : "track_bold",
                 "id" : i,
                 "output keys" : ["bold"]
-            } for i,layer_name in enumerate(("amygdala", "vmpfc"))
+            } for i,layer_name in enumerate(track)
         ]
     })
 
     return modules
 
 
-def init_vpnet(net, nvmnet, amygdala_sensitivity=0.1,
-        amy_vmpfc_strength=1.0, vmpfc_amy_strength=1.0):
+def init_vpnet(net, nvmnet, amygdala_sensitivity=0.1, vmpfc_sensitivity=0.1,
+        amy_vmpfc_strength=1.0, vmpfc_amy_strength=1.0, lpfc_weight=2.0):
     # load trained parameters
     vp_params = dict(**np.load("cnn2.npz"))
 
@@ -473,6 +564,26 @@ def init_vpnet(net, nvmnet, amygdala_sensitivity=0.1,
     for m in range(mat.size):
         mat.data[m] = w[m]
 
+    # class to vmpfc
+    # This allows tc to activate vmpfc when a face is detected
+    mat_name = "vmpfc <- class"
+    mat = net.get_weight_matrix(mat_name)
+
+    # Left face, cross, right face
+    w = [x * vmpfc_sensitivity for x in [1, 0, 1]]
+    for m in range(mat.size):
+        mat.data[m] = w[m]
+
+    # class to vmpfc
+    # This allows tc to activate vmpfc when a face is detected
+    mat_name = "vmpfc <- ip"
+    mat = net.get_weight_matrix(mat_name)
+
+    # Since ip patterns are 50% on, multiply by 2, divide by layer size
+    w = 2.0 * lpfc_weight / 1024
+    for m in range(mat.size):
+        mat.data[m] = w
+
     # amygdala to vmPFC
     # This allows the amgydala to activate the vmPFC for reciprocal inhibition
     mat_name = "vmpfc <- amygdala"
@@ -502,8 +613,8 @@ def init_vpnet(net, nvmnet, amygdala_sensitivity=0.1,
         mat.data[m] = w.flat[m]
 
 def main(read=True, visualizer=False, device=None, rate=0, iterations=1000000,
-         amygdala_sensitivity=0.0, amy_vmpfc_strength=1.0,
-         vmpfc_amy_strength=1.0, filename="", num_faces=34, noise=True):
+         amygdala_sensitivity=0.0, vmpfc_sensitivity=0.0, amy_vmpfc_strength=1.0,
+         vmpfc_amy_strength=1.0, lpfc_weight=2.0, filename="", num_faces=34, noise=True):
     np.set_printoptions(linewidth=200, formatter = {'float': lambda x: '% .2f'%x})
     task = "saccade"
     rows = 340
@@ -541,7 +652,9 @@ def main(read=True, visualizer=False, device=None, rate=0, iterations=1000000,
     ''' entire network '''
     connections = nvm_connections + om_network["connections"] + vp_connections + emot_connections
     connections += build_om_bridge_connections()
-    connections += build_vp_bridge_connections()
+
+    gi_gate = nvmnet.gate_map.get_gate_index(('di', 'di', 'u'))
+    connections += build_vp_bridge_connections(gi_gate)
 
     net = Network({
         "structures" : [nvm_structure, vp_structure, emot_structure] + om_network["structures"],
@@ -557,19 +670,22 @@ def main(read=True, visualizer=False, device=None, rate=0, iterations=1000000,
 
     # Draw amygdala sensitivity from distribution centered on parameter
     print("Using amygdala sensitivity: %f" % amygdala_sensitivity)
+    print("Using vmPFC sensitivity: %f" % vmpfc_sensitivity)
     print("Using amygdala->vmPFC: %f" % amy_vmpfc_strength)
     print("Using vmPFC->amygdala: %f" % vmpfc_amy_strength)
-    init_vpnet(net, nvmnet, amygdala_sensitivity,
-        amy_vmpfc_strength, vmpfc_amy_strength)
+    print("Using lPFC->vmPFC: %f" % lpfc_weight)
+    init_vpnet(net, nvmnet,
+        amygdala_sensitivity, vmpfc_sensitivity,
+        amy_vmpfc_strength, vmpfc_amy_strength, lpfc_weight)
 
     ''' Run Simulation '''
     if device is None:
         gpus = get_gpus()
         device = gpus[len(gpus)-1] if len(gpus) > 0 else get_cpu()
 
-    worker_threads = 4 if device == get_cpu() else 0
+    worker_threads = 8 if device == get_cpu() else 0
 
-    report = net.run(env, {"multithreaded" : True,
+    report = net.run(env, {"multithreaded" : False,
                                "worker threads" : worker_threads,
                                "devices" : device,
                                "iterations" : iterations,
@@ -588,23 +704,28 @@ def main(read=True, visualizer=False, device=None, rate=0, iterations=1000000,
     print("")
     print("BOLD Amygdala: %f" % sum(emot_bold[0]))
     print("BOLD vmPFC:    %f" % sum(emot_bold[1]))
+    print("BOLD emot-gate:%f" % sum(emot_bold[2]))
 
     print("")
     print("Activation Amygdala: %f" % sum(emot_activ[0]))
     print("Activation vmPFC:    %f" % sum(emot_activ[1]))
+    print("Activation emot-gate:%f" % sum(emot_activ[2]))
     print("Max Activation Amygdala: %f" % max(emot_activ[0]))
     print("Max Activation vmPFC:    %f" % max(emot_activ[1]))
+    print("Max Activation emot-gate:%f" % max(emot_activ[2]))
 
     plt.subplot(211)
     plt.plot(emot_bold[0])
     plt.plot(emot_bold[1])
+    plt.plot(emot_bold[2])
     plt.title("BOLD")
-    plt.legend(['amy BOLD', 'vmPFC BOLD'], loc='upper left')
+    plt.legend(['amy', 'vmPFC', 'emot-gate'], loc='upper left')
     plt.subplot(212)
     plt.plot(emot_activ[0])
     plt.plot(emot_activ[1])
+    plt.plot(emot_activ[2])
     plt.title("Activation")
-    plt.legend(['amy activ', 'vmPFC activ'], loc='upper left')
+    plt.legend(['amy', 'vmPFC', 'emot-gate'], loc='upper left')
 
     if filename != "":
         plt.tight_layout()
@@ -623,16 +744,20 @@ if __name__ == "__main__":
                         help='run the visualizer')
     parser.add_argument('-host', action='store_true', default=False,
                         help='run on host CPU')
-    parser.add_argument('-d', type=int, default=0,
+    parser.add_argument('-d', type=int, default=1,
                         help='run on device #')
     parser.add_argument('-r', type=int, default=0,
                         help='refresh rate')
-    parser.add_argument('-a', type=float, default=0.0,
+    parser.add_argument('-amy_s', type=float, default=0.0,
                         help='amygdala sensitivity')
-    parser.add_argument('-av', type=float, default=1.0,
+    parser.add_argument('-vmpfc_s', type=float, default=0.0,
+                        help='vmpfc sensitivity')
+    parser.add_argument('-av', type=float, default=0.0,
                         help='amygdala -> vmPFC')
-    parser.add_argument('-va', type=float, default=1.0,
+    parser.add_argument('-va', type=float, default=0.0,
                         help='vmPFC -> amygdala')
+    parser.add_argument('-l', type=float, default=0.0,
+                        help='lPFC -> vmPFC')
     parser.add_argument('-f', type=str, default="",
                         help='BOLD/activ filename')
     parser.add_argument('-n', type=int, default=34,
@@ -653,4 +778,4 @@ if __name__ == "__main__":
     read = False
 
     main(read, args.visualizer, device, args.r, 1000000,
-        args.a, args.av, args.va, args.f, args.n, args.noise)
+        args.amy_s, args.vmpfc_s, args.av, args.va, args.l, args.f, args.n, args.noise)

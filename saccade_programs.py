@@ -82,6 +82,12 @@ def make_sc(pad, activator, rows, columns):
     sc_coder.encode("off", act.off*np.ones((rows*columns,1)))
     return Layer("sc", (rows,columns), act, sc_coder)
 
+def make_lpfc(pad, activator, rows, columns):
+
+    act = activator(pad, rows*columns)
+    lpfc_coder = Coder(act)
+    return Layer("lpfc", (rows,columns), act, lpfc_coder)
+
 def make_saccade_nvm(activator_label):
 
     # set up activator
@@ -101,9 +107,10 @@ def make_saccade_nvm(activator_label):
         "tc": Layer("tc", layer_shape, act, Coder(act)),
         "fef": make_ef("fef", pad, activator, 17, 24),
         "pef": make_ef("pef", pad, activator, 17, 24),
-        "sc": make_sc(pad, activator, 5, 5)}
+        "sc": make_sc(pad, activator, 5, 5),
+        "lpfc": make_lpfc(pad, activator, 1, 1) }
 
-    shapes = {"gh": (32,16), "c": (16,16)}
+    shapes = {"gh": (32,32), "c": (16,16)}
     nvmnet = NVMNet(layer_shape, pad, activator, learning_rule, devices, shapes=shapes)
 
     # assemble and link programs
@@ -151,7 +158,7 @@ if __name__ == "__main__":
 
     history = []
     start_t = []
-    int_sched = [100,150]
+    int_sched = [20, 20]
     tc_sched = [60, 110, 200]
     for t in range(tc_sched[2]):
 
@@ -172,8 +179,8 @@ if __name__ == "__main__":
             nvmnet.activity["tc"] = nvmnet.layers["tc"].coder.encode(tok) # maybe face appears
 
         ### show state and tick
-        if True:
-        # if t % 2 == 0 or nvmnet.at_exit():
+        # if True:
+        if t % 2 == 0 or nvmnet.at_exit():
         # if nvmnet.at_start() or nvmnet.at_exit():
             if nvmnet.at_start(): start_t.append(t)
             print('t = %d'%t)
