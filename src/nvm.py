@@ -34,6 +34,10 @@ class NVM:
     def decode_layer(self, layer_name):
         return self.net.layers[layer_name].coder.decode(self.net.activity[layer_name])
 
+    def encode_symbol(self, layer_name, symbol):
+        pattern = self.net.layers[layer_name].coder.encode(symbol)
+        self.net.activity[layer_name] = pattern
+
     def decode_state(self, layer_names=None):
         if layer_names is None:
             layer_names = self.net.layers.keys()

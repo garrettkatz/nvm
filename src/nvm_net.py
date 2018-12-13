@@ -98,12 +98,12 @@ class NVMNet:
         # encode tokens
         self.orthogonal = orthogonal
         self.layers["opc"].encode_tokens(opcodes, orthogonal=orthogonal)
-        all_tokens = list(tokens | set(self.devices.keys() + ["null"]))
+        all_tokens = list(set(tokens) | set(self.devices.keys() + ["null"]))
         for name in self.devices.keys() + ["op1","op2","ci"]:
             self.layers[name].encode_tokens(all_tokens, orthogonal=orthogonal)
 
         # set up connection matrices
-        self.weights, self.biases = flash_instruction_set(self, verbose=False)
+        self.weights, self.biases = flash_instruction_set(self, verbose=True)
         for ms in 'ms':
             ms_weights, ms_biases = address_space(
                 layers[ms+'f'], layers[ms+'b'],
