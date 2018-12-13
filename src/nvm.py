@@ -22,7 +22,7 @@ class NVM:
             for name in register_names}
         self.net = NVMNet(layer_shape, pad, activator, learning_rule, registers, shapes=shapes, tokens=tokens, orthogonal=orthogonal)
 
-    def assemble(self, programs, verbose=1, other_tokens=[]):
+    def assemble(self, programs, verbose=0, other_tokens=[]):
         self.net.assemble(programs, verbose, self.orthogonal, other_tokens)
 
     def load(self, program_name, initial_state):

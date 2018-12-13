@@ -20,9 +20,9 @@ def flash_instruction_set(nvmnet, verbose=False):
     layers: dict of layers, including:
         gate_output, gate_hidden, ip, opc, op1, op2, op3, cmph, cmpo
     """
-    if verbose:
-        for name in nvmnet.layers:
-            print("|%s|=%d"%(name, nvmnet.layers[name].size))
+    # if verbose:
+    #     for name in nvmnet.layers:
+    #         print("|%s|=%d"%(name, nvmnet.layers[name].size))
     
     gate_map, layers, devices = nvmnet.gate_map, nvmnet.layers, nvmnet.devices
     gate_output, gate_hidden = layers['go'], layers['gh']

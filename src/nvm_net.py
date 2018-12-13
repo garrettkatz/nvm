@@ -103,7 +103,7 @@ class NVMNet:
             self.layers[name].encode_tokens(all_tokens, orthogonal=orthogonal)
 
         # set up connection matrices
-        self.weights, self.biases = flash_instruction_set(self, verbose=True)
+        self.weights, self.biases = flash_instruction_set(self, verbose=False)
         for ms in 'ms':
             ms_weights, ms_biases = address_space(
                 layers[ms+'f'], layers[ms+'b'],
@@ -145,7 +145,7 @@ class NVMNet:
                 open_gates.append(k)
         return open_gates
 
-    def assemble(self, programs, verbose=1, orthogonal=False, other_tokens=[]):
+    def assemble(self, programs, verbose=0, orthogonal=False, other_tokens=[]):
         weights, biases, diff_count = assemble(self,
             programs, verbose=(verbose > 1),
             orthogonal=orthogonal, other_tokens=other_tokens)

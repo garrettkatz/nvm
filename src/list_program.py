@@ -7,8 +7,8 @@ list_programs = {"echo":"""
 loop1:  mov rval rinp   # stage current element
         mem rval        # store current element
         nxt             # advance to next memory location
-        cmp rval nil    # check for nil terminator
-        jie out         # if nil, leave loop 1
+        cmp rval end    # check for list terminator
+        jie out         # if list ended, leave loop 1
         mov rinp sep    # separator for IO protocol
         jmp loop1       # repeat
 
@@ -16,8 +16,8 @@ out:    drf rloc        # restore starting memory location
 loop2:  rem rval        # retrieve current element
         mov rout rval   # output current element
         nxt             # advance to next memory location
-        cmp rval nil    # check for nil terminator
-        jie done        # if nil, leave loop 2
+        cmp rval end    # check for list terminator
+        jie done        # if list ended, leave loop 2
         mov rout sep    # separator for IO protocol
         jmp loop2       # repeat
 
@@ -25,21 +25,20 @@ done:   exit            # halt execution
     
 """}
 
-if __name__ == "__main__":
+def run_trial(num_items, list_length, orth, verbose=False):
 
-    list_items = list("ABCDEF")
+    list_items = list("ABCDEFGHIJKLMNOPQRSTUVWXYZ")[:num_items]
 
     nvm = make_scaled_nvm(
         register_names = ["rinp","rout","rloc","rval"],
         programs = list_programs,
-        orthogonal=True,
-        extra_tokens=list_items + ["nil", "sep"])
+        orthogonal=orth,
+        extra_tokens=list_items + ["end", "sep"])
     nvm.assemble(list_programs)
     
-    list_length = 10
-    list_index = 0
-    list_input = list(np.random.choice(list_items, list_length)) + ["nil"]
+    list_input = list(np.random.choice(list_items, list_length)) + ["end"]
     list_output = []
+    list_index = 0
     rout_was_sep = True
     
     nvm.load("echo", {
@@ -48,16 +47,7 @@ if __name__ == "__main__":
         "rloc": "adr"
     })
 
-    show_layers = [
-        ["go", "gh","ip"] + ["op"+x for x in "c12"] +\
-        ["mf","mb"] + ["sf","sb"] + ["co","ci"] +\
-        nvm.net.devices.keys(),
-    ]
-    show_tokens = True
-    show_corrosion = False
-    show_gates = False
-    
-    for t in range(500):
+    for t in range(1000000):
     
         # input
         if nvm.decode_layer("rinp") == "sep":
@@ -73,14 +63,42 @@ if __name__ == "__main__":
             rout_was_sep = True
 
         # step
-        nvm.step(verbose=1)
+        nvm.step(verbose=0)
         if nvm.at_exit(): break
 
-    print("%d steps:" % t)
+    if verbose:
+        print("%d steps:" % t)
+    
+        print("list input:")
+        print(list_input)
+    
+        print("list output:")
+        print(list_output)
+    
+        print("equal:")
+        print(list_input == list_output)
+    
+    matches = 0
+    for i in range(min(len(list_input), len(list_output))):
+        if list_input[i] == list_output[i]: matches += 1
+    
+    return t, matches
 
-    print("list input:")
-    print(list_input)
 
-    print("list output:")
-    print(list_output)
+if __name__ == "__main__":
 
+
+    errs = {}
+    for orth in [False, True]:
+        errs[orth] = {}
+        for num_items in range(26,27):
+        
+            for list_length in range(2,10):
+            
+                t, matches = run_trial(num_items, list_length, orth, verbose=False)
+                errs[orth][list_length] = (matches != list_length+1)
+                
+                if matches != list_length+1: print("ERR!!!")
+    
+                print("orth=%s, %d items, length %d, %d steps, %d matches"%(
+                    orth, num_items, list_length, t, matches))
