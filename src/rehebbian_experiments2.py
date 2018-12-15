@@ -66,7 +66,7 @@ if __name__ == "__main__":
     # linestyles = ['-', '--', '-.', ':']
     linestyles = ['-', '--', ':']
     # ratios = [.1, .25, .5, .9]
-    ratios = [.1, .25, .5]
+    ratios = [.14, .5, .9]
     # markers = list('osd^')
     markers = list('osd')
     leg = []
