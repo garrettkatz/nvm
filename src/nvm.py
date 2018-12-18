@@ -80,7 +80,7 @@ def make_default_nvm(register_names, layer_shape=None, orthogonal=False, shapes=
         pad, activator, learning_rule, register_names,
         shapes=shapes, tokens=tokens, orthogonal=orthogonal)
 
-def make_scaled_nvm(register_names, programs, orthogonal=False, capacity_factor=.05, scale_factor=1.0, extra_tokens=[]):
+def make_scaled_nvm(register_names, programs, orthogonal=False, capacity_factor=.05, scale_factor=1.0, extra_tokens=[], num_addresses=None):
     """
     Create an NVM with auto-scaled layer sizes based on programs that will be learned
     capacity_factor: assumes pattern capacity is at most this fraction of layer size
@@ -97,6 +97,11 @@ def make_scaled_nvm(register_names, programs, orthogonal=False, capacity_factor=
     
     layer_shape = (layer_size, 1)
     shapes = {'ip': (ip_size, 1)}
+
+    if num_addresses is not None:
+        m_size = int(nearest_power_of_2(scale_factor * num_addresses)
+        if orthogonal else scale_factor * num_addresses/capacity_factor)
+    	shapes['m'] = (m_size,1)
 
     pad = 0.0001
     activator, learning_rule = tanh_activator, rehebbian

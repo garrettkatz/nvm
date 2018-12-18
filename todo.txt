@@ -1,3 +1,4 @@
+decouple target num addresses and size of mf/b
 next steps:
     two assemblies could double-down program-independent linkages (e.g. reg<->reg)
     auto-infer required layer sizes for randprog (then rand-prog scales them)

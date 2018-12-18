@@ -1,4 +1,5 @@
 import numpy as np
+import pickle as pk
 from nvm import make_scaled_nvm
 
 list_programs = {"echo":"""
@@ -25,7 +26,7 @@ done:   exit            # halt execution
     
 """}
 
-def run_trial(num_items, list_length, orth, verbose=False):
+def run_trial(num_items, list_length, orth, scale_factor, verbose=False):
 
     list_items = list("ABCDEFGHIJKLMNOPQRSTUVWXYZ")[:num_items]
 
@@ -33,7 +34,9 @@ def run_trial(num_items, list_length, orth, verbose=False):
         register_names = ["rinp","rout","rloc","rval"],
         programs = list_programs,
         orthogonal=orth,
-        extra_tokens=list_items + ["end", "sep"])
+        scale_factor=scale_factor,
+        extra_tokens=list_items + ["end", "sep"],
+        num_addresses=list_length+1)
     nvm.assemble(list_programs)
     
     list_input = list(np.random.choice(list_items, list_length)) + ["end"]
@@ -47,7 +50,7 @@ def run_trial(num_items, list_length, orth, verbose=False):
         "rloc": "adr"
     })
 
-    for t in range(1000000):
+    for t in range(10000):
     
         # input
         if nvm.decode_layer("rinp") == "sep":
@@ -87,18 +90,34 @@ def run_trial(num_items, list_length, orth, verbose=False):
 
 if __name__ == "__main__":
 
+    scaling = {
+        # False: np.array([.75, 1., 1.25, 1.5]), # not orth
+        True: np.array([.5, 1., 2.]), #  orth
+        # False: np.array([.5, 1.5]), # not orth
+        # True: np.array([.5, 1]), #  orth
+        False: np.array([1.5]), # not orth
+        # True: np.array([1]), #  orth
+    }
 
     errs = {}
     for orth in [False, True]:
         errs[orth] = {}
-        for num_items in range(26,27):
-        
-            for list_length in range(2,10):
+        for scale_factor in scaling[orth]:
+            errs[orth][scale_factor] = {}
+
+            # for num_items in range(1,27):
+            for num_items in [7]:
             
-                t, matches = run_trial(num_items, list_length, orth, verbose=False)
-                errs[orth][list_length] = (matches != list_length+1)
+                for list_length in range(2,10):
                 
-                if matches != list_length+1: print("ERR!!!")
-    
-                print("orth=%s, %d items, length %d, %d steps, %d matches"%(
-                    orth, num_items, list_length, t, matches))
+                    args = (num_items, list_length, orth, scale_factor)
+                    t, matches = run_trial(*args, verbose=False)
+                    errs[orth][scale_factor][list_length] = (args, t, matches != list_length+1)
+                    
+                    print("orth=%s, scale=%f, %d items, %d steps, length %d =? %d matches"%(
+                        orth, scale_factor, num_items, t, list_length+1, matches))
+                    if matches != list_length+1: print("ERR!!!")
+        
+    with open('lp.pkl','w') as f: pk.dump(errs, f)
+    # with open('lp.pkl','r') as f: errs = pk.load(f)
+
