@@ -55,6 +55,7 @@ def run_trial(num_items, list_length, orth, scale_factor, verbose=False):
         # input
         if nvm.decode_layer("rinp") == "sep":
             list_index += 1
+            if list_index == len(list_input): break
             nvm.encode_symbol("rinp", list_input[list_index])
 
         # output
