@@ -66,8 +66,8 @@ def run_trial(num_items, list_length, orth, scale_factor, verbose=False):
             rout_was_sep = True
 
         # step
-        failure = nvm.step(verbose=0)
-        if failure: break
+        success = nvm.step(verbose=0)
+        if not success: break
         if nvm.at_exit(): break
 
     if verbose:

@@ -67,11 +67,11 @@ class NVM:
             if verbose > 1: print(self.state_string())
             elif self.net.at_ready() and verbose > 0: print(self.state_string())
 
-            if self.net.at_start(): break
-            if self.at_exit(): break
+            if self.net.at_start(): return True
+            if self.at_exit(): return True
 
         # indicate whether step failed
-        return t == max_ticks
+        return False
 
 def make_default_nvm(register_names, layer_shape=None, orthogonal=False, shapes={}, tokens=[]):
     if layer_shape is None: layer_shape = (16,16) if orthogonal else (32,32)
