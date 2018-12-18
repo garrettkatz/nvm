@@ -110,20 +110,23 @@ if __name__ == "__main__":
 
             # for num_items in range(1,27):
             for num_items in [26]:
-            
+                errs[orth][scale_factor][num_items] = {}
+
                 for list_length in range(10,51,10):
+                    errs[orth][scale_factor][num_items][list_length] = []
                 
                     args = (num_items, list_length, orth, scale_factor)
                     
                     for r in range(reps):
 
                         t, matches = run_trial(*args, verbose=False)
-                        errs[orth][scale_factor][list_length] = (args, t, matches != list_length+1)
+                        errs[orth][scale_factor][num_items][list_length].append(
+                            (args, t, matches, matches != list_length+1))
                         
                         print("orth=%s, scale=%f, %d items, rep %d, %d steps, length %d =? %d matches"%(
                             orth, scale_factor, num_items, r, t, list_length+1, matches))
                         if matches != list_length+1: print("ERR!!!")
         
-    with open('lp.pkl','w') as f: pk.dump(errs, f)
+                        with open('lp.pkl','w') as f: pk.dump(errs, f)
     # with open('lp.pkl','r') as f: errs = pk.load(f)
 
