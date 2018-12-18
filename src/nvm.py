@@ -70,6 +70,9 @@ class NVM:
             if self.net.at_start(): break
             if self.at_exit(): break
 
+        # indicate whether step failed
+        return t == max_ticks
+
 def make_default_nvm(register_names, layer_shape=None, orthogonal=False, shapes={}, tokens=[]):
     if layer_shape is None: layer_shape = (16,16) if orthogonal else (32,32)
     pad = 0.0001
