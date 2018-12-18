@@ -50,7 +50,7 @@ def run_trial(num_items, list_length, orth, scale_factor, verbose=False):
         "rloc": "adr"
     })
 
-    for t in range(10000):
+    for t in range(700): # length 50 requires 698 steps
     
         # input
         if nvm.decode_layer("rinp") == "sep":
@@ -91,32 +91,36 @@ def run_trial(num_items, list_length, orth, scale_factor, verbose=False):
 if __name__ == "__main__":
 
     scaling = {
-        # False: np.array([.75, 1., 1.25, 1.5]), # not orth
+        False: np.array([.75, 1., 1.25, 1.5]), # not orth
         True: np.array([.5, 1., 2.]), #  orth
         # False: np.array([.5, 1.5]), # not orth
         # True: np.array([.5, 1]), #  orth
-        False: np.array([1.5]), # not orth
+        # False: np.array([1.5]), # not orth
         # True: np.array([1]), #  orth
     }
 
+    reps = 30
     errs = {}
-    for orth in [False, True]:
+    for orth in [True]:
         errs[orth] = {}
         for scale_factor in scaling[orth]:
             errs[orth][scale_factor] = {}
 
             # for num_items in range(1,27):
-            for num_items in [7]:
+            for num_items in [26]:
             
-                for list_length in range(2,10):
+                for list_length in range(10,51,10):
                 
                     args = (num_items, list_length, orth, scale_factor)
-                    t, matches = run_trial(*args, verbose=False)
-                    errs[orth][scale_factor][list_length] = (args, t, matches != list_length+1)
                     
-                    print("orth=%s, scale=%f, %d items, %d steps, length %d =? %d matches"%(
-                        orth, scale_factor, num_items, t, list_length+1, matches))
-                    if matches != list_length+1: print("ERR!!!")
+                    for r in range(reps):
+
+                        t, matches = run_trial(*args, verbose=False)
+                        errs[orth][scale_factor][list_length] = (args, t, matches != list_length+1)
+                        
+                        print("orth=%s, scale=%f, %d items, rep %d, %d steps, length %d =? %d matches"%(
+                            orth, scale_factor, num_items, r, t, list_length+1, matches))
+                        if matches != list_length+1: print("ERR!!!")
         
     with open('lp.pkl','w') as f: pk.dump(errs, f)
     # with open('lp.pkl','r') as f: errs = pk.load(f)
