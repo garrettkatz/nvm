@@ -101,7 +101,7 @@ if __name__ == "__main__":
 
     reps = 30
     errs = {}
-    for orth in [True]:
+    for orth in [False, True]:
         errs[orth] = {}
         for scale_factor in scaling[orth]:
             errs[orth][scale_factor] = {}
