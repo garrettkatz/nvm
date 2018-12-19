@@ -1,5 +1,6 @@
 import numpy as np
 import pickle as pk
+import matplotlib.pyplot as pt
 from nvm import make_scaled_nvm
 
 list_programs = {"echo":"""
@@ -50,7 +51,7 @@ def run_trial(num_items, list_length, orth, scale_factor, verbose=False):
         "rloc": "adr"
     })
 
-    for t in range(700): # length 50 requires 698 steps
+    for t in range(700): # length 50 requires >= 698 steps
     
         # input
         if nvm.decode_layer("rinp") == "sep":
@@ -89,44 +90,107 @@ def run_trial(num_items, list_length, orth, scale_factor, verbose=False):
     
     return t, matches
 
+def plot_results(errs):
+    
+    # plot pattern counts against the lowest scale factors with perfect (or near) success rate
+    # need to get all success rates for all scale factors at each pattern count, then aggregate
+    
+    pt.figure(figsize=(9,4))
+    for orth in errs:
+
+        data = {}
+        for scale_factor in errs[orth]:
+            data[scale_factor] = []
+
+            for num_items in errs[orth][scale_factor]:
+                for list_length in errs[orth][scale_factor][num_items]:
+                    if list_length == 50: continue
+                    reps = len(errs[orth][scale_factor][num_items])
+                    successes = 0
+                    for r in range(reps):                    
+                        _, t, matches, failed = errs[orth][scale_factor][num_items][list_length][r]
+                        if not failed: successes += 1
+                    success_rate = float(successes)/reps
+                    data[scale_factor].append((list_length, success_rate))
+
+        o = int(orth)
+        pt.subplot(1,2,1+o)
+
+        leg = []
+        for scale_factor in errs[orth]:
+            marker = 'o+d^'[errs[orth].keys().index(scale_factor)]
+            c = 0 #1. - scale_factor/max(errs[orth].keys())
+            x,y = zip(*data[scale_factor])
+            idx = np.argsort(x)
+            print(idx)
+            x, y = np.array(x)[idx], np.array(y)[idx]
+            pt.plot(x,y, marker=marker, color=3*[c], mfc='none', linestyle='-')
+            leg.append("Scale = %.2f"%scale_factor)
+        pt.legend(leg)
+        pt.xlabel("List length")
+        pt.ylabel("Success rate")
+        pt.ylim([-.1,1.1])
+        pt.title("%s trials"%["Bernoulli","Orthogonal"][o])
+
+    pt.tight_layout()
+    pt.show()
+
 
 if __name__ == "__main__":
 
     scaling = {
         False: np.array([.75, 1., 1.25, 1.5]), # not orth
-        True: np.array([.5, 1., 2.]), #  orth
+        True: np.array([.75, 1., 1.25, 1.5]), #  orth
         # False: np.array([.5, 1.5]), # not orth
         # True: np.array([.5, 1]), #  orth
         # False: np.array([1.5]), # not orth
         # True: np.array([1]), #  orth
     }
 
-    reps = 30
-    errs = {}
-    for orth in [False, True]:
-        errs[orth] = {}
-        for scale_factor in scaling[orth]:
-            errs[orth][scale_factor] = {}
-
-            # for num_items in range(1,27):
-            for num_items in [26]:
-                errs[orth][scale_factor][num_items] = {}
-
-                for list_length in range(10,51,10):
-                    errs[orth][scale_factor][num_items][list_length] = []
-                
-                    args = (num_items, list_length, orth, scale_factor)
+    reps = 10
+    
+    if True: # Run trials
+        errs = {}
+        for orth in [False, True]:
+            errs[orth] = {}
+            for scale_factor in scaling[orth]:
+                errs[orth][scale_factor] = {}
+    
+                # for num_items in range(1,27):
+                for num_items in [26]:
+                    errs[orth][scale_factor][num_items] = {}
+    
+                    for list_length in range(10,41,5):
+                        errs[orth][scale_factor][num_items][list_length] = []
                     
-                    for r in range(reps):
-
-                        t, matches = run_trial(*args, verbose=False)
-                        errs[orth][scale_factor][num_items][list_length].append(
-                            (args, t, matches, matches != list_length+1))
+                        args = (num_items, list_length, orth, scale_factor)
                         
-                        print("orth=%s, scale=%f, %d items, rep %d, %d steps, length %d =? %d matches"%(
-                            orth, scale_factor, num_items, r, t, list_length+1, matches))
-                        if matches != list_length+1: print("ERR!!!")
-        
-                        with open('lp.pkl','w') as f: pk.dump(errs, f)
-    # with open('lp.pkl','r') as f: errs = pk.load(f)
+                        for r in range(reps):
+    
+                            t, matches = run_trial(*args, verbose=False)
+                            errs[orth][scale_factor][num_items][list_length].append(
+                                (args, t, matches, matches != list_length+1))
+                            
+                            print("orth=%s, scale=%f, %d items, rep %d, %d steps, length %d =? %d matches"%(
+                                orth, scale_factor, num_items, r, t, list_length+1, matches))
+                            if matches != list_length+1: print("ERR!!!")
+            
+                            with open('lp.pkl','w') as f: pk.dump(errs, f)
+    # analyze results
+    if False:
 
+        with open('lp.pkl','r') as f: errs = pk.load(f)
+
+        for orth in errs:
+            for scale_factor in errs[orth]:
+                for num_items in errs[orth][scale_factor]:
+                    for list_length in errs[orth][scale_factor][num_items]:
+                        for r in range(reps):
+    
+                            _, t, matches, failed = errs[orth][scale_factor][num_items][list_length][r]
+                            
+                            print("orth=%s, scale=%f, %d items, rep %d, %d steps, length %d =? %d matches"%(
+                                orth, scale_factor, num_items, r, t, list_length+1, matches) + \
+                                (" ERR!!!" if failed else ""))
+
+        plot_results(errs)
