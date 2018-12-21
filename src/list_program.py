@@ -95,7 +95,7 @@ def plot_results(errs):
     # plot pattern counts against the lowest scale factors with perfect (or near) success rate
     # need to get all success rates for all scale factors at each pattern count, then aggregate
     
-    pt.figure(figsize=(9,4))
+    pt.figure(figsize=(9,3))
     for orth in errs:
 
         data = {}
@@ -107,11 +107,14 @@ def plot_results(errs):
                     if list_length == 50: continue
                     reps = len(errs[orth][scale_factor][num_items])
                     successes = 0
+                    match_rates = []
                     for r in range(reps):                    
                         _, t, matches, failed = errs[orth][scale_factor][num_items][list_length][r]
                         if not failed: successes += 1
+                        match_rates.append(float(matches)/(list_length+1))
                     success_rate = float(successes)/reps
-                    data[scale_factor].append((list_length, success_rate))
+                    # data[scale_factor].append((list_length, success_rate))
+                    data[scale_factor].append((list_length, np.mean(match_rates)))
 
         o = int(orth)
         pt.subplot(1,2,1+o)
@@ -128,7 +131,9 @@ def plot_results(errs):
             leg.append("Scale = %.2f"%scale_factor)
         pt.legend(leg)
         pt.xlabel("List length")
-        pt.ylabel("Success rate")
+        if o == 0:
+            # pt.ylabel("Success rate")
+            pt.ylabel("Average match rate")
         pt.ylim([-.1,1.1])
         pt.title("%s trials"%["Bernoulli","Orthogonal"][o])
 
@@ -147,9 +152,9 @@ if __name__ == "__main__":
         # True: np.array([1]), #  orth
     }
 
-    reps = 10
+    reps = 30
     
-    if True: # Run trials
+    if False: # Run trials
         errs = {}
         for orth in [False, True]:
             errs[orth] = {}
@@ -177,7 +182,7 @@ if __name__ == "__main__":
             
                             with open('lp.pkl','w') as f: pk.dump(errs, f)
     # analyze results
-    if False:
+    if True:
 
         with open('lp.pkl','r') as f: errs = pk.load(f)
 
