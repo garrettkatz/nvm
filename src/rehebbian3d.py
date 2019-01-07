@@ -26,7 +26,7 @@ X *= r
 g = N * r**2
 
 points = set([(0.,0.,0.,-1,1)])
-for expand in range(7):
+for expand in range(5):
     print("expansion %d: %d points"%(expand, len(points)))
 
     point_array = np.array(list(points)).T[:N,:]
@@ -58,15 +58,23 @@ for c in range(X.shape[1]):
 point_array = np.array(list(points)).T
 points, point_groups, point_signs = point_array[:N,:], point_array[N,:], point_array[N+1,:]
 # for c in range(X.shape[1]):
-for c in [0]:
+for c in [0,1]:
     for pm in [1]:
     # for pm in [-1,1]:
 
         points_c = points[:,(point_groups==c) & (point_signs==pm)]
         print(np.fabs(X[:,[c]].T.dot(points_c) - pm*r_).max())
     
-        # ax.plot(*points_c, linestyle='none', color='rbg'[c], marker='.')
-        ax.plot(*points_c, linestyle='none', color='k', marker='.')
+        ax.plot(*points_c, linestyle='none', color='rbg'[c], marker='.')
+        # ax.plot(*points_c, linestyle='none', color='k', marker='.')
+
+a = r_ / X[:,[1,2,3,1]].T.dot(X[:,[0]])
+w = X[:,[1,2,3,1]] * a.T
+ax.plot(*w, linestyle='-', color='r')
+
+a = r_ / X[:,[0,2,3,0]].T.dot(X[:,[1]])
+w = X[:,[0,2,3,0]] * a.T
+ax.plot(*w, linestyle='-', color='b')
 
 ax.set_aspect("equal")
 # plt.axis("equal")
