@@ -104,7 +104,8 @@ if __name__ == "__main__":
             stds = trial_means.std(axis=0)
     
             trial_norms = np.array(trial_norms)
-            norms = trial_norms.mean(axis=0)
+            # norms = trial_norms.mean(axis=0)
+            norms = trial_norms.max(axis=0)
 
             pt.sca(ax[0]) #pt.subplot(2,1,1)
             # print(means[-10:])
