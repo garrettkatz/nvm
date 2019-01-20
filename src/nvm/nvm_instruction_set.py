@@ -25,8 +25,8 @@ def flash_instruction_set(nvmnet, verbose=False):
     #         print("|%s|=%d"%(name, nvmnet.layers[name].size))
     
     gate_map, layers, devices = nvmnet.gate_map, nvmnet.layers, nvmnet.devices
-    gate_output, gate_hidden, gate_interrupt = layers['go'], layers['gh'], layers['gi']
-    gs = GateSequencer(gate_map, gate_output, gate_hidden, layers, gate_interrupt)
+    gate_output, gate_hidden = layers['go'], layers['gh']
+    gs = GateSequencer(gate_map, gate_output, gate_hidden, layers)
 
     ### Start executing new instruction
     
@@ -35,47 +35,12 @@ def flash_instruction_set(nvmnet, verbose=False):
     gate_output.coder.encode('start', g)
     g_start, h_start = g.copy(), h.copy()
 
-    # Check for interrupt signal
-    g, h = gs.add_transit(ungate = [('gh','gi','u')],
-        old_gates = g, old_hidden=h)
-    gate_output.coder.encode('int', g)
-    gate_hidden.coder.encode('int', h)
-    g_int, h_int = g.copy(), h.copy()
-    
-    # Hang on pause interrupt
-    g, h = gs.add_transit(
-        ungate = [('gh','gi','u'),("di","di","u")],
-        old_gates = g_int, old_hidden = h_int, gi = 'pause')
-    gate_output.coder.encode('pause', g)
-    gate_hidden.coder.encode('pause', h)
-    g_pause, h_pause = g.copy(), h.copy()
-
-    di_gates = gs.make_gate_output([("di","di","u")])
-    gate_output.coder.encode('di', di_gates)
-
-    gs.add_transit(
-        new_gates = g_pause, new_hidden = h_pause,
-        intermediate_gates = di_gates,
-        old_gates = g_pause, old_hidden = h_pause, gi = 'pause')
-
-    _, h = gs.add_transit(
-        new_gates = g_pause,
-        intermediate_gates = di_gates,
-        old_gates = g_pause, old_hidden = h_pause, gi = 'quiet')
-    gate_hidden.coder.encode('resume', h)
-    h_resume = h.copy()
-
     g, h = gs.add_transit(
         ungate = gprog(),
-        old_gates = g_pause, old_hidden = h_resume, gi = 'quiet')
+        old_gates = g_start, old_hidden = h_start)
     gate_output.coder.encode('load', g)
     gate_hidden.coder.encode('load', h)
     g_load, h_load = g.copy(), h.copy()
-    
-    # If no interrupt, load operands and step instruction pointer
-    gs.add_transit(
-        new_gates = g_load, new_hidden = h_load,
-        old_gates = g_int, old_hidden=h_int, gi = 'quiet')
     
     # Let opcode bias the gate layer
     g, h = gs.add_transit(ungate = [('gh','opc','u')],

@@ -80,19 +80,12 @@ class NVMNet:
 
         # set up gates
         NL = len(layers) + 2 # +2 for gate out/hidden
-        # NG = NL + 3*NL**2 # number of gates (d + u + l + f)
         NG = NL + 2*NL**2 # number of gates (d + u + l)
         NH = shapes['gh'][0]*shapes['gh'][1] # number of hidden units
-        NI = shapes['gi'][0]*shapes['gi'][1] # number of interrupt units
-        ND = 1 # number of dummy units
         acto = heaviside_activator(NG)
         acth = activator(pad,NH)
-        acti = heaviside_activator(NI)
-        actd = activator(pad,ND)
         layers['go'] = Layer('go', (1,NG), acto, Coder(acto))
         layers['gh'] = Layer('gh', shapes['gh'], acth, Coder(acth))
-        layers['gi'] = Layer('gi', shapes['gi'], acti, Coder(acti))
-        layers['di'] = Layer('di', (1,ND), actd, Coder(actd)) # dummy layer for persistent interrupt signal
         self.gate_map = make_nvm_gate_map(layers.keys())        
 
         # set up gain
