@@ -1,3 +1,5 @@
+register_names = ["r0", "r1"]
+
 programs = {
 "myfirstprogram":"""
 
@@ -21,7 +23,7 @@ and.f:  mov r0 false  # a conjunct was false, set r0 to false
 from nvm.nvm import make_scaled_nvm
 
 my_nvm = make_scaled_nvm(
-    register_names = ["r0", "r1"],
+    register_names = register_names,
     programs = programs,
     orthogonal=True)
 
@@ -34,7 +36,7 @@ print(my_nvm.net.activity["r0"].T)
 v = my_nvm.net.activity["r0"].T
 print(my_nvm.net.layers["r0"].coder.decode(v))
 
-print(my_nvm.decode_state(layer_names=["r0","r1"]))
+print(my_nvm.decode_state(layer_names=register_names))
 
 import itertools as it
 
@@ -43,4 +45,4 @@ for t in it.count():
     if my_nvm.at_exit(): break
 
 print(t)
-print(my_nvm.decode_state(layer_names=["r0","r1"]))
+print(my_nvm.decode_state(layer_names=register_names))

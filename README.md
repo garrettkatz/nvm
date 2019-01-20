@@ -16,3 +16,12 @@
 2. Add the `src` sub-directory to your [PYTHONPATH](https://docs.python.org/2/using/cmdline.html#envvar-PYTHONPATH).
 
 ## Basic Usage
+
+First, decide on the registers you want for your NVM instance.  For example:
+
+```
+>>> register_names = ["r0", "r1"]
+```
+
+Begin by writing programs in NVM assembly.  Each program should be given a name and stored in a dictionary with its name as the key.  For example, the following program implements and invokes a sub-routine for logical and, using 
+
