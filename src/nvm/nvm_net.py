@@ -7,7 +7,6 @@ from learning_rules import *
 from nvm_instruction_set import opcodes, flash_instruction_set
 from nvm_assembler import assemble
 from orthogonal_patterns import nearest_power_of_2
-# from nvm_linker import link
 
 def update_add(accumulator, summand):
     for k, v in summand.items():

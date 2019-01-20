@@ -106,6 +106,11 @@ def make_scaled_nvm(register_names, programs, orthogonal=False, capacity_factor=
         if orthogonal else scale_factor * num_addresses/capacity_factor)
     	shapes['m'] = (m_size,1)
 
+    # avoid non-deterministic transits with very small layer_size
+    for layer_name in ["opc", "op1", "op2"]:
+        if layer_name not in shapes:
+            shapes[layer_name] = (max(layer_size, 16), 1)
+
     pad = 0.0001
     activator, learning_rule = tanh_activator, rehebbian
     # activator, learning_rule = logistic_activator, rehebbian

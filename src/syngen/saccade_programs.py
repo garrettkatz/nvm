@@ -7,7 +7,6 @@ from activator import *
 from learning_rules import *
 from nvm_instruction_set import flash_instruction_set
 from nvm_assembler import assemble
-# from nvm_linker import link
 from nvm_net import NVMNet
 
 aas_program = {"aas":"""

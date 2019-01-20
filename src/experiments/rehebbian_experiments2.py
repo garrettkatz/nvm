@@ -21,7 +21,7 @@ def run_trial(N, P, T, rho, verbose = False):
     # sample[:P] = np.arange(P)
     
     X = np.random.choice([-1,1], (N,P))[:, sample] * rho
-    Y = np.random.choice([-1,1], (N,T)) * rho
+    Y = np.random.choice([-1,1], (N,T)) * rho # g(Y) applied separately
     
     W = np.zeros((N,N))
     means = []
