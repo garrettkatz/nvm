@@ -1,61 +1,33 @@
-next steps:
-    2.0:
-        ipop
-        no decay (auto-assoc) or forget (within learn)
-        cts gates, slower smoother hidden
-        single address space with instruction, stack, heap pointers
-        orthogonal encodings before assembly
-        namespaced labels, but program name is not ip
-    instruction pitfalls:
-        unlinked tokens in nvm_linker
-        missing internal connectivity in nvm_net
-        uninitialized internal layers in nvm_net
-    raise more during assembly
-        sub to label that doesn't exist
-    biorealism for new unlearning:
-        read schiess2016biobackprop and refs (backprop within dendritic tree but not across synapses)
-    auto-associative devices for better token stability
-        and remove decay gate, instead letting auto-update stay on usually
-    overall diffcounts
-    make layer/activator-specific:
-        omega and beta for gain
-    more biorealistic gating
-        multiplicative gating is possible: mehaffy2005mult, salinas2001modulation, shepherd1985spines, koch1983nonlin
-        dendritic vs somatic inhibition is multiplicative vs additive
-        although, to be fair, dendritic inhibition was apical (right before entering soma, not at subsets of dendritic tree leaves)
-        modulation is "divisive": higher inhibition *divides* the firing rate.  high gate output should = high inhibition.
-        also intertwined with dendritic backpropagation.
-    cts gate output
-    dynamics move through htn finite state machine?
-    talk to greg about:
-        only one input module per layer?
-        in input callback I need to explicitly set 0 after first tick
-        for tc I needed to overcompensate to cancel out previous activity
-    smarter linking (only what's necessary)
-    namespaces for clobbered human-readable labels
-    different coding semantics/errors when pattern provided and token already used?
-    check Z that randomly interpolates X,Y and multiple intermediate Z steps
-    distinct excitatory/inhibitory populations
-    outgoing connections are all to excitatory or all to inhibitory
-    axons can excite either excitatory or inhibitory neurons in other regions
-    axons can only inhibit within region
-    expose gating, user-oriented library for building instructions
-    base gate sequencer?
-    study more carefully:
-        increasing hidden gate layer improves stability?
-        smaller pad improves stability?
-
-empirical experiments:
-    how size of N_HGATES (and N_LAYER?) affects stability in long loops
-    noise injection
-
-rank problems with to,from:
-    tried a little 2x2 on paper: to1, to2, fr1, fr2.
-    [h  h  h  h
-     t1 t1 t2 t2   * [-1 1 1 -1].T = [0 0 0].T
-     f1 f2 f1 f2]
-    so actually low rank.
-lork->lork (matrank_scratch.py) beats problem for load, but set+load simultaneous has problem.
-
+make sub-routine call save register values on stack too? needs separate result register no overwritten on return pop
+two assemblies could double-down program-independent linkages (e.g. reg<->reg)
+empirically test attractor basins in learning rule
+more encapsulated callback API for IO
+bring back hypervisor + visualizer (raster and add new shape-based viewer)
+cts gates, slower smoother hidden
+memory management+defrag
+refactor devices to registers
+asymmetric time learning, and seq/lnk commands for programming learning within/between layers
+instruction pitfalls:
+    missing internal connectivity in nvm_net
+    uninitialized internal layers in nvm_net
+namespaced labels error
+raise more during assembly
+    sub to label that doesn't exist
+normal learning in co, and single-corner sensitivity in gh (linprog?)
+overall diffcounts
+more biorealistic gating
+    multiplicative gating is possible: mehaffy2005mult, salinas2001modulation, shepherd1985spines, koch1983nonlin
+    dendritic vs somatic inhibition is multiplicative vs additive
+    although, to be fair, dendritic inhibition was apical (right before entering soma, not at subsets of dendritic tree leaves)
+    modulation is "divisive": higher inhibition *divides* the firing rate.  high gate output should = high inhibition.
+    also intertwined with dendritic backpropagation.
+namespaces for clobbered human-readable labels
+different coding semantics/errors when pattern provided and token already used?
+check Z that randomly interpolates X,Y and multiple intermediate Z steps
+distinct excitatory/inhibitory populations
+outgoing connections are all to excitatory or all to inhibitory
+axons can excite either excitatory or inhibitory neurons in other regions
+axons can only inhibit within region
+expose gating, user-oriented library for building instructions
 competition idea: delta w_ij proportional to sum_t x_i^t W_ij^t x_j^t over recent t.  If this number is large, x_j is in agreement with others about the affect on x_i.  If it is small, x_j is in disagreement, competing.  So "more important", i.e. it's absence could be missed in the borderline cases.  however, don't make *too* large, or else x_j could overrule others when it shouldn't.
-systematic comparison of learn rules, local and global
+

@@ -21,6 +21,7 @@ class GateSequencer(Sequencer, object):
         pattern = self.gate_output.activator.off * np.ones((self.gate_output.size,1))
         gate_keys = [
             (self.gate_hidden.name, self.gate_hidden.name, 'u'),
+            (self.gate_hidden.name, self.gate_hidden.name, 'd'),
             (self.gate_output.name, self.gate_hidden.name, 'u'),
             (self.gate_output.name, self.gate_output.name, 'd')]
 
@@ -88,7 +89,7 @@ class GateSequencer(Sequencer, object):
             g_off, hidden = self.add_transit(old_hidden=hidden)
         return g_off, hidden
 
-    def flash(self, verbose=True):
+    def flash(self, verbose=False):
         
         # Flash sequencer
         weights, biases, XYZ, residual = super(GateSequencer, self).flash(verbose)

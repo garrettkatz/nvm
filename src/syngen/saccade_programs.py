@@ -6,7 +6,6 @@ from gate_map import make_nvm_gate_map
 from activator import *
 from learning_rules import *
 from nvm_assembler import assemble
-from nvm_linker import link
 from nvm_net import NVMNet
 
 # New version using pef
@@ -95,7 +94,8 @@ def make_saccade_nvm(activator_label):
         activator = logistic_activator
     if activator_label == "tanh":
         activator = tanh_activator
-    learning_rule = hebbian
+    # learning_rule = hebbian
+    learning_rule = rehebbian
 
     # make network
     layer_shape = (32,32)
@@ -117,7 +117,7 @@ def make_saccade_nvm(activator_label):
     for name, program in aas_program.items():
     #for name, program in aps_program.items():
         nvmnet.assemble(program, name, verbose=1)
-    nvmnet.link(verbose=2)
+    # nvmnet.link(verbose=2)
 
     # redo pef/fef and pef/ip linkages with special learning rule
     # pef -> fef

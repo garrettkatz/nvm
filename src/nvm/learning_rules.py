@@ -17,6 +17,22 @@ def hebbian(w, b, X, Y, actx, acty):
     db = acty.g(Y).dot(- alpha * beta * X.T + beta**2 * one.T).dot(one[:,:1]) / N
     return dw, db
 
+def rehebbian(w, b, X, Y, actx, acty):
+
+    N = X.shape[0]
+    c = (actx.on + actx.off)/2. # center
+    r = (actx.on - actx.off)/2. # radius
+
+    w0, b0 = w, b
+    for p in range(Y.shape[1]):
+        x, y = X[:,[p]], Y[:,[p]]
+        dw = (acty.g(y) - (w.dot(x)+b)) * (x - c).T / (N*r**2)
+        db = - dw.sum(axis=1)[:,np.newaxis] * c
+        w, b = w + dw, b + db
+
+    dw, db = w - w0, b - b0
+    return dw, db
+
 def dipole(w, b, X, Y, actx, acty):
     # only works for single x, y
     
@@ -42,17 +58,23 @@ def dipole(w, b, X, Y, actx, acty):
 
 def flash_mem(w, b, X, Y, actx, acty, learning_rule, verbose=False):
     
-    dw, db = learning_rule(w, b, X, Y, actx, acty)
-    w, b = w + dw, b + db
+    if X.shape[1] > 0:
 
-    _Y = acty.f(w.dot(X) + b)
-    diff_count = (np.ones(Y.shape) - acty.e(Y, _Y)).sum()
+        dw, db = learning_rule(w, b, X, Y, actx, acty)
+        w, b = w + dw, b + db
+    
+        _Y = acty.f(w.dot(X) + b)
+        diff_count = (np.ones(Y.shape) - acty.e(Y, _Y)).sum()
 
-    # if verbose and diff_count > 0:
-    if verbose:
-        print("Flash residual max: %f"%np.fabs(Y - _Y).max())
-        print("Flash residual mad: %f"%np.fabs(Y - _Y).mean())
-        print("Flash diff count: %d"%(diff_count))
+        # if verbose and diff_count > 0:
+        if verbose:
+            print("Flash residual max: %f"%np.fabs(Y - _Y).max())
+            print("Flash residual mad: %f"%np.fabs(Y - _Y).mean())
+            print("Flash diff count: %d"%(diff_count))
+
+    else:
+
+        diff_count = 0
 
     return w, b, diff_count
 

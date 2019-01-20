@@ -4,9 +4,9 @@ from coder import Coder
 from gate_map import make_nvm_gate_map
 from activator import *
 from learning_rules import *
-from nvm_instruction_set import sequence_instruction_set
+from nvm_instruction_set import opcodes, flash_instruction_set
 from nvm_assembler import assemble
-from nvm_linker import link
+from orthogonal_patterns import nearest_power_of_2
 
 def update_add(accumulator, summand):
     for k, v in summand.items():
@@ -14,15 +14,15 @@ def update_add(accumulator, summand):
             accumulator[k] += v
         else: accumulator[k] = v
 
-def address_space(forward_layer, backward_layer):
+def address_space(forward_layer, backward_layer, orthogonal=False):
     # set up memory address space
     layers = {'f': forward_layer, 'b': backward_layer}
     N = layers['f'].size
     A = {}
     for d in ['f','b']:
-        A[d] = np.concatenate(
-            [layers[d].coder.encode(str(a)) for a in range(N)],
-            axis=1)
+        A[d] = layers[d].encode_tokens(
+            tokens = [str(a) for a in range(N)],
+            orthogonal=orthogonal)
     weights, biases = {}, {}
     for d_to in ['f','b']:
         for d_from in ['f','b']:
@@ -30,34 +30,32 @@ def address_space(forward_layer, backward_layer):
             Y, X = A[d_to], A[d_from]
             if d_from == 'f': X = np.roll(X, 1, axis=1)
             if d_from == 'b': Y = np.roll(Y, 1, axis=1)
-            print("%s residuals:"%str(key))
+            # print("%s residuals:"%str(key))
             weights[key], biases[key], _ = flash_mem(
                 np.zeros((N, N)), np.zeros((N, 1)),
                 X, Y,
                 layers[d_from].activator,
                 layers[d_to].activator,
-                linear_solve, verbose=True)
+                linear_solve, verbose=False)
     return weights, biases
 
 class NVMNet:
     
-    def __init__(self, layer_shape, pad, activator, learning_rule, devices, shapes={}):
+    def __init__(self, layer_shape, pad, activator, learning_rule, devices, shapes={}, tokens=[], orthogonal=False):
         # layer_shape is default, shapes[layer_name] are overrides
-        if 'gh' not in shapes: shapes['gh'] = (32,32)
-        if 'gi' not in shapes: shapes['gi'] = (8,8)
+        if 'gh' not in shapes: shapes['gh'] = (32,16)
         if 'm' not in shapes: shapes['m'] = (16,16)
         if 's' not in shapes: shapes['s'] = (8,8)
-        if 'c' not in shapes: shapes['c'] = (32,32)
 
-        # set up parameters
-        self.layer_size = layer_shape[0]*layer_shape[1]
+        # Save padding
         self.pad = pad
 
         # set up instruction layers
-        act = activator(pad, self.layer_size)
-        layer_names = ['ip','opc','op1','op2']
-        layers = {name: Layer(name, shapes.get(name, layer_shape), act, Coder(act))
-            for name in layer_names}
+        layers = {}
+        for name in ['ip','opc','op1','op2']:
+            shape = shapes.get(name, layer_shape)
+            act = activator(pad, shape[0]*shape[1])
+            layers[name] = Layer(name, shape, act, Coder(act))
 
         # set up memory and stack layers
         NM, NS = shapes['m'][0]*shapes['m'][1], shapes['s'][0]*shapes['s'][1]
@@ -66,9 +64,10 @@ class NVMNet:
         for s in ['sf','sb']: layers[s] = Layer(s, shapes['s'], acts, Coder(acts))
 
         # set up comparison layers
-        NC = shapes['c'][0]*shapes['c'][1]
+        c_shape = shapes.get('c', layer_shape)
+        NC = c_shape[0]*c_shape[1]
         actc = activator(pad, NC)
-        for c in ['ci','co']: layers[c] = Layer(c, shapes['c'], actc, Coder(actc))
+        for c in ['ci','co']: layers[c] = Layer(c, c_shape, actc, Coder(actc))
         co_true = layers['co'].coder.encode('true')
         layers['co'].coder.encode('false', np.array([
             [actc.on if tf == actc.off else actc.off]
@@ -79,12 +78,10 @@ class NVMNet:
         self.devices = devices
         self.layers = layers
 
-        # set up gain
-        self.w_gain, self.b_gain = act.gain()
-
         # set up gates
-        NL = len(layers) + 4 # +4 for gate out/hidden/interrupt/dummy
-        NG = NL + 3*NL**2 # number of gates (d + u + l + f)
+        NL = len(layers) + 2 # +2 for gate out/hidden
+        # NG = NL + 3*NL**2 # number of gates (d + u + l + f)
+        NG = NL + 2*NL**2 # number of gates (d + u + l)
         NH = shapes['gh'][0]*shapes['gh'][1] # number of hidden units
         NI = shapes['gi'][0]*shapes['gi'][1] # number of interrupt units
         ND = 1 # number of dummy units
@@ -98,24 +95,25 @@ class NVMNet:
         layers['di'] = Layer('di', (1,ND), actd, Coder(actd)) # dummy layer for persistent interrupt signal
         self.gate_map = make_nvm_gate_map(layers.keys())        
 
-        # Encode interrupts
-        layers['gi'].coder.encode('quiet',
-            # layers['gi'].activator.off * np.ones((layers['gi'].size,1)))
-            0. * np.ones((layers['gi'].size,1)))
-        layers['gi'].coder.encode('pause',
-            # layers['gi'].activator.on * np.ones((layers['gi'].size,1)))
-            1. * np.ones((layers['gi'].size,1)))
-        layers['di'].coder.encode('quiet',
-            0. * np.ones((layers['di'].size,1)))
-        layers['di'].coder.encode('pause',
-            1. * np.ones((layers['di'].size,1)))
+        # set up gain
+        self.w_gain, self.b_gain = {}, {}
+        for layer_name, layer in layers.items():
+            self.w_gain[layer_name], self.b_gain[layer_name] = layer.activator.gain()
+
+        # encode tokens
+        self.orthogonal = orthogonal
+        self.layers["opc"].encode_tokens(opcodes, orthogonal=orthogonal)
+        all_tokens = list(set(tokens) | set(self.devices.keys() + ["null"]))
+        for name in self.devices.keys() + ["op1","op2","ci"]:
+            self.layers[name].encode_tokens(all_tokens, orthogonal=orthogonal)
 
         # set up connection matrices
-        gs = sequence_instruction_set(self)
-        self.weights, self.biases, _ = gs.flash()
+        self.weights, self.biases = flash_instruction_set(self, verbose=False)
+
         for ms in 'ms':
             ms_weights, ms_biases = address_space(
-                layers[ms+'f'], layers[ms+'b'])
+                layers[ms+'f'], layers[ms+'b'],
+                orthogonal=orthogonal)
             self.weights.update(ms_weights)
             self.biases.update(ms_biases)
 
@@ -123,6 +121,8 @@ class NVMNet:
         connect_pairs = \
             [(device,'mf') for device in self.devices] + \
             [('mf',device) for device in self.devices] + \
+            [(device,'mb') for device in self.devices] + \
+            [('mb',device) for device in self.devices] + \
             [('ip','sf')] + \
             [('co','ci')]
         for (to_name, from_name) in connect_pairs:
@@ -130,21 +130,6 @@ class NVMNet:
             N_from = self.layers[from_name].size
             self.weights[(to_name, from_name)] = np.zeros((N_to, N_from))
             self.biases[(to_name, from_name)] = np.zeros((N_to, 1))
-
-        # initialize layer states
-        self.activity = {
-            name: layer.activator.off * np.ones((layer.size,1))
-            for name, layer in self.layers.items()}
-        self.activity['go'] = self.layers['go'].coder.encode('start')
-        self.activity['gh'] = self.layers['gh'].coder.encode('start')
-        self.activity['gi'] = self.layers['gi'].coder.encode('quiet')
-        self.activity['di'] = self.layers['di'].coder.encode('quiet')
-        for ms in 'ms':
-            self.activity[ms+'f'] = self.layers[ms+'f'].coder.encode('0')
-            self.activity[ms+'b'] = self.layers[ms+'b'].coder.encode('0')
-
-        # initialize constants
-        self.constants = ["null"] #"true", "false"]
 
         # initialize learning
         self.learning_rules = {
@@ -166,27 +151,65 @@ class NVMNet:
                 open_gates.append(k)
         return open_gates
 
-    def assemble(self, program, name, verbose=1):
+    def assemble(self, programs, verbose=0, orthogonal=False, other_tokens=[]):
         weights, biases, diff_count = assemble(self,
-            program, name, verbose=(verbose > 1))
+            programs, verbose=(verbose > 1),
+            orthogonal=orthogonal, other_tokens=other_tokens)
         if verbose > 0: print("assembler diff count = %d"%diff_count)
         update_add(self.weights, weights)
         update_add(self.biases, biases)
 
-    def link(self, verbose=1, tokens=[], orthogonal=False):
-        weights, biases, diff_count = link(
-            self, verbose=(verbose > 1), tokens=tokens, orthogonal=orthogonal)
-        if verbose > 0: print("linker diff count = %d"%diff_count)
-        update_add(self.weights, weights)
-        update_add(self.biases, biases)
-        return diff_count
-
     def load(self, program_name, activity):
-        # set program pointer
-        self.activity["ip"] = self.layers["ip"].coder.encode(program_name)
-        # set initial activities
+        # default all layers to off state
+        self.activity = {
+            name: layer.activator.off * np.ones((layer.size,1))
+            for name, layer in self.layers.items()}
+
+        # initialize gates
+        self.activity['go'] = self.layers['go'].coder.encode('start')
+        self.activity['gh'] = self.layers['gh'].coder.encode('start')
+
+        # initialize pointers
+        self.activity['ip'] = self.layers['ip'].coder.encode(program_name)
+        for ms in 'ms':
+            self.activity[ms+'f'] = self.layers[ms+'f'].coder.encode('0')
+            self.activity[ms+'b'] = self.layers[ms+'b'].coder.encode('0')
+
+        # initialize comparison
+        self.activity["co"] = self.layers["co"].coder.encode('false')
+
+        # user initializations
         for layer, token in activity.items():
             self.activity[layer] = self.layers[layer].coder.encode(token)
+
+    def initialize_memory(self, pointers, values):
+        # pointers = {memory location: {register name: token}} -
+        #    token in register is a reference to memory location
+        # values = {memory location: {register name: token}} -
+        #    token in register is stored at memory location
+        
+        for loc in pointers:
+            for reg, tok in pointers[loc].items():
+                for x in "fb":
+                    w, b = self.weights[('m'+x,reg)], self.biases[('m'+x,reg)]
+                    dw, db = self.learning_rules[('m'+x,reg)](w, b,
+                        self.layers[reg].coder.encode(tok),
+                        self.layers['m'+x].coder.encode(loc),
+                        self.layers[reg].activator,
+                        self.layers['m'+x].activator)
+                    self.weights[('m'+x,reg)] += dw
+                    self.biases[('m'+x,reg)] += db
+
+        for loc in values:
+            for reg, tok in values[loc].items():
+                w, b = self.weights[(reg,'mf')], self.biases[(reg,'mf')]
+                dw, db = self.learning_rules[(reg,'mf')](w, b,
+                    self.layers['mf'].coder.encode(loc),
+                    self.layers[reg].coder.encode(tok),
+                    self.layers['mf'].activator,
+                    self.layers[reg].activator)
+                self.weights[(reg,'mf')] += dw
+                self.biases[(reg,'mf')] += db
 
     def tick(self):
 
@@ -205,10 +228,9 @@ class NVMNet:
             activity_new[to_layer] += wvb
 
         for name, layer in self.layers.items():
-            u = self.gate_map.get_gate_value((name, name, 'u'), current_gates)
             d = self.gate_map.get_gate_value((name, name, 'd'), current_gates)
-            wvb = self.w_gain * self.activity[name] + self.b_gain
-            activity_new[name] += (1-u) * (1-d) * wvb
+            wvb = self.w_gain[name] * self.activity[name] + self.b_gain[name]
+            activity_new[name] += (1-d) * wvb
     
         for name in activity_new:
             activity_new[name] = self.layers[name].activator.f(activity_new[name])
@@ -217,30 +239,11 @@ class NVMNet:
         for (to_layer, from_layer) in self.weights:
             l = self.gate_map.get_gate_value(
                 (to_layer, from_layer, 'l'), current_gates)
-            f = self.gate_map.get_gate_value(
-                (to_layer, from_layer, 'f'), current_gates)
             pair_key = (to_layer, from_layer)
 
             # actg = self.layers["go"].activator
             # if np.fabs(l - actg.on) < np.fabs(l - actg.off):
             # if True:
-            if f != 0: # forget before learning since uses previous weights
-
-                old_to = self.layers[to_layer].activator.f(
-                    self.weights[pair_key].dot(self.activity[from_layer]) +
-                    self.biases[pair_key])
-
-                dw, db = self.learning_rules[pair_key](
-                    self.weights[pair_key],
-                    self.biases[pair_key],
-                    self.activity[from_layer],
-                    old_to,
-                    self.layers[from_layer].activator,
-                    self.layers[to_layer].activator)
-
-                self.weights[pair_key] -= f*dw
-                self.biases[pair_key] -= f*db
-
             if l != 0:
 
                 dw, db = self.learning_rules[pair_key](
@@ -258,6 +261,9 @@ class NVMNet:
 
     def at_start(self):
         return self.layers["gh"].coder.decode(self.activity["gh"]) == "start"
+
+    def at_ready(self):
+        return self.layers["gh"].coder.decode(self.activity["gh"]) == "ready"
 
     def at_exit(self):
         return (self.layers["opc"].coder.decode(self.activity["opc"]) == "exit")

@@ -25,8 +25,8 @@ class Coder:
     def encode(self, token, pattern=None):
         """
         Return the pattern encoding a token.
-        Uses make_pattern() if token was not already encoded.
-        Uses given pattern if provided.
+        If not already encoded and pattern provided, encodes using given pattern
+        If not already encoded and no pattern provided, uses make_pattern()
         """
         # Encode if not already encoded
         if token not in self.encodings:

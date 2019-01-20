@@ -37,6 +37,5 @@ def make_nvm_gate_map(layers):
         for from_layer in layers:
             gate_keys.append((to_layer, from_layer, "u"))
             gate_keys.append((to_layer, from_layer, "l"))
-            gate_keys.append((to_layer, from_layer, "f"))
 
     return GateMap(gate_keys)

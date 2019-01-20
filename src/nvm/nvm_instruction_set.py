@@ -1,18 +1,28 @@
 from gate_sequencer import GateSequencer
 
+opcodes = [
+    "movv","movd","jmpv","jmpd",
+    "cmpv","cmpd","jie",
+    "subv","subd","ret",
+    "mem","rem","nxt","prv","ref","drf",
+    "exit","nop"]
+
 def gflow(to_layer, from_layer):
     """gates for inter-layer information flow"""
     return [(to_layer,from_layer,'u'), (to_layer,to_layer,'d')]
 
 def gprog():
     """gates for program memory (ip and op) layer updates"""
-    return [('ip','ip','u')]+[k for x in ['c','1','2'] for k in gflow('op'+x, 'ip')]
+    return gflow('ip','ip') + gflow('opc','ip') + gflow('op1','ip') + gflow('op2','ip')
 
-def sequence_instruction_set(nvmnet):
+def flash_instruction_set(nvmnet, verbose=False):
     """
     layers: dict of layers, including:
         gate_output, gate_hidden, ip, opc, op1, op2, op3, cmph, cmpo
     """
+    # if verbose:
+    #     for name in nvmnet.layers:
+    #         print("|%s|=%d"%(name, nvmnet.layers[name].size))
     
     gate_map, layers, devices = nvmnet.gate_map, nvmnet.layers, nvmnet.devices
     gate_output, gate_hidden, gate_interrupt = layers['go'], layers['gh'], layers['gi']
@@ -217,8 +227,7 @@ def sequence_instruction_set(nvmnet):
 
         # Open plasticity from mf to device in op1
         g, h = gs.add_transit(
-            ungate = [(device, 'mf', 'l'), (device, 'mf', 'f')],
-            # ungate = [(device, 'mf', 'l')],
+            ungate = [(device, 'mf', 'l')],
             old_gates = g_mem, old_hidden = h_mem,
             op1 = device)
         g_mem_dev, h_mem_dev = g.copy(), h.copy()
@@ -478,14 +487,6 @@ def sequence_instruction_set(nvmnet):
     # # Stabilize ip
     # g, h = gs.stabilize(h, num_iters=3)
 
-    # Clean stack (unlearn to avoid future interference)
-    g, h = gs.add_transit(
-        ungate = [("ip","sf","f")],
-        old_gates = g, old_hidden = h)
-    g_ret_unl, h_ret_unl = g.copy(), h.copy()
-    gate_hidden.coder.encode('ret_unl', h_ret_unl)
-    gate_output.coder.encode('ip!sf', g_ret_unl)
-
     # then return to start state
     gs.add_transit(
         new_gates = g_start, new_hidden = h_start,
@@ -501,10 +502,9 @@ def sequence_instruction_set(nvmnet):
 
     for device in devices:
 
-        # Open plasticity from device in op1 to mf
+        # Open plasticity from device in op1 to mf and mb
         g, h = gs.add_transit(
-            ungate = [('mf', device, 'l'), ('mf', device, 'f')],
-            # ungate = [('mf', device, 'l')],
+            ungate = [('m'+x, device, 'l') for x in "fb"],
             old_gates = g_ref, old_hidden = h_ref,
             op1 = device)
         g_ref_dev, h_ref_dev = g.copy(), h.copy()
@@ -527,18 +527,19 @@ def sequence_instruction_set(nvmnet):
     gate_output.coder.encode('drf', g_drf)
 
     for drf_name, drf_device in devices.items():
-        # Open flow from device to mf
+        # Open flow from device to mf and mb
         g, h = gs.add_transit(
-            ungate = gflow("mf", drf_name),
+            ungate = gflow("mf", drf_name) + gflow("mb", drf_name),
             old_gates = g_drf, old_hidden = h_drf,
             op1 = drf_name)
         gate_hidden.coder.encode('drf_'+drf_name, h)
-        gate_output.coder.encode("mf<" + drf_name, g)
+        gate_output.coder.encode("mx<" + drf_name, g)
 
         # return to start state
         gs.add_transit(
             new_gates = g_start, new_hidden = h_start,
             old_gates = g, old_hidden = h)
 
-    return gs
+    weights, biases, residual = gs.flash(verbose)
+    return weights, biases
 

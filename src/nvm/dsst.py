@@ -1,34 +1,10 @@
 import numpy as np
 import matplotlib.pyplot as plt
-from layer import Layer
-from coder import Coder
-from gate_map import make_nvm_gate_map
-from activator import *
-from learning_rules import *
-from nvm_instruction_set import flash_instruction_set
-from nvm_assembler import assemble
-from nvm_linker import link
-from nvm_net import NVMNet
+from nvm import make_scaled_nvm
 
 np.seterr(all='raise')
 
 dsst_programs = {
-# "sub":"""
-
-#             sub foo
-#             exit
-
-#     foo:    mov tc A
-#             sub bar
-#             mov tc B
-#             sub bar
-#             mov tc C
-#             ret
-
-#     bar:    mov tc D
-#             ret
-    
-# """,
 "dsst":"""
 
             # sub lookup
@@ -166,56 +142,37 @@ def make_dsst_grid(letters, rows, cols):
 
 def make_dsst_nvm(activator_label, tokens=[]):
 
-    # set up activator
-    if activator_label == "logistic":
-        activator = logistic_activator
-    if activator_label == "tanh":
-        activator = tanh_activator
-    learning_rule = hebbian
-
-    # make network
-    layer_shape = (2048,1)
-    layer_size = layer_shape[0]*layer_shape[1]
-    pad = 0.0001
-    act = activator(pad, layer_size)
+    nvm = make_scaled_nvm(
+        register_names = ["ol", "tc", "pm", "mc"],
+        programs = dsst_programs,
+        orthogonal=True,
+        scale_factor=1.0,
+        extra_tokens=tokens)
     
-    devices = {
-        "ol": Layer("ol", layer_shape, act, Coder(act)), # occipital lobe
-        "tc": Layer("tc", layer_shape, act, Coder(act)), # temporal cortex
-        "pm": Layer("pm", layer_shape, act, Coder(act)), # premotor cortex
-        "mc": Layer("mc", layer_shape, act, Coder(act)),} # motor cortex
-
-    # assemble and link programs
-    shapes = {"gh":(32,16), "s":(32,16), "m": (16,16)}
-    nvmnet = NVMNet(layer_shape, pad, activator, learning_rule, devices, shapes=shapes)
-    for name, program in dsst_programs.items():
-        nvmnet.assemble(program, name, verbose=1)
-    diff_count = nvmnet.link(verbose=2, tokens=tokens, orthogonal=True)
-
-    return nvmnet, diff_count
+    print("|ip|=%d, |r|=%d"%(nvm.net.layers['ip'].size, nvm.net.layers['ol'].size))
+    
+    return nvm
 
 if __name__ == "__main__":
     
     letters = list('abcd')
     digits = map(str,range(len(letters)))
-    grid = make_dsst_grid(letters, 2, len(letters))
-    # print("\n".join([" ".join(g) for g in grid]))
+    grid = make_dsst_grid(letters, 3, len(letters))
+    print("\n".join([" ".join(g) for g in grid]))
     # raw_input('.')
 
     # _ is blank space
     # + is grid boundary
     tokens = ["up","left","down","right","_","+"] + letters + digits
-    diff_count = 100
-    while diff_count > 10:
-        nvmnet, diff_count = make_dsst_nvm("logistic", tokens=tokens)
-        break
-    # nvmnet = make_nback_nvm("tanh")
-    # raw_input("continue?")
-    
+
+    # nvm = make_dsst_nvm("tanh", tokens)
+    nvm = make_dsst_nvm("logistic", tokens)
+    raw_input('.')
+
     show_layers = [
-        ["go", "gh","ip"] + ["op"+x for x in "c12"] +\
-        ["mf","mb"] + ["sf","sb"] + ["co","ci"] +\
-        nvmnet.devices.keys(),
+        ["ip"] + ["op"+x for x in "c12"] +\
+        ["sf","sb"] + ["co","ci"] +\
+        nvm.register_names,
     ]
     show_tokens = True
     show_corrosion = False
@@ -225,18 +182,19 @@ if __name__ == "__main__":
     moved = False
     grids = [(grid_row, grid_col, [list(g) for g in grid])]
     
-    # nvmnet.load("sub", {})
-    nvmnet.load("dsst", {
+    nvm.assemble(dsst_programs, other_tokens=tokens, verbose=2)
+    nvm.load("dsst", {
         "mc": "hold"
     })
 
     history = []
     start_t = []
     trace = []
-    for t in range(8000):
+    for t in range(32000):
+    # for t in range(10):
     
         # Action
-        motion = nvmnet.layers['mc'].coder.decode(nvmnet.activity['mc'])
+        motion = nvm.decode_layer('mc')
         if not motion == 'hold' and not moved:
             if motion == 'left' and grid_col > 0: grid_col -= 1
             if motion == 'right' and grid_col < len(grid[0])-1: grid_col += 1
@@ -249,51 +207,61 @@ if __name__ == "__main__":
         if motion == 'hold': moved = False
 
         # Perception
-        nvmnet.activity['ol'] = nvmnet.layers['ol'].coder.encode(grid[grid_row][grid_col])
+        nvm.net.activity['ol'] = nvm.net.layers['ol'].coder.encode(grid[grid_row][grid_col])
 
         ### show state and tick
         # if True:
-        # if t % 2 == 0 or nvmnet.at_exit():
-        if nvmnet.at_start() or nvmnet.at_exit():
-            if nvmnet.at_start():
+        # if t % 2 == 0 or nvm.net.at_exit():
+        if nvm.at_start() or nvm.at_exit():
+            if nvm.at_start():
                 start_t.append(t)
                 trace_st = " ".join([
-                    nvmnet.layers[name].coder.decode(nvmnet.activity[name])
+                    nvm.net.layers[name].coder.decode(nvm.net.activity[name])
                     for name in ['ip','opc','op1','op2']])
                 trace.append(trace_st)
             print('t = %d'%t)
-            print(nvmnet.state_string(show_layers, show_tokens, show_corrosion, show_gates))
+            print(nvm.net.state_string(show_layers, show_tokens, show_corrosion, show_gates))
 
-            grid[grid_row][grid_col] += "!"
+            for r in range(len(grid)):
+                for c in range(len(grid[r])):
+                    if r == grid_row and c == grid_col:
+                        grid[r][c] += "!"
+                    else:
+                        grid[r][c] += " "
             print("\n".join([" ".join(g) for g in grid]))
-            grid[grid_row][grid_col] = grid[grid_row][grid_col][:-1]
+            for r in range(len(grid)):
+                for c in range(len(grid[r])):
+                    grid[r][c] = grid[r][c][:-1]
+
             # raw_input(".")
-        if nvmnet.at_exit():
+        if nvm.at_exit():
             break
-        nvmnet.tick()
+        nvm.net.tick()
 
-        history.append(dict(nvmnet.activity))
+        history.append(dict(nvm.net.activity))
 
-    ### Grid history
-    for i, (r, c, grid_i) in enumerate(grids):
-        grid_i[r][c] += "!"
-        print("*** GRID %d ***"%i)
-        print("At %d, %d"%(r,c))
-        print("\n".join([" ".join(g) for g in grid_i]))
-        grid_i[r][c] = grid_i[r][c][:-1]
-        # raw_input('...')
+    # ### Grid history
+    # for i, (r, c, grid_i) in enumerate(grids):
+    #     grid_i[r][c] += "!"
+    #     print("*** GRID %d ***"%i)
+    #     print("At %d, %d"%(r,c))
+    #     print("\n".join([" ".join(g) for g in grid_i]))
+    #     grid_i[r][c] = grid_i[r][c][:-1]
+    #     # raw_input('...')
     
     # print("*** execution trace ***")
     # for t in trace:
     #     print(t)
 
     ### raster plot
-    max_hist = 2000
+    max_hist = 8000
     if len(history) > max_hist:
         t_off = len(history)-max_hist
         history = history[t_off:]
+    else:
+        t_off = 0
     A = np.zeros((sum([
-        nvmnet.layers[name].size for sl in show_layers for name in sl]),
+        nvm.net.layers[name].size for sl in show_layers for name in sl]),
         len(history)))
     for h in range(len(history)):
         A[:,[h]] = np.concatenate([history[h][k] for sl in show_layers for k in sl],axis=0)
@@ -304,13 +272,13 @@ if __name__ == "__main__":
     for t in start_t:
         ops = []
         for op in ["opc","op1","op2"]:
-            tok = nvmnet.layers[op].coder.decode(history[t][op])
+            tok = nvm.net.layers[op].coder.decode(history[t][op])
             ops.append("" if tok in ["null","?"] else tok)
         xl.append("\n".join([str(t+t_off)]+ops))
     yt = np.array([history[0][k].shape[0] for sl in show_layers for k in sl])
     yt = yt.cumsum() - yt/2
     
-    act = nvmnet.layers["gh"].activator
+    act = nvm.net.layers["gh"].activator
     plt.figure()
     plt.imshow(A, cmap='gray', vmin=act.off, vmax=act.on, aspect='auto')
     plt.xticks(xt, xl)
