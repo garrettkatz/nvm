@@ -23,28 +23,28 @@ First, decide on the registers you want for your NVM instance.  For example:
 >>> register_names = ["r0", "r1"]
 ```
 
-Next, write some NVM assembly programs for the instance.  Each program should be given a name and stored in a dictionary with its name as the key.  For example, the following program implements and invokes a sub-routine that computes logical and of the two register contents, using the primitive comparison instruction:
+Next, write some NVM assembly programs for the instance.  Each program should be given a name and stored in a dictionary with its name as the key.  For example, the following program implements and invokes a sub-routine that computes logical-and of the two register contents, using the primitive comparison instruction:
 
 ```
 >>> programs = {
-"myfirstprogram":"""
-
-### computes logical-and of r0 and r1, overwriting r0 with result
-
-        nop           # do nothing
-        sub and       # call logical-and sub-routine
-        exit          # halt execution
-
-and:    cmp r0 false  # compare first conjunct to false
-        jie and.f     # jump, if equal to false, to and.f label
-        cmp r1 false  # compare second conjunct to false
-        jie and.f     # jump, if equal false, to and.f label
-        mov r0 true   # both conjuncts true, set r0 to true
-        ret           # return from sub-routine
-and.f:  mov r0 false  # a conjunct was false, set r0 to false
-        ret           # return from sub-routine
-
-"""}
+... "myfirstprogram":"""
+... 
+... ### computes logical-and of r0 and r1, overwriting r0 with result
+... 
+...         nop           # do nothing
+...         sub and       # call logical-and sub-routine
+...         exit          # halt execution
+... 
+... and:    cmp r0 false  # compare first conjunct to false
+...         jie and.f     # jump, if equal to false, to and.f label
+...         cmp r1 false  # compare second conjunct to false
+...         jie and.f     # jump, if equal false, to and.f label
+...         mov r0 true   # both conjuncts true, set r0 to true
+...         ret           # return from sub-routine
+... and.f:  mov r0 false  # a conjunct was false, set r0 to false
+...         ret           # return from sub-routine
+... 
+... """}
 ```
 
 Now we can construct an NVM instance to run this program.  We will use a convenience method that automatically scales the network size to accommodate the program.
@@ -58,7 +58,7 @@ Now we can construct an NVM instance to run this program.  We will use a conveni
 
 ```
 
-The `orthogonal=True` flag uses orthogonal activity patterns to represent symbols, which greatly reduces the size requirements.  Now we can assemble the program into the instance, and load it so that it is ready to be executed.  When loading we can also specify initial activity for each register when execution begins.
+The `orthogonal=True` flag uses orthogonal activity patterns to represent symbols, which greatly reduces the size requirements.  Now we can assemble the program into the NVM instance, and load it so that it is ready to be executed.  When loading we can also specify initial activity for each register when execution begins.
 
 ```
 >>> my_nvm.assemble(programs)
@@ -72,7 +72,8 @@ The underlying representations for `true` and `false` are distributed activity p
 >>> my_nvm.net.layers["r0"].shape
 (8, 1)
 >>> my_nvm.net.activity["r0"].T
-[[ 0.9999  0.9999  0.9999 -0.9999  0.9999  0.9999 -0.9999  0.9999]]
+array([[ 0.9999, -0.9999,  0.9999, -0.9999, -0.9999,  0.9999,  0.9999,
+         0.9999]])
 ```
 
 Each layer has a `coder` we can use to look-up the human-readable symbol represented by a pattern:
@@ -80,10 +81,10 @@ Each layer has a `coder` we can use to look-up the human-readable symbol represe
 ```
 >>> v = my_nvm.net.activity["r0"].T
 >>> my_nvm.net.layers["r0"].coder.decode(v)
-true
+'true'
 ```
 
-The `nvm` instance also has convenience wrappers for this:
+The `nvm` instance also has a convenience wrapper for this:
 
 ```
 >>> my_nvm.decode_state(layer_names=register_names)
@@ -97,7 +98,7 @@ The program is already loaded; all we need to do to emulate it is run the networ
 >>> for t in itertools.count():
 ...     my_nvm.net.tick()
 ...     if my_nvm.at_exit(): break
-
+...
 ```
 
 The invocation `my_nvm.at_exit()` is a convenience wrapper for:
@@ -112,7 +113,7 @@ We can see how many time-steps of network dynamics were used:
 106
 ```
 
-We can check the final register states when the program is finished:
+We can check the final register states now that the program is finished:
 ```
 >>> my_nvm.decode_state(layer_names=register_names)
 {'r0': 'false', 'r1': 'false'}
