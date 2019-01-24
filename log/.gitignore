@@ -9,4 +9,5 @@
 *.out
 *.aux
 *.eps
+*.png
 pstats
