@@ -114,124 +114,25 @@ def build_network(rows=200, cols=200, scale=5):
     retina_structure = {"name" : "retina", "type" : "feedforward"}
 
     # Add retinal layers
-    p_retina_layers, p_retina_connections = build_retina(
-        "peripheral", rows, cols,
-        rf_size = 5,
-        convergence = scale)
     c_retina_layers, c_retina_connections = build_retina(
         "central", rows/3, cols/3,
         rf_size = 5,
         convergence = 1)
 
     # Add superior colliculus layers
-    sc_sup = {
-        "name" : "sc_sup",
-        "neural model" : "rate_encoding",
-        "rows" : int(rows / scale),
-        "columns" : int(cols / scale)
-        }
-
     sc_deep = {
         "name" : "sc_deep",
         "neural model" : "rate_encoding",
         "rows" : int(rows / scale),
         "columns" : int(cols / scale)}
 
-    gating_layer = {
-        "name" : "gating",
-        "neural model" : "rate_encoding",
-        "rows" : int(rows / scale),
-        "columns" : int(cols / scale),
-        "dendrites" : [{"name" : "disinhibition"}],
-        "init config" : {
-            "type" : "flat",
-            "value" : 1.0
-        }
-    }
-
     # Add layers to structure
-    sc_structure["layers"] = [sc_sup, sc_deep, gating_layer]
-    retina_structure["layers"] = p_retina_layers + c_retina_layers
-
-    # Create connections
-    receptive_field = 5
-    sc_input_strength = 1.0
-    sc_to_motor_strength = 1.0
-    gate_strength = 5.0
-    connections = [
-        # ON/OFF -> SC
-        {
-            "from layer" : "peripheral_retina_on",
-            "to layer" : "sc_sup",
-            "type" : "convergent",
-            "convolutional" : True,
-            "opcode" : "add",
-            "plastic" : False,
-            "weight config" : {
-                "type" : "flat",
-                "weight" : sc_input_strength,
-                "distance callback" : "mexican_hat",
-            },
-            "arborized config" : {
-                "field size" : receptive_field,
-                "stride" : 1,
-                "wrap" : False
-            }
-        },
-        {
-            "from layer" : "peripheral_retina_off",
-            "to layer" : "sc_sup",
-            "type" : "convergent",
-            "convolutional" : True,
-            "opcode" : "add",
-            "plastic" : False,
-            "weight config" : {
-                "type" : "flat",
-                "weight" : sc_input_strength,
-                "distance callback" : "mexican_hat",
-            },
-            "arborized config" : {
-                "field size" : receptive_field,
-                "stride" : 1,
-                "wrap" : False
-            }
-        },
-        # SC -> SC out
-        {
-            "from layer" : "sc_sup",
-            "to layer" : "sc_deep",
-            "type" : "convergent",
-            "convolutional" : True,
-            "opcode" : "add",
-            "plastic" : False,
-            "weight config" : {
-                "type" : "flat",
-                "weight" : sc_to_motor_strength,
-                "distance callback" : "mexican_hat",
-            },
-            "arborized config" : {
-                "field size" : receptive_field,
-                "stride" : 1,
-                "wrap" : False
-            }
-        },
-        # Gating -> SC out
-        {
-            "from layer" : "gating",
-            "to layer" : "sc_deep",
-            "type" : "one to one",
-            "opcode" : "sub",
-            "plastic" : False,
-            "weight config" : {
-                "type" : "flat",
-                "weight" : gate_strength
-            }
-        }
-    ]
+    sc_structure["layers"] = [sc_deep]
+    retina_structure["layers"] = c_retina_layers
 
     # Create network
     return {"structures" : [sc_structure, retina_structure],
-         "connections" : connections + p_retina_connections + c_retina_connections}
+         "connections" : c_retina_connections}
 
 train_dump_index = 0
 
@@ -261,36 +162,17 @@ def build_environment(rows=200, cols=200, scale=5, visualizer=False,
     create_io_callback("dump_training_data", dump_training_data)
 
     # Create environment modules
-    if task == "dsst":
-        modules = [
-            {
-                "type" : "dsst",
-                "rows" : dsst_params["rows"],
-                "columns" : dsst_params["columns"],
-                "cell size" : dsst_params["cell columns"],
-                "layers" : [
-                    {
-                        "layer" : "peripheral_photoreceptor",
-                        "input" : True,
-                    }
-                ]
-            }
-        ]
-    elif task == "saccade":
+    if task == "saccade":
         modules = [
             {
                 "type" : "saccade",
-                "saccade rate" : 0.75,
+                "saccade rate" : 1.0,
                 "automatic" : True,
                 "shuffle" : True,
                 "num faces" : num_faces,
                 "cross time" : 1000,
                 "face time" : 1000,
                 "layers" : [
-                    {
-                        "layer" : "peripheral_photoreceptor",
-                        "input" : True,
-                    },
                     {
                         "layer" : "central_photoreceptor",
                         "input" : True,
@@ -315,30 +197,12 @@ def build_environment(rows=200, cols=200, scale=5, visualizer=False,
                     } for i,layer_name in enumerate(training_layers)
                 ]
             })
-    else:
-        modules = [
-            {
-                "type" : "image_input",
-                "filename" : image_filename,
-                "layers" : [
-                    {
-                        "layer" : "peripheral_photoreceptor",
-                        "input" : True,
-                    }
-                ]
-            }
-        ]
 
     if visualizer:
         modules.append({
             "type" : "visualizer",
             "layers" : [
-                {"layer" : "peripheral_photoreceptor" },
-                {"layer" : "peripheral_retina_on" },
-                {"layer" : "peripheral_retina_off" },
-                {"layer" : "sc_sup" },
                 {"layer" : "sc_deep" },
-                {"layer" : "gating" },
                 {"layer" : "central_photoreceptor" },
                 {"layer" : "central_retina_on" },
                 {"layer" : "central_retina_off" },
@@ -350,74 +214,51 @@ def build_environment(rows=200, cols=200, scale=5, visualizer=False,
             "window" : "1000",
             "linear" : True,
             "layers" : [
-                {"layer" : "sc_sup" },
                 {"layer" : "sc_deep" },
-                {"layer" : "gating" },
             ]
         })
 
     return modules
 
-def build_bridge_connections():
+def build_bridge_connections(motor_gate, rows, cols, scale):
     return [
         {
             "from structure" : "nvm",
             "from layer" : "fef",
             "to structure" : "oculomotor",
             "to layer" : "sc_deep",
-            "type" : "divergent",
-            "convolutional" : True,
+            "type" : "one to one",
             "opcode" : "add",
             "plastic" : False,
             "weight config" : {
                 "type" : "flat",
-                "weight" : 0.2,
-                "from spacing" : 4,
-                "distance callback" : "gaussian",
+                "weight" : 1.0,
             },
-            "arborized config" : {
-                "field size" : 5,
-                "stride" : 4,
-                "wrap" : False
-            }
         },
         {
+            "name" : "sc_deep <- go",
             "from structure" : "nvm",
-            "from layer" : "fef",
+            "from layer" : "go",
             "to structure" : "oculomotor",
-            "to layer" : "gating",
-            "dendrite" : "disinhibition",
-            "type" : "divergent",
-            "convolutional" : True,
-            "opcode" : "sub",
-            "plastic" : False,
-            "weight config" : {
-                "type" : "flat",
-                "weight" : 4.0,
-                "from spacing" : 4,
-                "distance callback" : "gaussian",
-            },
-            "arborized config" : {
-                "field size" : 5,
-                "stride" : 4,
-                "wrap" : False
-            }
-        },
-        {
-            "from structure" : "nvm",
-            "from layer" : "sc",
-            "to structure" : "oculomotor",
-            "to layer" : "gating",
-            "dendrite" : "disinhibition",
-            "type" : "fully connected",
+            "to layer" : "sc_deep",
+            "type" : "subset",
             "opcode" : "mult",
             "plastic" : False,
+            "subset config" : {
+                "from row start" : 0,
+                "from row end" : 1,
+                "from column start" : motor_gate,
+                "from column end" : motor_gate+1,
+                "to row start" : 0,
+                "to row end" : int(rows / scale),
+                "to column start" : 0,
+                "to column end" : int(cols / scale),
+            },
             "weight config" : {
                 "type" : "flat",
-                "weight" : 1.0 / 25,
-                "distance callback" : "gaussian",
+                "weight" : 1
             }
-        }
+        },
     ]
 
 def main(read=True, visualizer=False, device=None, rate=0, iterations=1000000):
@@ -426,7 +267,7 @@ def main(read=True, visualizer=False, device=None, rate=0, iterations=1000000):
     task = "saccade"
 
     # Scale for superior colliculus
-    scale = 5
+    scale = 20
 
     if task == "dsst":
         rows = dsst_params["input rows"]
@@ -467,7 +308,8 @@ def main(read=True, visualizer=False, device=None, rate=0, iterations=1000000):
         stat_layers=[],
         read=read)
 
-    bridge_connections = build_bridge_connections()
+    motor_gate = nvmnet.gate_map.get_gate_index(('sc', 'op2', 'u'))
+    bridge_connections = build_bridge_connections(motor_gate, rows, cols, scale)
 
     net = Network({"structures" : [nvm_structure] + om_network["structures"],
                    "connections" : nvm_connections + om_network["connections"] + bridge_connections})

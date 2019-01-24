@@ -9,46 +9,24 @@ from nvm_assembler import assemble
 from nvm_linker import link
 from nvm_net import NVMNet
 
-# New version using pef
 aas_program = {"aas":"""
 
 loop:   mov fef center
         mov sc on
-        mov sc off
 wait:   cmp tc cross
         jie cross
         jmp wait
-cross:  mov pef tc
-        jmp pef
+cross:  jmp tc
 left:   mov fef right
         jmp look
 right:  mov fef left
         jmp look
 look:   mov sc on
-        mov sc off
         jmp loop
         exit
 
 """}
 
-aps_program = {"aps":"""
-
-loop:   mov fef center
-        mov sc on
-        mov sc off
-wait:   cmp tc cross
-        jie cross
-        jmp wait
-cross:  mov pef tc
-        jmp pef
-left:   nop
-right:  mov fef pef
-        mov sc on
-        mov sc off
-        jmp loop
-        exit
-
-"""}
 
 def make_ef(name, pad, activator, rows, columns):
     dim = min(rows, columns)
@@ -82,12 +60,6 @@ def make_sc(pad, activator, rows, columns):
     sc_coder.encode("off", act.off*np.ones((rows*columns,1)))
     return Layer("sc", (rows,columns), act, sc_coder)
 
-def make_lpfc(pad, activator, rows, columns):
-
-    act = activator(pad, rows*columns)
-    lpfc_coder = Coder(act)
-    return Layer("lpfc", (rows,columns), act, lpfc_coder)
-
 def make_saccade_nvm(activator_label):
 
     # set up activator
@@ -106,37 +78,15 @@ def make_saccade_nvm(activator_label):
     devices = {
         "tc": Layer("tc", layer_shape, act, Coder(act)),
         "fef": make_ef("fef", pad, activator, 17, 24),
-        "pef": make_ef("pef", pad, activator, 17, 24),
-        "sc": make_sc(pad, activator, 5, 5),
-        "lpfc": make_lpfc(pad, activator, 1, 1) }
+        "sc": make_sc(pad, activator, 5, 5) }
 
     shapes = {"gh": (32,32), "c": (16,16)}
     nvmnet = NVMNet(layer_shape, pad, activator, learning_rule, devices, shapes=shapes)
 
     # assemble and link programs
     for name, program in aas_program.items():
-    #for name, program in aps_program.items():
         nvmnet.assemble(program, name, verbose=1)
     nvmnet.link(verbose=2)
-
-    # redo pef/fef and pef/ip linkages with special learning rule
-    # pef -> fef
-    X = np.concatenate([nvmnet.layers["pef"].coder.encode(tok)
-        for tok in ["left","right","cross"]], axis=1)
-    Y = np.concatenate([nvmnet.layers["fef"].coder.encode(tok)
-        for tok in ["left","right","cross"]], axis=1)
-    nvmnet.weights[("fef","pef")] = nvmnet.layers["fef"].activator.g(Y).dot(
-        X.T / (X**2).sum(axis=0)[:, np.newaxis])
-    nvmnet.biases[("fef","pef")][:] = 0
-
-    # pef -> ip
-    X = np.concatenate([nvmnet.layers["pef"].coder.encode(tok)
-        for tok in ["left","right","cross"]], axis=1)
-    Y = np.concatenate([nvmnet.layers["ip"].coder.encode(tok)
-        for tok in ["left","right","cross"]], axis=1)
-    nvmnet.weights[("ip","pef")] = nvmnet.layers["ip"].activator.g(Y).dot(
-        X.T / (X**2).sum(axis=0)[:, np.newaxis])
-    nvmnet.biases[("ip","pef")][:] = 0
 
     # initialize layers
     nvmnet.activity["ip"] = nvmnet.layers["ip"].coder.encode(name) # program pointer

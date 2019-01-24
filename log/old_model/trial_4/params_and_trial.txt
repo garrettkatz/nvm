@@ -1,0 +1,56 @@
+    # Add amygdala layer
+    layers.append({
+        "name" : "amygdala",
+        "neural model" : "oscillator",
+        "tau" : 0.025,
+        "decay" : 0.025,
+        "rows" : 1,
+        "columns" : 1,
+        "init config": {
+            "type": "normal",
+            "mean": 0.0,
+            "std dev": 0.025
+        }
+        })
+
+    # Add vmpfc layer
+    layers.append({
+        "name" : "vmpfc",
+        "neural model" : "oscillator",
+        "tau" : 0.025,
+        "decay" : 0.00125,
+#        "tonic" : 0.1,
+        "rows" : 1,
+        "columns" : 1,
+        "init config": {
+            "type": "normal",
+            "mean": 0.0,
+            "std dev": 0.025
+        }
+        })
+
+**Standard deviation = mean / 5.0
+
+
+
+Healthy: amy = 0.4  amy_vmpfc = 1.0  vmpfc_amy = 1.0
+Response latency mean: 125.599998
+Response latency std dev: 6.135144
+
+BOLD Amygdala: 11137.612020
+BOLD vmPFC:    211.876236
+
+Activation Amygdala: 211.896704
+Activation vmPFC:    3899.065340
+
+
+
+PTSD: amy = 0.6  amy_vmpfc = 0.25  vmpfc_amy = 2.0
+Response latency mean: 238.199997
+Response latency std dev: 13.392534
+
+BOLD Amygdala: 16275.244581
+BOLD vmPFC:    150.008702
+
+Activation Amygdala: 600.090807
+Activation vmPFC:    2717.260713

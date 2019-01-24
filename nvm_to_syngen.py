@@ -73,10 +73,6 @@ def make_syngen_network(nvmnet):
         "rbf scale" : 1,
     })
 
-    structure = {"name" : "nvm",
-                 "type" : "parallel",
-                 "layers": layer_configs}
-
     # Parameters shared by all connections
     defaults = { "plastic" : False }
 
@@ -318,28 +314,26 @@ def make_syngen_network(nvmnet):
     connections = [conn for conn in connections
         if conn["to layer"] not in exclude and conn["from layer"] not in exclude]
 
-    exclude = ["op2", "fef", "tc"]
+    exclude = ["op2", "fef"]
     connections = [conn for conn in connections
         if conn["to layer"] != "ip" or conn["from layer"] not in exclude]
 
     # Remove unused device connections
-    devices = ["tc", "fef", "pef", "sc", "lpfc"]
-    include = [("pef", "tc")]
+    devices = ["tc", "fef", "sc"]
     connections = [conn for conn in connections
         if conn["to layer"] not in devices or \
            conn["from layer"] not in devices or \
-           conn["from layer"] == conn["to layer"] or \
-           (conn["to layer"], conn["from layer"]) in include]
+           conn["from layer"] == conn["to layer"]]
 
     # Remove unused op2 -> device connections
-    include = ["fef", "sc"]
+    include = ["fef"]
     connections = [conn for conn in connections
         if conn["from layer"] != "op2" or \
            conn["to layer"] not in devices or \
            conn["to layer"] in include]
 
     # Removed unused device -> ip connections
-    include = ["pef"]
+    include = ["tc"]
     connections = [conn for conn in connections
         if conn["to layer"] != "ip" or \
            conn["from layer"] not in devices or \
@@ -378,6 +372,10 @@ def make_syngen_network(nvmnet):
     # Remove dummy 'di' connections (only necessary to instantiate gate)
     connections = [conn for conn in connections
         if conn["to layer"] != "di" and conn["from layer"] != "di"]
+
+    structure = {"name" : "nvm",
+                 "type" : "parallel",
+                 "layers": layer_configs}
 
     return structure, connections
 

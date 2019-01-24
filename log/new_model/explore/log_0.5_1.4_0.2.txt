@@ -1,0 +1,453 @@
+Sequencer flash residual = 0.000015
+gate sequencer residual = 0.000015
+('mf', 'mf') residuals:
+Flash residual max: 0.000000
+Flash residual mad: 0.000000
+Flash diff count: 0
+('mf', 'mb') residuals:
+Flash residual max: 0.000000
+Flash residual mad: 0.000000
+Flash diff count: 0
+('mb', 'mf') residuals:
+Flash residual max: 0.000000
+Flash residual mad: 0.000000
+Flash diff count: 0
+('mb', 'mb') residuals:
+Flash residual max: 0.000000
+Flash residual mad: 0.000000
+Flash diff count: 0
+('sf', 'sf') residuals:
+Flash residual max: 0.000000
+Flash residual mad: 0.000000
+Flash diff count: 0
+('sf', 'sb') residuals:
+Flash residual max: 0.000000
+Flash residual mad: 0.000000
+Flash diff count: 0
+('sb', 'sf') residuals:
+Flash residual max: 0.000000
+Flash residual mad: 0.000000
+Flash diff count: 0
+('sb', 'sb') residuals:
+Flash residual max: 0.000000
+Flash residual mad: 0.000000
+Flash diff count: 0
+assembler diff count = 0
+Linking op2 -> fef
+Flash residual max: 0.011317
+Flash residual mad: 0.000229
+Flash diff count: 0
+Linking op2 -> sc
+Flash residual max: 0.004576
+Flash residual mad: 0.000204
+Flash diff count: 0
+Linking op2 -> tc
+Flash residual max: 0.019326
+Flash residual mad: 0.000209
+Flash diff count: 0
+Linking fef -> sc
+Flash residual max: 0.999900
+Flash residual mad: 0.039997
+Flash diff count: 24
+Linking fef -> tc
+Flash residual max: 0.999900
+Flash residual mad: 0.043387
+Flash diff count: 1089
+Linking sc -> fef
+Flash residual max: 0.999900
+Flash residual mad: 0.152713
+Flash diff count: 1602
+Linking sc -> tc
+Flash residual max: 0.999900
+Flash residual mad: 0.159911
+Flash diff count: 4127
+Linking tc -> fef
+Flash residual max: 0.012601
+Flash residual mad: 0.000220
+Flash diff count: 0
+Linking tc -> sc
+Flash residual max: 0.005696
+Flash residual mad: 0.000214
+Flash diff count: 0
+Linking fef -> ci
+Flash residual max: 0.999900
+Flash residual mad: 0.044539
+Flash diff count: 273
+Linking sc -> ci
+Flash residual max: 0.999900
+Flash residual mad: 0.157441
+Flash diff count: 1011
+Linking tc -> ci
+Flash residual max: 0.020023
+Flash residual mad: 0.000241
+Flash diff count: 0
+Linking op2 -> ci
+Flash residual max: 0.008185
+Flash residual mad: 0.000200
+Flash diff count: 0
+Linking fef -> ip
+Flash residual max: 0.999900
+Flash residual mad: 0.043534
+Flash diff count: 1090
+Linking sc -> ip
+Flash residual max: 0.999900
+Flash residual mad: 0.146924
+Flash diff count: 3799
+Linking tc -> ip
+Flash residual max: 0.025638
+Flash residual mad: 0.000225
+Flash diff count: 0
+Linking op1 -> ip
+Flash residual max: 0.044770
+Flash residual mad: 0.000312
+Flash diff count: 0
+linker diff count = 13015
+FATAL ERROR (src/core/network/network.cpp:94): 
+Could not find connection: tc<op2-input
+FATAL ERROR (src/core/network/network.cpp:94): 
+Could not find connection: tc<op2-biases
+FATAL ERROR (src/core/network/network.cpp:94): 
+Could not find connection: sb<sf-input
+FATAL ERROR (src/core/network/network.cpp:94): 
+Could not find connection: sb<sf-biases
+FATAL ERROR (src/core/network/network.cpp:94): 
+Could not find connection: fef<sc-input
+FATAL ERROR (src/core/network/network.cpp:94): 
+Could not find connection: fef<sc-biases
+FATAL ERROR (src/core/network/network.cpp:94): 
+Could not find connection: mf<fef-input
+FATAL ERROR (src/core/network/network.cpp:94): 
+Could not find connection: mf<fef-biases
+FATAL ERROR (src/core/network/network.cpp:94): 
+Could not find connection: sb<sb-input
+FATAL ERROR (src/core/network/network.cpp:94): 
+Could not find connection: sb<sb-biases
+FATAL ERROR (src/core/network/network.cpp:94): 
+Could not find connection: ip<sc-input
+FATAL ERROR (src/core/network/network.cpp:94): 
+Could not find connection: ip<sc-biases
+FATAL ERROR (src/core/network/network.cpp:94): 
+Could not find connection: sf<sb-input
+FATAL ERROR (src/core/network/network.cpp:94): 
+Could not find connection: sf<sb-biases
+FATAL ERROR (src/core/network/network.cpp:94): 
+Could not find connection: fef<mf-input
+FATAL ERROR (src/core/network/network.cpp:94): 
+Could not find connection: fef<mf-biases
+FATAL ERROR (src/core/network/network.cpp:94): 
+Could not find connection: sc<fef-input
+FATAL ERROR (src/core/network/network.cpp:94): 
+Could not find connection: sc<fef-biases
+FATAL ERROR (src/core/network/network.cpp:94): 
+Could not find connection: sf<sf-input
+FATAL ERROR (src/core/network/network.cpp:94): 
+Could not find connection: sf<sf-biases
+FATAL ERROR (src/core/network/network.cpp:94): 
+Could not find connection: sc<op2-input
+FATAL ERROR (src/core/network/network.cpp:94): 
+Could not find connection: sc<op2-biases
+FATAL ERROR (src/core/network/network.cpp:94): 
+Could not find connection: sc<mf-input
+FATAL ERROR (src/core/network/network.cpp:94): 
+Could not find connection: sc<mf-biases
+FATAL ERROR (src/core/network/network.cpp:94): 
+Could not find connection: tc<mf-input
+FATAL ERROR (src/core/network/network.cpp:94): 
+Could not find connection: tc<mf-biases
+FATAL ERROR (src/core/network/network.cpp:94): 
+Could not find connection: mb<mf-input
+FATAL ERROR (src/core/network/network.cpp:94): 
+Could not find connection: mb<mf-biases
+FATAL ERROR (src/core/network/network.cpp:94): 
+Could not find connection: ip<fef-input
+FATAL ERROR (src/core/network/network.cpp:94): 
+Could not find connection: ip<fef-biases
+FATAL ERROR (src/core/network/network.cpp:94): 
+Could not find connection: mb<mb-input
+FATAL ERROR (src/core/network/network.cpp:94): 
+Could not find connection: mb<mb-biases
+FATAL ERROR (src/core/network/network.cpp:94): 
+Could not find connection: tc<fef-input
+FATAL ERROR (src/core/network/network.cpp:94): 
+Could not find connection: tc<fef-biases
+FATAL ERROR (src/core/network/network.cpp:94): 
+Could not find connection: ci<fef-input
+FATAL ERROR (src/core/network/network.cpp:94): 
+Could not find connection: ci<fef-biases
+FATAL ERROR (src/core/network/network.cpp:94): 
+Could not find connection: ci<sc-input
+FATAL ERROR (src/core/network/network.cpp:94): 
+Could not find connection: ci<sc-biases
+FATAL ERROR (src/core/network/network.cpp:94): 
+Could not find connection: mf<mb-input
+FATAL ERROR (src/core/network/network.cpp:94): 
+Could not find connection: mf<mb-biases
+FATAL ERROR (src/core/network/network.cpp:94): 
+Could not find connection: ip<op2-input
+FATAL ERROR (src/core/network/network.cpp:94): 
+Could not find connection: ip<op2-biases
+FATAL ERROR (src/core/network/network.cpp:94): 
+Could not find connection: mf<sc-input
+FATAL ERROR (src/core/network/network.cpp:94): 
+Could not find connection: mf<sc-biases
+FATAL ERROR (src/core/network/network.cpp:94): 
+Could not find connection: sc<tc-input
+FATAL ERROR (src/core/network/network.cpp:94): 
+Could not find connection: sc<tc-biases
+FATAL ERROR (src/core/network/network.cpp:94): 
+Could not find connection: mf<mf-input
+FATAL ERROR (src/core/network/network.cpp:94): 
+Could not find connection: mf<mf-biases
+FATAL ERROR (src/core/network/network.cpp:94): 
+Could not find connection: ip<sf-input
+FATAL ERROR (src/core/network/network.cpp:94): 
+Could not find connection: ip<sf-biases
+FATAL ERROR (src/core/network/network.cpp:94): 
+Could not find connection: tc<sc-input
+FATAL ERROR (src/core/network/network.cpp:94): 
+Could not find connection: tc<sc-biases
+FATAL ERROR (src/core/network/network.cpp:94): 
+Could not find connection: mf<tc-input
+FATAL ERROR (src/core/network/network.cpp:94): 
+Could not find connection: mf<tc-biases
+FATAL ERROR (src/core/network/network.cpp:94): 
+Could not find connection: fef<tc-input
+FATAL ERROR (src/core/network/network.cpp:94): 
+Could not find connection: fef<tc-biases
+         gh<gi-input       1024
+        gh<gi-biases       1024
+        ci<op2-input     262144
+       ci<op2-biases     262144
+         gh<co-input     262144
+        gh<co-biases     262144
+         ci<tc-input     262144
+        ci<tc-biases     262144
+       fef<op2-input     417792
+      fef<op2-biases     417792
+         go<gh-input     905216
+        go<gh-biases     905216
+        gh<op2-input    1048576
+       gh<op2-biases    1048576
+        op1<ip-input    1048576
+       op1<ip-biases    1048576
+        gh<op1-input    1048576
+       gh<op1-biases    1048576
+        opc<ip-input    1048576
+       opc<ip-biases    1048576
+         ip<tc-input    1048576
+        ip<tc-biases    1048576
+        gh<opc-input    1048576
+       gh<opc-biases    1048576
+        op2<ip-input    1048576
+       op2<ip-biases    1048576
+         ip<ip-input    1048576
+        ip<ip-biases    1048576
+        ip<op1-input    1048576
+       ip<op1-biases    1048576
+         gh<gh-input    1048576
+        gh<gh-biases    1048576
+Using amygdala sensitivity: 0.500000
+Using vmPFC sensitivity: 0.500000
+Using amygdala->vmPFC: 1.000000
+Using vmPFC->amygdala: 1.400000
+Using lPFC->vmPFC: 0.200000
+
+Built network.
+  - neurons     :     172582
+  - layers      :         40
+  - connections :        124
+  - weights     :   12691569 ( 317602729)
+
+Structure: nvm (8617 neurons in 19 layers)
+  fef                                       | n=       408  w=    419832 (    419832)
+  ci                                        | n=       256  w=    526080 (    526080)
+  mf                                        | n=       256  w=         0 (         0)
+  co                                        | n=       256  w=      1280 (      1280)
+  op1                                       | n=      1024  w=   1053696 (   1053696)
+  op2                                       | n=      1024  w=   1053696 (   1053696)
+  mb                                        | n=       256  w=         0 (         0)
+  ip                                        | n=      1024  w=   3154944 (   3154944)
+  di                                        | n=         1  w=         0 (         0)
+  tc                                        | n=      1024  w=      6144 (      6144)
+  go                                        | n=       884  w=    908752 (    908752)
+  opc                                       | n=      1024  w=   1053696 (   1053696)
+  sc                                        | n=        25  w=        75 (        75)
+  sb                                        | n=        64  w=         0 (         0)
+  sf                                        | n=        64  w=         0 (         0)
+  gi                                        | n=         1  w=         5 (         5)
+  gh                                        | n=      1024  w=   4472832 (   4472832)
+  bias                                      | n=         1  w=         0 (         0)
+  csom                                      | n=         1  w=       257 (       257)
+
+
+Structure: visual pathway (91234 neurons in 13 layers)
+  conv-0                                    | n=     18080  w=      3362 (  60784960)
+  inter_max-0                               | n=       165  w=       121 (     19965)
+  conv-1                                    | n=     18080  w=      3362 (  60784960)
+  inter_max-1                               | n=       165  w=       121 (     19965)
+  conv-2                                    | n=     18080  w=      3362 (  60784960)
+  inter_max-2                               | n=       165  w=       121 (     19965)
+  conv-3                                    | n=     18080  w=      3362 (  60784960)
+  inter_max-3                               | n=       165  w=       121 (     19965)
+  conv-4                                    | n=     18080  w=      3362 (  60784960)
+  inter_max-4                               | n=       165  w=       121 (     19965)
+  max                                       | n=         5  w=       825 (       825)
+  class-bias                                | n=         1  w=         0 (         0)
+  class                                     | n=         3  w=        18 (        18)
+
+
+Structure: emotional (3 neurons in 3 layers)
+  amygdala                                  | n=         1  w=      1025 (      1025)
+  vmpfc                                     | n=         1  w=      2050 (      2050)
+  emot-gate                                 | n=         1  w=         1 (         1)
+
+
+Structure: oculomotor (408 neurons in 1 layers)
+  sc_deep                                   | n=       408  w=       816 (       816)
+
+
+Structure: retina (72320 neurons in 4 layers)
+  central_photoreceptor                     | n=     18080  w=         0 (         0)
+  central_photoreceptor_inverse             | n=     18080  w=     18080 (     18080)
+  central_retina_on                         | n=     18080  w=        25 (    452000)
+  central_retina_off                        | n=     18080  w=        25 (    452000)
+
+Device 0 memory usage:
+  used  :  1861943296    1775.69 MB
+  free  :  6642925568    6335.19 MB
+  total :  8504868864    8110.88 MB
+Device 1 memory usage:
+  proc  :    53168352      50.71 MB
+  used  :   424607744     404.94 MB
+  free  :  8083537920    7709.06 MB
+  total :  8508145664    8114.00 MB
+Device 2 memory usage:
+  proc  :      108436       0.10 MB
+  used  : 18369069056   17518.11 MB
+  free  : 15266971648   14559.72 MB
+  total : 33636040704   32077.83 MB
+
+Launching single threaded...
+
+Measured refresh rate: 142.47 fps
+Setting face to neutral left 5
+Looked right (169, 418)  correct=1  time=249
+Looked center (169, 239)
+Setting face to fear left 2
+Looked right (169, 418)  correct=1  time=239
+Looked center (169, 239)
+Setting face to neutral right 2
+Looked left (169, 61)  correct=1  time=243
+Looked center (169, 239)
+Setting face to neutral right 0
+Looked left (169, 61)  correct=1  time=245
+Looked center (169, 239)
+Setting face to fear right 1
+Looked left (169, 61)  correct=1  time=255
+Looked center (169, 239)
+Interrupting engine...
+
+
+* Engine Report:
+
+Total time: 70.464996s
+Time averaged over 10100 iterations: 0.006977s (143.33fps)
+Network state size:     52377672 bytes    (   49.951241 MB)
+State  buffer size:       690328 bytes    (    0.658348 MB)
+Engine buffer size:       108436 bytes    (    0.103413 MB)
+
+Report for [Layer: sc_deep (oculomotor)]
+           Module -> saccade
+        Structure -> oculomotor
+            Layer -> sc_deep
+            Total -> 5
+          Correct -> 5
+     Average time -> 246.199997
+  Standard deviation time -> 5.455273
+
+Report for [Layer: central_photoreceptor (retina)]
+           Module -> saccade
+        Structure -> retina
+            Layer -> central_photoreceptor
+            Total -> 5
+          Correct -> 5
+     Average time -> 246.199997
+  Standard deviation time -> 5.455273
+
+{
+    "iterations": "10100", 
+    "total time": "70.464996", 
+    "average time": "0.006977", 
+    "fps": "143.333572", 
+    "network bytes": "52377672", 
+    "state buffer bytes": "690328", 
+    "engine buffer bytes": "108436", 
+    "args": {
+        "verbose": "true", 
+        "refresh rate": "0", 
+        "devices": "1", 
+        "worker threads": "0", 
+        "multithreaded": "false", 
+        "iterations": "1000000", 
+        "learning flag": "true"
+    }, 
+    "layer reports": [
+        {
+            "Module": "saccade", 
+            "Structure": "retina", 
+            "Layer": "central_photoreceptor", 
+            "Total": "5", 
+            "Correct": "5", 
+            "Average time": "246.199997", 
+            "Standard deviation time": "5.455273"
+        }, 
+        {
+            "Module": "saccade", 
+            "Structure": "oculomotor", 
+            "Layer": "sc_deep", 
+            "Total": "5", 
+            "Correct": "5", 
+            "Average time": "246.199997", 
+            "Standard deviation time": "5.455273"
+        }
+    ], 
+    "memory usage": [
+        {
+            "device id": "0", 
+            "device type": "gpu", 
+            "proc": "0.000000", 
+            "used": "1775.687500", 
+            "free": "6335.187500", 
+            "total": "8110.875000"
+        }, 
+        {
+            "device id": "1", 
+            "device type": "gpu", 
+            "proc": "50.705292", 
+            "used": "404.937500", 
+            "free": "7709.062500", 
+            "total": "8114.000000"
+        }, 
+        {
+            "device id": "2", 
+            "device type": "host", 
+            "proc": "0.103413", 
+            "used": "17518.109375", 
+            "free": "14559.718750", 
+            "total": "32077.828125"
+        }
+    ]
+}
+Response latency mean: 246.199997
+Response latency std dev: 5.455273
+
+BOLD Amygdala: 6430.075153
+BOLD vmPFC:    9337.274111
+BOLD emot-gate:1820.822162
+
+Activation Amygdala: 246.174900
+Activation vmPFC:    2309.527935
+Activation emot-gate:825.516874
+Max Activation Amygdala: 0.329525
+Max Activation vmPFC:    0.493122
+Max Activation emot-gate:0.689667

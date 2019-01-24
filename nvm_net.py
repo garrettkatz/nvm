@@ -44,7 +44,7 @@ class NVMNet:
     def __init__(self, layer_shape, pad, activator, learning_rule, devices, shapes={}):
         # layer_shape is default, shapes[layer_name] are overrides
         if 'gh' not in shapes: shapes['gh'] = (32,32)
-        if 'gi' not in shapes: shapes['gi'] = (8,8)
+        if 'gi' not in shapes: shapes['gi'] = (1,1)
         if 'm' not in shapes: shapes['m'] = (16,16)
         if 's' not in shapes: shapes['s'] = (8,8)
         if 'c' not in shapes: shapes['c'] = (32,32)

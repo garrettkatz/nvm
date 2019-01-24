@@ -202,7 +202,7 @@ def build_emot_network(noise=True):
         "neural model" : "oscillator",
         "tau" : 0.01,
         "decay" : 0.01,
-        "tonic" : 0.1,
+        "tonic" : 0.0,
         "rows" : 1,
         "columns" : 1,
     })
@@ -300,12 +300,12 @@ def build_vp_bridge_connections(gi_gate):
             "weight" : 0,
         }})
 
-    # class -> amygdala
-    # Implements class -> amygdala mapping for emotional activation
+    # tc -> amygdala
+    # Implements tc -> amygdala mapping for emotional activation
     connections.append({
-        "name" : "amygdala <- class",
-        "from structure" : "visual pathway",
-        "from layer" : "class",
+        "name" : "amygdala <- tc",
+        "from structure" : "nvm",
+        "from layer" : "tc",
         "to structure" : "emotional",
         "to layer" : "amygdala",
         "type" : "fully connected",
@@ -316,12 +316,12 @@ def build_vp_bridge_connections(gi_gate):
             "weight" : 0,
         }})
 
-    # class -> vmPFC
-    # Implements class -> vmPFC mapping for emotional regulation activation
+    # tc -> vmPFC
+    # Implements tc -> vmPFC mapping for emotional regulation activation
     connections.append({
-        "name" : "vmpfc <- class",
-        "from structure" : "visual pathway",
-        "from layer" : "class",
+        "name" : "vmpfc <- tc",
+        "from structure" : "nvm",
+        "from layer" : "tc",
         "to structure" : "emotional",
         "to layer" : "vmpfc",
         #"dendrite" : "gated",
@@ -554,27 +554,27 @@ def init_vpnet(net, nvmnet, amygdala_sensitivity=0.1, vmpfc_sensitivity=0.1,
     for m in range(mat.size):
         mat.data[m] = quiet.flat[m]
 
-    # class to amygdala
+    # tc to amygdala
     # This allows tc to activate amygdala when a face is detected
-    mat_name = "amygdala <- class"
+    mat_name = "amygdala <- tc"
     mat = net.get_weight_matrix(mat_name)
 
-    # Left face, cross, right face
-    w = [x * amygdala_sensitivity for x in [1, 0, 1]]
+    w = (2.0 * amygdala_sensitivity / 1024) * \
+        (tc.coder.encode("left") + tc.coder.encode("right") - tc.coder.encode("cross"))
     for m in range(mat.size):
         mat.data[m] = w[m]
 
-    # class to vmpfc
+    # tc to vmpfc
     # This allows tc to activate vmpfc when a face is detected
-    mat_name = "vmpfc <- class"
+    mat_name = "vmpfc <- tc"
     mat = net.get_weight_matrix(mat_name)
 
-    # Left face, cross, right face
-    w = [x * vmpfc_sensitivity for x in [1, 0, 1]]
+    w = (2.0 * vmpfc_sensitivity / 1024) * \
+        (tc.coder.encode("left") + tc.coder.encode("right") - tc.coder.encode("cross"))
     for m in range(mat.size):
         mat.data[m] = w[m]
 
-    # class to vmpfc
+    # ip to vmpfc
     # This allows tc to activate vmpfc when a face is detected
     mat_name = "vmpfc <- ip"
     mat = net.get_weight_matrix(mat_name)
@@ -619,7 +619,7 @@ def main(read=True, visualizer=False, device=None, rate=0, iterations=1000000,
     task = "saccade"
     rows = 340
     cols = 480
-    scale = 5
+    scale = 20
 
     ''' Build oculomotor '''
     om_network = build_om_network(rows, cols, scale)
@@ -630,7 +630,7 @@ def main(read=True, visualizer=False, device=None, rate=0, iterations=1000000,
     nvmnet = make_saccade_nvm("logistic")
     nvm_structure, nvm_connections = make_syngen_network(nvmnet)
     if visualizer:
-        viz_layers = ["sc","fef","pef","tc","ip","opc","op1","op2","gh","go", "ci", "csom", "co"]
+        viz_layers = ["sc","fef","tc","ip","opc","op1","op2","gh","go", "ci", "csom", "co"]
     else:
         viz_layers = []
     nvm_modules = make_syngen_environment(nvmnet,
@@ -651,7 +651,8 @@ def main(read=True, visualizer=False, device=None, rate=0, iterations=1000000,
 
     ''' entire network '''
     connections = nvm_connections + om_network["connections"] + vp_connections + emot_connections
-    connections += build_om_bridge_connections()
+    motor_gate = nvmnet.gate_map.get_gate_index(('sc', 'op2', 'u'))
+    connections += build_om_bridge_connections(motor_gate, rows, cols, scale)
 
     gi_gate = nvmnet.gate_map.get_gate_index(('di', 'di', 'u'))
     connections += build_vp_bridge_connections(gi_gate)
