@@ -96,8 +96,10 @@ class NVMNet:
         # encode tokens
         self.orthogonal = orthogonal
         self.layers["opc"].encode_tokens(opcodes, orthogonal=orthogonal)
-        all_tokens = list(set(tokens) | set(self.devices.keys() + ["null"]))
-        for name in self.devices.keys() + ["op1","op2","ci"]:
+        # explicitly convert to list for python3
+        all_tokens = list(set(tokens) | set(list(self.devices.keys()) + ["null"]))
+        # explicitly convert to list for python3
+        for name in list(self.devices.keys()) + ["op1","op2","ci"]:
             self.layers[name].encode_tokens(all_tokens, orthogonal=orthogonal)
 
         # set up connection matrices

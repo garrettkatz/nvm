@@ -1,5 +1,8 @@
 import numpy as np
 from orthogonal_patterns import random_orthogonal_patterns
+# import added for python3
+from functools import reduce
+
 
 class Layer:
     def __init__(self, name, shape, activator, coder):
@@ -7,7 +10,7 @@ class Layer:
         self.shape = shape
         self.activator = activator
         self.coder = coder
-        self.size = reduce(lambda x,y: x*y, shape)
+        self.size = reduce(lambda x, y: x * y, shape)
     def encode_tokens(self, tokens, orthogonal=False):
         """
         Return patterns encoding a list of tokens
