@@ -131,6 +131,13 @@ class NVMNet:
         self.learning_rules[('co','ci')] = lambda w, b, x, y, ax, ay: \
             dipole(w, b, x, co_true, ax, ay)
 
+        # initialize comparison biases
+        dw, db = dipole(
+            self.weights[('co','ci')], self.biases[('co','ci')],
+            self.layers['ci'].coder.encode('null'), co_true,
+            self.layers['ci'].activator, self.layers['co'].activator)
+        self.biases[('co','ci')] += db
+
     def set_pattern(self, layer_name, pattern):
         self.activity[layer_name] = pattern
 
