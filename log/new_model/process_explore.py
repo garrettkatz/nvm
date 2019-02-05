@@ -11,13 +11,14 @@ import scipy as sc
 from random import sample, shuffle
 
 ### PARAMETERS ###
+ts_to_ms = 2.483
 
 # Number of faces in the trial
 num_faces = 5
 
 # Latency range to consider
-lat_min = 61.2
-lat_max = 1000
+lat_min = 61.2 * ts_to_ms
+lat_max = 1000 * ts_to_ms
 
 # Tolerances for significant changes (percentage of original)
 lat_tolerance = 0.05
@@ -81,11 +82,11 @@ class Sample:
         self.mean_latency = mean_latency
         self.stdev_latency = stdev_latency
 
-        self.bold_amy = bold_amy / iterations
-        self.bold_vmpfc = bold_vmpfc / iterations
+        self.bold_amy = bold_amy / (iterations * ts_to_ms / 1000)
+        self.bold_vmpfc = bold_vmpfc / (iterations * ts_to_ms / 1000)
 
-        self.activ_amy = activ_amy / iterations
-        self.activ_vmpfc = activ_vmpfc / iterations
+        self.activ_amy = activ_amy / (iterations * ts_to_ms / 1000)
+        self.activ_vmpfc = activ_vmpfc / (iterations * ts_to_ms / 1000)
         self.max_activ_amy = max_activ_amy
         self.max_activ_vmpfc = max_activ_vmpfc
         self.num_responses = num_responses
@@ -250,9 +251,9 @@ def load_data(d, number_faces, latency_minimum, latency_maximum):
                 elif line.startswith("Using lPFC->vmPFC:"):
                     lpfc = (float(line.split(":")[1].strip()))
                 elif line.startswith("Response latency mean:"):
-                    mean_latency = (float(line.split(":")[1].strip()))
+                    mean_latency = (float(line.split(":")[1].strip())) * ts_to_ms
                 elif line.startswith("Response latency std dev:"):
-                    stdev_latency = (float(line.split(":")[1].strip()))
+                    stdev_latency = (float(line.split(":")[1].strip())) * ts_to_ms
                 elif line.startswith("BOLD Amygdala:"):
                     bold_amy = (float(line.split(":")[1].strip()))
                 elif line.startswith("BOLD vmPFC:"):
@@ -355,20 +356,20 @@ def plot_space(samples):
 
     # Plot latency of good data points using heatmap
     ax = fig.add_subplot(131, projection='3d')
-    ax.set_title("Mean Antisaccade Latency")
+    ax.set_title("Mean Antisaccade Latency (ms)")
 
     data = np.array([s.to_3d() for s in samples])
     labels = np.array([s.mean_latency for s in samples])
     x, y, z = zip(*data)
     p = ax.scatter(x, y, z, c=labels, cmap='gist_heat', norm=cm.colors.LogNorm())
-    fig.colorbar(p, ticks=[100, 200, 300, 400, 500, 600, 700, 800], format=cm.ticker.LogFormatter(10, labelOnlyBase=False, minor_thresholds=(10, 10)))
+    fig.colorbar(p, ticks=[0, 250, 500, 750, 1000, 1250, 1500, 1750, 2000], format=cm.ticker.LogFormatter(10, labelOnlyBase=False, minor_thresholds=(8, 8)))
 
     ax.set_xlabel("at")
     ax.set_ylabel("av")
     ax.set_zlabel("vl")
 
     ax = fig.add_subplot(132, projection='3d')
-    ax.set_title("Amygdala BOLD")
+    ax.set_title("Amygdala BOLD (units/sec)")
 
     data = np.array([s.to_3d() for s in samples])
     labels = np.array([s.bold_amy for s in samples])
@@ -381,7 +382,7 @@ def plot_space(samples):
     ax.set_zlabel("vl")
 
     ax = fig.add_subplot(133, projection='3d')
-    ax.set_title("vmPFC BOLD")
+    ax.set_title("vmPFC BOLD (units/sec)")
 
     data = np.array([s.to_3d() for s in samples])
     labels = np.array([s.bold_vmpfc for s in samples])
@@ -606,9 +607,9 @@ print("")
 
 #hist_latency(samples)
 plot_space(samples)
-#linear_regression(samples)
+linear_regression(samples)
 
-#coeff, sugg = build_model(samples)
+coeff, sugg = build_model(samples)
 #validate(samples, coeff, sugg)
 
 #search(samples, coeff, sugg)
@@ -670,7 +671,7 @@ fig = plt.figure()
 for index,main_key in enumerate(key_names):
     ax = fig.add_subplot(131 + index)
     ax.set_xlabel(main_key)
-    ax.set_ylabel("Mean Latency")
+    ax.set_ylabel("Mean Latency (ms)")
 
     inc,dec = 0,0
 
