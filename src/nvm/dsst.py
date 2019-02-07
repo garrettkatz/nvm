@@ -1,6 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from nvm import make_scaled_nvm
+from builtins import input
 
 np.seterr(all='raise')
 
