@@ -1,6 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from nvm import make_scaled_nvm
+from builtins import input
 
 np.seterr(all='raise')
 
@@ -156,7 +157,8 @@ def make_dsst_nvm(activator_label, tokens=[]):
 if __name__ == "__main__":
     
     letters = list('abcd')
-    digits = map(str,range(len(letters)))
+    # explicitly convert to list for python3
+    digits = list(map(str,range(len(letters))))
     grid = make_dsst_grid(letters, 3, len(letters))
     print("\n".join([" ".join(g) for g in grid]))
     # raw_input('.')
@@ -167,7 +169,8 @@ if __name__ == "__main__":
 
     # nvm = make_dsst_nvm("tanh", tokens)
     nvm = make_dsst_nvm("logistic", tokens)
-    raw_input('.')
+    # changed from raw_input to input for python3
+    input('.')
 
     show_layers = [
         ["ip"] + ["op"+x for x in "c12"] +\

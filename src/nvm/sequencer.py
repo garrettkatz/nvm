@@ -53,7 +53,8 @@ class Sequencer(object):
                 X[name][-1, i] = 1. # bias
 
         # Fix layer order, make sure sequence layer comes first for zsolve
-        names = X.keys()
+        # explicitly convert to list for python3
+        names = list(X.keys())
         names.remove(self.sequence_layer.name)
         names.insert(0, self.sequence_layer.name)
         
