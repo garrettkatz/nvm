@@ -222,15 +222,19 @@ class NVMNet:
         for (to_layer, from_layer) in self.weights:
             u = self.gate_map.get_gate_value(
                 (to_layer, from_layer, 'u'), current_gates)
-            w = self.weights[(to_layer, from_layer)]
-            b = self.biases[(to_layer, from_layer)]
-            wvb = u * (w.dot(self.activity[from_layer]) + b)
-            activity_new[to_layer] += wvb
+
+            if u != 0:
+                w = self.weights[(to_layer, from_layer)]
+                b = self.biases[(to_layer, from_layer)]
+                wvb = u * (w.dot(self.activity[from_layer]) + b)
+                activity_new[to_layer] += wvb
 
         for name, layer in self.layers.items():
             d = self.gate_map.get_gate_value((name, name, 'd'), current_gates)
-            wvb = self.w_gain[name] * self.activity[name] + self.b_gain[name]
-            activity_new[name] += (1-d) * wvb
+
+            if d != 1:
+                wvb = self.w_gain[name] * self.activity[name] + self.b_gain[name]
+                activity_new[name] += (1-d) * wvb
     
         for name in activity_new:
             activity_new[name] = self.layers[name].activator.f(activity_new[name])
