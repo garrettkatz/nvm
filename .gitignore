@@ -10,5 +10,7 @@
 *.aux
 *.eps
 *.png
+*.swp
+*.swo
 pstats
 resources/

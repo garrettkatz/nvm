@@ -1,12 +1,82 @@
+import sys
+sys.path.append('../nvm')
+
+from gate_sequencer import GateSequencer
+
 import numpy as np
-from syngen import Network, Environment, ConnectionFactory, create_io_callback, FloatArray, VoidArray, interrupt_engine
+from syngen import Network, Environment, create_io_callback, FloatArray
+from syngen import get_cpu, get_gpus, interrupt_engine
 
 class SyngenNVM:
     def __init__(self, nvmnet):
-        pass
+        structure, connections = make_syngen_network(nvmnet)
+        self.net = Network({
+            "structures" : [structure],
+            "connections" : connections})
 
-# Builds a name for a connection or dendrite
-def build_name(from_name, to_name, suffix=""):
+        # Initialize bias
+        self.get_output("bias")[0] = 1.0
+
+        self.initialize_weights(nvmnet)
+        self.initialize_activity(nvmnet)
+
+    def initialize_weights(self, nvmnet):
+        init_syngen_nvm_weights(nvmnet, self.net)
+
+    def initialize_activity(self, nvmnet):
+        init_syngen_nvm_activity(nvmnet.activity, self.net)
+
+    def get_output(self, layer_name):
+        return self.net.get_neuron_data(
+            "nvm", layer_name, "output").to_np_array()
+
+    def decode_output(self, layer_name, coder):
+        return coder.decode(self.get_output(layer_name))
+
+    def run(self, syn_env=None, args={}):
+        modules = [] if syn_env is None else syn_env.modules
+
+        default_args = {
+            "multithreaded" : False,
+            "worker threads" : 0,
+            "iterations" : 0,
+            "refresh rate" : 0,
+            "verbose" : False,
+            "learning flag" : False}
+
+        for key,val in default_args.iteritems():
+            if key not in args:
+                args[key] = val
+
+        env = Environment({"modules" : modules})
+        report = self.net.run(env, args)
+        env.free()
+        return report
+
+    def free(self):
+        self.net.free()
+        self.net = None
+
+class SyngenEnvironment:
+    def __init__(self):
+        self.modules = [make_exit_module()]
+
+    def add_visualizer(self, layer_names):
+        self.modules.append(make_visualizer_module(layer_names))
+
+    def add_printer(self, nvmnet, layer_names):
+        self.modules.append(make_printer_module(nvmnet, layer_names))
+
+    def add_checker(self, nvmnet):
+        self.modules.append(make_checker_module(nvmnet))
+
+    def add_custom(self, layer_names, cb_name, cb):
+        self.modules.append(make_custom_module(layer_names, cb_name, cb))
+
+
+
+# Builds a name for a connection
+def get_conn_name(to_name, from_name, suffix=""):
     return to_name + "<" + from_name + suffix
 
 def make_syngen_network(nvmnet):
@@ -34,7 +104,7 @@ def make_syngen_network(nvmnet):
             "columns" : layer.shape[1],
         })
 
-    # one more bias layer
+    # bias layer
     layer_configs.append({
         "name" : "bias",
         "neural model" : "relay",
@@ -46,6 +116,20 @@ def make_syngen_network(nvmnet):
         }
     })
 
+    # exit detection layer
+    opc = nvmnet.layers["opc"]
+    exit_bias = opc.activator.on * -(opc.size - 1)
+    layer_configs.append({
+        "name" : "exit",
+        "neural model" : "relay",
+        "rows" : 1,
+        "columns" : 1,
+        "init config": {
+            "type": "flat",
+            "value": exit_bias
+        }
+    })
+
     structure = {"name" : "nvm",
                  "type" : "parallel",
                  "layers": layer_configs}
@@ -54,13 +138,29 @@ def make_syngen_network(nvmnet):
     ### CONNECTIONS ###
     connections = []
 
-    # Add gain connections
-    gate_output = nvmnet.layers["go"]
+    # Exit detection connection
+    connections.append({
+        "name" : get_conn_name("exit", "opc"),
+        "from layer" : "opc",
+        "to layer" : "exit",
+        "type" : "fully connected",
+        "plastic" : False,
+    })
+
+    # Determine which gates are always active to save computations
+    #   For decay gates, omit gain connection
+    #   For update gates, use non-gated kernel
+    gate_map, layers, devices = nvmnet.gate_map, nvmnet.layers, nvmnet.devices
+    gate_output, gate_hidden = layers['go'], layers['gh']
+    gs = GateSequencer(gate_map, gate_output, gate_hidden, layers)
+    gates_always_on = np.where(gs.make_gate_output() > 0.0)[0]
+
+    # Add gain connections (skip if decay always on)
     for layer in nvmnet.layers.values():
-        # Gate layer decay always active
-        if layer not in ["go", "gh"]:
-            decay_gate_index = nvmnet.gate_map.get_gate_index(
-                (layer.name, layer.name, "d"))
+        decay_gate_index = nvmnet.gate_map.get_gate_index(
+            (layer.name, layer.name, "d"))
+
+        if decay_gate_index not in gates_always_on:
             connections.append({
                 "name" : "%s-decay" % layer.name,
                 "from layer" : "go",
@@ -98,17 +198,15 @@ def make_syngen_network(nvmnet):
     for (to_name, from_name) in nvmnet.weights:
         to_layer, from_layer = nvmnet.layers[to_name], nvmnet.layers[from_name]
 
-        # Gate mechanism is always running
-        gated = (from_name != "gh")
-
+        # Activity gate (skip if always on)
+        gate_index = nvmnet.gate_map.get_gate_index(
+                (to_name, from_name, "u"))
+        gated = gate_index not in gates_always_on
         if gated:
-            # Activity gate
-            gate_index = nvmnet.gate_map.get_gate_index(
-                (to_layer.name, from_layer.name, "u"))
             connections.append({
-                "name" : build_name(from_layer.name, to_layer.name, "-gate"),
+                "name" : get_conn_name(to_name, from_name, "-gate"),
                 "from layer" : "go",
-                "to layer" : to_layer.name,
+                "to layer" : to_name,
                 "type" : "subset",
                 "subset config" : {
                     "from row start" : 0,
@@ -124,7 +222,7 @@ def make_syngen_network(nvmnet):
                 "gate" : True
             })
 
-        # Plastic connections:
+        # Connections with gated learning
         #   device <- mf
         #   co <- ci
         #   ip <- sf
@@ -135,20 +233,14 @@ def make_syngen_network(nvmnet):
            (to_name == "ip" and from_name == "sf") or \
            (to_name in ["mf", "mb"] and from_name in nvmnet.devices)
 
-        # Normalization factor for plasticity
-        if to_name == "co":
-            norm = to_layer.activator.on ** 2
-        else:
-            norm = from_layer.size * (to_layer.activator.on ** 2)
-
+        # Learning gate (skip if never used)
         if plastic:
-            # Learning gate
             gate_index = nvmnet.gate_map.get_gate_index(
-                (to_layer.name, from_layer.name, "l"))
+                (to_name, from_name, "l"))
             connections.append({
-                "name" : build_name(from_layer.name, to_layer.name, "-learning"),
+                "name" : get_conn_name(to_name, from_name, "-learning"),
                 "from layer" : "go",
-                "to layer" : to_layer.name,
+                "to layer" : to_name,
                 "type" : "subset",
                 "subset config" : {
                     "from row start" : 0,
@@ -164,36 +256,35 @@ def make_syngen_network(nvmnet):
                 "learning" : True
             })
 
+        # Normalization factor for plasticity
+        if to_name == "co":
+            norm = to_layer.activator.on ** 2
+        else:
+            norm = from_layer.size * (to_layer.activator.on ** 2)
+
         # Weights
         connections.append({
-            "name" : build_name(from_layer.name, to_layer.name, "-weights"),
-            "from layer" : from_layer.name,
-            "to layer" : to_layer.name,
+            "name" : get_conn_name(to_name, from_name, "-weights"),
+            "from layer" : from_name,
+            "to layer" : to_name,
             "type" : "fully connected",
             "opcode" : "add",
-            "weight config" : {
-                "type" : "flat",
-                "weight" : 0.0  # This will get overwritten when the ROM is flashed
-            },
             "gated" : gated,
             "plastic" : plastic,
             "norm" : norm,
         })
 
-        # Biases
-        connections.append({
-            "name" : build_name(from_layer.name, to_layer.name, "-biases"),
-            "from layer" : "bias",
-            "to layer" : to_layer.name,
-            "type" : "fully connected",
-            "opcode" : "add",
-            "weight config" : {
-                "type" : "flat",
-                "weight" : 0.0  # This will get overwritten when the ROM is flashed
-            },
-            "gated" : gated,
-            "plastic" : False,
-        })
+        # Biases (skip if all zero)
+        if np.count_nonzero(nvmnet.biases[(to_name, from_name)]) > 0:
+            connections.append({
+                "name" : get_conn_name(to_name, from_name, "-biases"),
+                "from layer" : "bias",
+                "to layer" : to_name,
+                "type" : "fully connected",
+                "opcode" : "add",
+                "gated" : gated,
+                "plastic" : False,
+            })
 
     # Set structures
     for conn in connections:
@@ -203,219 +294,146 @@ def make_syngen_network(nvmnet):
     return structure, connections
 
 
-def init_syngen_nvm(nvmnet, syngen_net):
+def init_syngen_nvm_weights(nvmnet, syngen_net):
     # Initialize weights
     for (to_name, from_name), w in nvmnet.weights.items():
-        mat = syngen_net.get_weight_matrix(
-            build_name(from_name, to_name, "-weights"))
-        if not isinstance(mat, VoidArray):
-            for m in range(mat.size):
-                mat.data[m] = w.flat[m]
+        if np.count_nonzero(w) > 0:
+            syngen_net.get_weight_matrix(
+                get_conn_name(to_name, from_name, "-weights")).copy_from(w.flat)
 
     # Initialize biases
     for (to_name, from_name), b in nvmnet.biases.items():
-        mat = syngen_net.get_weight_matrix(
-            build_name(from_name, to_name, "-biases"))
-        if not isinstance(mat, VoidArray):
-            for m in range(mat.size):
-                mat.data[m] = b.flat[m]
+        if np.count_nonzero(b) > 0:
+            syngen_net.get_weight_matrix(
+                get_conn_name(to_name, from_name, "-biases")).copy_from(b.flat)
 
-    # Initialize activity
-    for layer_name, activity in nvmnet.activity.items():
-        output = syngen_net.get_neuron_data("nvm", layer_name, "output")
-        if not isinstance(output, VoidArray):
-            for m in range(output.size):
-                output.data[m] = activity.flat[m]
-
-    # Bias
-    output = syngen_net.get_neuron_data("nvm", "bias", "output")
-    if not isinstance(output, VoidArray):
-        for m in range(output.size):
-            output.data[m] = 1.0
+    # Initialize exit detector
+    exit_pattern = np.sign(nvmnet.layers["opc"].coder.encode("exit"))
+    syngen_net.get_weight_matrix(
+        get_conn_name("exit", "opc")).copy_from(exit_pattern.flat)
 
     # Initialize comparison true pattern
-    true_state = syngen_net.get_neuron_data("nvm", "co", "true_state")
     co = nvmnet.layers["co"]
     co_true = co.coder.encode("true")
-    if not isinstance(true_state, VoidArray):
-        for m in range(true_state.size):
-            true_state.data[m] = co.activator.g(co_true.flat[m])
+    syngen_net.get_neuron_data(
+        "nvm", "co", "true_state").copy_from(co.activator.g(co_true.flat))
+
+def init_syngen_nvm_activity(activity, syngen_net):
+    for layer_name, activity in activity.items():
+        if np.count_nonzero(activity) > 0:
+            syngen_net.get_neuron_data(
+                "nvm", layer_name, "output").copy_from(activity.flat)
 
 
-tick = 0
-do_print = False
+def make_visualizer_module(layer_names):
+    return {
+        "type" : "visualizer",
+        "layers" : [
+            {"structure": "nvm", "layer": layer_name}
+                for layer_name in layer_names]
+    }
 
-def make_syngen_environment(nvmnet, run_nvm=False,
-        viz_layers=[], print_layers=[], stat_layers=[], read=True):
-    global tick, do_print, foo
-    tick = 0
-    do_print = False
+def make_exit_module():
 
-    ### INITIALIZE ENVIRONMENT ###
-    layer_names = nvmnet.layers.keys() # deterministic order
-    layer_names.remove("gh") # make sure hidden gates come first
-    layer_names.insert(0,"gh")
+    def exit_callback(ID, size, ptr):
+        if FloatArray(size,ptr)[0] > 0.0:
+            interrupt_engine()
 
-    modules = [
-        {
-            "type" : "visualizer",
-            "layers" : [
-                {"structure": "nvm", "layer": layer_name}
-                    for layer_name in viz_layers]
-        },
-    ]
+    create_io_callback("nvm_exit", exit_callback)
 
-    if read:
-        modules.append({
-            "type" : "callback",
-            "layers" : [
-                {
-                    "structure" : "nvm",
-                    "layer" : layer_name,
-                    "output" : True,
-                    "function" : "nvm_read",
-                    "id" : i
-                } for i,layer_name in enumerate(layer_names)
-            ]
-        })
+    return {
+        "type" : "callback",
+        "layers" : [
+            {
+                "structure" : "nvm",
+                "layer" : "exit",
+                "output" : True,
+                "function" : "nvm_exit",
+                "id" : 0
+            }
+        ]
+    }
 
-    def read_callback(ID, size, ptr):
-        global tick, do_print
 
-        if run_nvm and ID == 0: #len(layer_names)-1:
-            if do_print: print("nvm tick")
+def make_printer_module(nvmnet, layer_names):
+
+    def print_callback(ID, size, ptr):
+        layer_name = layer_names[ID]
+        syn_v = FloatArray(size,ptr).to_np_array()
+        syn_tok = nvmnet.layers[layer_name].coder.decode(syn_v)
+        print("%4s: %12s"%(layer_name, syn_tok))
+                    
+    create_io_callback("nvm_print", print_callback)
+
+    return {
+        "type" : "callback",
+        "layers" : [
+            {
+                "structure" : "nvm",
+                "layer" : layer_name,
+                "output" : True,
+                "function" : "nvm_print",
+                "id" : i
+            } for i,layer_name in enumerate(layer_names)
+        ]
+    }
+
+def make_checker_module(nvmnet):
+
+    layer_names = nvmnet.layers.keys()
+
+    def checker_callback(ID, size, ptr):
+        if ID == 0:
             nvmnet.tick()
 
         layer_name = layer_names[ID]
 
-        ### Start printing current iteration
-        if ID == 0:
-            tick += 1
-            
-            coder = nvmnet.layers["gh"].coder
-            h = np.array(FloatArray(size,ptr).to_list()).reshape(nvmnet.layers["gh"].shape)
-            do_print = (coder.decode(h) == "ready")
-            do_print = True
+        coder = nvmnet.layers[layer_name].coder
+        syn_v = FloatArray(size,ptr).to_np_array()
+        syn_tok = coder.decode(syn_v)
+        py_v = nvmnet.activity[layer_name]
+        py_tok = coder.decode(py_v)
 
-            if do_print and len(print_layers) > 0:
-                print("Tick %d"%tick)
-                if run_nvm:
-                    print("Layer tokens (syngen|py)")
-                else:
-                    print("Layer tokens")
-    
-        if do_print and layer_name in print_layers:
-            coder = nvmnet.layers[layer_name].coder
-            syn_v = np.array(FloatArray(size,ptr).to_list())
-            syn_tok = coder.decode(syn_v)
-            if run_nvm:
-                py_v = nvmnet.activity[layer_name]
-                py_tok = coder.decode(py_v)
-                residual = np.fabs(syn_v.reshape(py_v.shape) - py_v).max()
-                print("%4s: %12s %s %12s (res=%f)"%(
-                    layer_name,
-                    syn_tok, "|" if syn_tok == py_tok else "X", py_tok, residual))
-            else:
-                print("%4s: %12s"%(layer_name, syn_tok))
+        if py_tok != syn_tok:
+            residual = np.fabs(syn_v.reshape(py_v.shape) - py_v).max()
 
-            if layer_name == "opc" and syn_tok == "exit":
-                print("DONE")
-                interrupt_engine()
+            print("Mismatch detected in nvm_checker!")
+            print("%4s: %12s | %12s (res=%f)"%(
+                layer_name, syn_tok, py_tok, residual))
+
+            interrupt_engine()
                     
-        if do_print and layer_name in stat_layers:
-            v = np.array(FloatArray(size,ptr).to_list())
-            print("%s (syngen): %f, %f, %f"%(
-                layer_name, v.min(), v.max(), np.fabs(v).mean()))
-            if run_nvm:
-                v = nvmnet.activity[layer_name]
-                print("%s (py): %f, %f, %f"%(
-                    layer_name, v.min(), v.max(), np.fabs(v).mean()))
+    create_io_callback("nvm_checker", checker_callback)
+
+    return {
+        "type" : "callback",
+        "layers" : [
+            {
+                "structure" : "nvm",
+                "layer" : layer_name,
+                "output" : True,
+                "function" : "nvm_checker",
+                "id" : i
+            } for i,layer_name in enumerate(layer_names)
+        ]
+    }
+
+def make_custom_module(layer_names, name, cb):
+
+    def custom_callback(ID, size, ptr):
+        cb(layer_names[ID], FloatArray(size,ptr).to_np_array())
                     
-    create_io_callback("nvm_read", read_callback)
+    create_io_callback(name, custom_callback)
 
-    return modules
-
-'''
-def init_syngen_nvm(nvmnet, syngen_net):
-    connections = []
-
-    for (to_name, from_name), w in nvmnet.weights.items():
-        # Skip comparison circuitry
-        if to_name != 'co' and from_name != 'ci':
-            # weights
-            mat_name = build_name(from_name, to_name, "-input")
-            mat = syngen_net.get_weight_matrix(mat_name)
-            if not isinstance(mat, VoidArray):
-                for m in range(mat.size):
-                    mat.data[m] = w.flat[m]
-                connections.append((mat_name, np.size(w)))
-
-            # biases
-            b = nvmnet.biases[(to_name, from_name)]
-            mat_name = build_name(from_name, to_name, "-biases")
-            mat = syngen_net.get_weight_matrix(mat_name)
-            if not isinstance(mat, VoidArray):
-                for m in range(mat.size):
-                    mat.data[m] = b.flat[m]
-                connections.append((mat_name, np.size(w)))
-
-    connections = sorted(connections, key = lambda x : x[1])
-    for name,size in connections:
-        print("%20s %10d" % (name, size))
-
-
-if __name__ == "__main__":
-
-    np.set_printoptions(linewidth=200, formatter = {'float': lambda x: '% .2f'%x})
-
-    # nvmnet = make_saccade_nvm("tanh")
-    nvmnet = make_saccade_nvm("logistic")
-
-    print(nvmnet.layers["gh"].activator.off)
-    print(nvmnet.w_gain, nvmnet.b_gain)
-    print(nvmnet.layers["go"].activator.label)
-    print(nvmnet.layers["gh"].activator.label)
-    raw_input("continue?")
-
-    structure, connections = make_syngen_network(nvmnet)
-    modules = make_syngen_environment(nvmnet,
-        initial_patterns = dict(nvmnet.activity),
-        run_nvm=False,
-        viz_layers = ["sc","fef","tc","ip","opc","op1","op2","gh","go"],
-        print_layers = nvmnet.layers,
-        # stat_layers=["ip","go","gh"])
-        stat_layers=[],
-        read=True)
-
-    net = Network({"structures" : [structure], "connections" : connections})
-    env = Environment({"modules" : modules})
-
-    init_syngen_nvm(nvmnet, net)
-
-    print(net.run(env, {"multithreaded" : True,
-                            "worker threads" : 0,
-                            "iterations" : 200,
-                            "refresh rate" : 0,
-                            "verbose" : True,
-                            "learning flag" : False}))
-    
-    # Delete the objects
-    del net
-
-    # show_layers = [
-    #     ["go", "gh","ip"] + ["op"+x for x in "c123"] + ["d0","d1","d2"],
-    # ]
-    # show_tokens = True
-    # show_corrosion = True
-    # show_gates = False
-
-    # for t in range(100):
-    #     # if True:
-    #     # if t % 2 == 0 or at_exit:
-    #     if nvmnet.at_start() or nvmnet.at_exit():
-    #         print('t = %d'%t)
-    #         print(nvmnet.state_string(show_layers, show_tokens, show_corrosion, show_gates))
-    #     if nvmnet.at_exit():
-    #         break
-    #     nvmnet.tick()
-'''
+    return {
+        "type" : "callback",
+        "layers" : [
+            {
+                "structure" : "nvm",
+                "layer" : layer_name,
+                "output" : True,
+                "function" : name,
+                "id" : i
+            } for i,layer_name in enumerate(layer_names)
+        ]
+    }
