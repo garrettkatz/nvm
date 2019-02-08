@@ -24,7 +24,8 @@ class SyngenNVM:
         init_syngen_nvm_weights(nvmnet, self.net)
 
     def initialize_activity(self, nvmnet):
-        init_syngen_nvm_activity(nvmnet.activity, self.net)
+        try: init_syngen_nvm_activity(nvmnet.activity, self.net)
+        except AttributeError: pass
 
     def get_output(self, layer_name):
         return self.net.get_neuron_data(

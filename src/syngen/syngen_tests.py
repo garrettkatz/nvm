@@ -26,15 +26,16 @@ class SyngenNVMTestCase(NVMTestCase):
         
         vm.assemble(programs, verbose=0)
 
+        ### BUILD NETWORK ####
+        syn_net = SyngenNVM(vm.net)
+
         for name, trace in zip(names, traces):
             if verbose > 0:
                 print()
                 print(name)
 
             vm.load(name, trace[0])
-
-            ### BUILD NETWORK ####
-            syn_net = SyngenNVM(vm.net)
+            syn_net.initialize_activity(vm.net)
 
             ### SET UP VALIDATION CALLBACK ####
             class TestState:
@@ -76,10 +77,10 @@ class SyngenNVMTestCase(NVMTestCase):
                 "worker threads" : 0,
                 "verbose" : verbose})
                 
-            syn_net.free()
-
             if verbose:
                 print(report)
+
+        syn_net.free()
 
 
     def _make_vm(self, num_registers, tokens):
