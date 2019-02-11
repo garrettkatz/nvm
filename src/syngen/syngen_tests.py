@@ -139,11 +139,11 @@ class SyngenNVMTestCase(NVMTestCase):
             shapes={}, tokens=tokens, orthogonal=orthogonal)
 
 class SyngenNVMArithTestCase(ut.TestCase):
+    opdef = make_arith_opdef(in_range=range(-1,10), out_range=range(-9,10))
 
     def _make_syngen_nvm(self, vm):
         return SyngenNVM(vm.net,
-            [OpNet(vm.net, make_arith_opdef(),
-                ["r0", "r1"], ["r0", "r1"], "r2")])
+            [OpNet(vm.net, self.opdef, ["r0", "r1"], ["r0", "r1"], "r2")])
 
     def _make_syngen_env(self, vm):
         return SyngenEnvironment()
@@ -180,33 +180,46 @@ class SyngenNVMArithTestCase(ut.TestCase):
                 mov r0 9
                 mov r2 +
                 nop
+                mov r0 -1
+                mov r2 +
+                nop
+                mov r0 A
+                mov r2 +
+                nop
                 exit
         """
         trace = [
-            {"r0": None, "r1": None,"r2": None   },
-            {"r0": "1" , "r1": None,"r2": None   },
-            {"r0": "1" , "r1": "2" ,"r2": None   },
-            {"r0": "1" , "r1": "2" ,"r2": "+"    },
-            {"r0": "0" , "r1": "3" ,"r2": "null" }, # 1 + 2 = 3
-            {"r0": "0" , "r1": "3" ,"r2": "A"    },
-            {"r0": "0" , "r1": "3" ,"r2": "A"    }, # no change
-            {"r0": "0" , "r1": "3" ,"r2": "+"    },
-            {"r0": "0" , "r1": "3" ,"r2": "null" }, # 0 + 3 = 3
-            {"r0": "9" , "r1": "3" ,"r2": "null" },
-            {"r0": "9" , "r1": "3" ,"r2": "+"    },
-            {"r0": "1" , "r1": "2" ,"r2": "null" }, # 9 + 3 = 12
+            {"r0": None   , "r1": None   ,"r2": None   },
+            {"r0": "1"    , "r1": None   ,"r2": None   },
+            {"r0": "1"    , "r1": "2"    ,"r2": None   },
+            {"r0": "1"    , "r1": "2"    ,"r2": "+"    },
+            {"r0": "0"    , "r1": "3"    ,"r2": "null" }, # 1 + 2 = 3
+            {"r0": "0"    , "r1": "3"    ,"r2": "A"    },
+            {"r0": "0"    , "r1": "3"    ,"r2": "A"    }, # no change
+            {"r0": "0"    , "r1": "3"    ,"r2": "+"    },
+            {"r0": "0"    , "r1": "3"    ,"r2": "null" }, # 0 + 3 = 3
+            {"r0": "9"    , "r1": "3"    ,"r2": "null" },
+            {"r0": "9"    , "r1": "3"    ,"r2": "+"    },
+            {"r0": "1"    , "r1": "2"    ,"r2": "null" }, # 9 + 3 = 12
+            {"r0": "-1"   , "r1": "2"    ,"r2": "null" },
+            {"r0": "-1"   , "r1": "2"    ,"r2": "+"    },
+            {"r0": "0"    , "r1": "1"    ,"r2": "null" }, # -1 + 2 = 1
+            {"r0": "A"    , "r1": "1"    ,"r2": "null" },
+            {"r0": "A"    , "r1": "1"    ,"r2": "+"    },
+            {"r0": "null" , "r1": "null" ,"r2": "null" }, # A + 1 = ?
         ]
 
         self._test({"test":program}, ["test"], [trace],
-            tokens = ["A"] + arith_tokens,
+            tokens = ["A"] + self.opdef.tokens,
             num_registers=3, verbose=0)
 
 
-    def _test_bin_op(self, opcode, opdef):
-        f0,f1 = opdef.operations[opcode]
+    def _test_bin_op(self, opcode):
+        f0,f1 = self.opdef.operations[opcode]
 
-        values = {x: {"r0": x,"r1": x} for x in opdef.in_ops}
-        values[str(len(opdef.in_ops))] = {"r0": "null","r1": "null"}
+        values = {str(i): {"r0": x,"r1": x}
+            for i,x in enumerate(self.opdef.in_ops)}
+        values[str(len(self.opdef.in_ops))] = {"r0": "null","r1": "null"}
         pointers = {"0": {"r3": "arr"}}
         memory = (pointers, values)
 
@@ -263,8 +276,8 @@ class SyngenNVMArithTestCase(ut.TestCase):
             {"r3": "ptr", "r4": "ptr" },
         ]
 
-        for i,x in enumerate(opdef.in_ops):
-            for y in opdef.in_ops:
+        for i,x in enumerate(self.opdef.in_ops):
+            for y in self.opdef.in_ops:
                 try: v0,v1 = f0(x,y), f1(x,y)
                 except: v0,v1 = 'null','null'
 
@@ -286,7 +299,9 @@ class SyngenNVMArithTestCase(ut.TestCase):
                 ]
 
             # Last loop iteration with break, post-loop code
-            next_op = "null" if i == len(opdef.in_ops)-1 else opdef.in_ops[i+1]
+            next_op = (
+                "null" if i == len(self.opdef.in_ops)-1
+                       else self.opdef.in_ops[i+1])
             trace += [
                 {},                                        # drf
                 {"r1": "null" },                           # rem
@@ -311,25 +326,25 @@ class SyngenNVMArithTestCase(ut.TestCase):
         trace.append({}) # exit
 
         self._test({"test":program}, ["test"], [trace], memory = memory,
-            tokens = ["arr", "ptr"] + opdef.tokens,
+            tokens = ["arr", "ptr"] + self.opdef.tokens,
             num_registers=5, verbose=0)
 
 
     # @ut.skip("")
     def test_add(self):
-        self._test_bin_op("+", make_arith_opdef())
+        self._test_bin_op("+")
 
     # @ut.skip("")
     def test_sub(self):
-        self._test_bin_op("-", make_arith_opdef())
+        self._test_bin_op("-")
 
     # @ut.skip("")
     def test_mult(self):
-        self._test_bin_op("*", make_arith_opdef())
+        self._test_bin_op("*")
 
     # @ut.skip("")
     def test_div(self):
-        self._test_bin_op("/", make_arith_opdef())
+        self._test_bin_op("/")
 
 
 

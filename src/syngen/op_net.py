@@ -17,10 +17,6 @@ arith_ops = {
            lambda x,y:str((int(x)/int(y)))),
 }
 
-arith_in_ops = list(str(x) for x in range(0,10))
-arith_out_ops = list(str(x) for x in range(-9,10))
-arith_tokens = list(set(arith_ops.keys() + arith_in_ops + arith_out_ops))
-
 
 class OpDef:
     def __init__(self, op_name, operations, in_ops, out_ops):
@@ -33,8 +29,10 @@ class OpDef:
         self.tokens = list(set(
             self.operations.keys() + self.in_ops + self.out_ops))
 
-def make_arith_opdef():
-    return OpDef("arith", arith_ops, arith_in_ops, arith_out_ops)
+def make_arith_opdef(in_range=range(0,10),out_range=range(-9,10)):
+    return OpDef("arith", arith_ops,
+        (str(x) for x in in_range),
+        (str(x) for x in out_range))
 
 class OpNet:
     def __init__(self, nvmnet, opdef, in_regs, out_regs, op_reg):
@@ -54,6 +52,11 @@ class OpNet:
         self.hidden_name = "%s_hidden" % self.op_name
         self.output_name = "%s_output" % self.op_name
 
+        self.gate_size = len(self.operations)
+        self.input_size = len(self.in_ops) * len(self.input_registers)
+        self.hidden_size = len(self.in_ops) ** 2
+        self.output_size = len(self.out_ops) * len(self.output_registers)
+
         op_reg = nvmnet.layers[self.op_register]
         gate_bias = op_reg.activator.on * -(op_reg.size - 1)
 
@@ -62,7 +65,7 @@ class OpNet:
             "name" : self.gate_name,
             "neural model" : "binary threshold",
             "rows" : 1,
-            "columns" : len(self.operations),
+            "columns" : self.gate_size,
             "init config": {
                 "type": "flat",
                 "value": gate_bias
@@ -73,17 +76,18 @@ class OpNet:
             "name" : self.input_name,
             "neural model" : "nvm_heaviside",
             "rows" : 1,
-            "columns" : len(self.in_ops) * len(self.input_registers),
+            "columns" : self.input_size,
         }
         # Hidden layer
+        # Bias is set according to the number of input registers
         hidden_layer = {
             "name" : self.hidden_name,
             "neural model" : "nvm_heaviside",
-            "rows" : len(self.in_ops),
-            "columns" : len(self.in_ops),
+            "rows" : 1,
+            "columns" : self.hidden_size,
             "init config": {
                 "type": "flat",
-                "value": -1.5
+                "value": -len(self.input_registers)+0.5
             }
         }
         # Output layer
@@ -91,7 +95,7 @@ class OpNet:
             "name" : self.output_name,
             "neural model" : "nvm_heaviside",
             "rows" : 1,
-            "columns" : len(self.out_ops) * len(self.output_registers),
+            "columns" : self.output_size,
         }
         self.structure = {
             "name" : self.op_name,
@@ -99,7 +103,7 @@ class OpNet:
             "layers": [gate_layer, input_layer, hidden_layer, output_layer]
         }
 
-        def build_gate(to_name, indices=(0, len(self.operations)), suffix=""):
+        def build_gate(to_name, indices=(0, self.gate_size), suffix=""):
             return {
                 "name" : get_conn_name(to_name, self.gate_name, suffix),
                 "from layer" : self.gate_name,
@@ -177,6 +181,10 @@ class OpNet:
             self.connections.append(
                 build_fc(self.output_name, self.hidden_name, gated=True, suffix=op))
 
+        # Output bias (for 'null')
+        self.connections.append(
+            build_fc(self.output_name, 'bias', gated=False))
+
         # Output to operands
         for index,to_name in enumerate(self.output_registers):
             self.connections.append(build_gate(to_name, suffix=op));
@@ -252,9 +260,7 @@ class OpNet:
 
         # Input to hidden
         # Each hidden node is a unique combination of operands
-        w = np.zeros((
-            len(self.in_ops)**2,
-            len(self.in_ops)*len(self.input_registers)))
+        w = np.zeros((self.hidden_size, self.input_size))
         for i,x in enumerate(self.in_ops):
             for j,y in enumerate(self.in_ops):
                 hid_index = i * len(self.in_ops) + j
@@ -267,11 +273,15 @@ class OpNet:
         # Hidden to output
         # Each operation maps operand combos to outputs
         # Any exception yields a 'null' output
+        null1 = self.out_ops.index('null')
+        null2 = self.out_ops.index('null') + len(self.out_ops)
         for op,(f0,f1) in self.operations.iteritems():
-            w = np.zeros((
-                len(self.out_ops)*len(self.output_registers),
-                len(self.in_ops)**2))
+            w = np.zeros((self.output_size, self.hidden_size))
 
+            # Create the map
+            # 'null' is the default output if no hidden node is active
+            # For this reason, weights to 'null' are 2, not 1
+            # They will be decremented to 1, and 'null' will be biased
             for i,x in enumerate(self.in_ops):
                 for j,y in enumerate(self.in_ops):
                     try:
@@ -284,8 +294,20 @@ class OpNet:
                     w[v0,hid_index] = 1
                     w[v1+len(self.out_ops),hid_index] = 1
 
+            # Decrement all weights into 'null' outputs
+            w[null1,:] -= 1
+            w[null2,:] -= 1
+
             syngen_net.net.get_weight_matrix(get_conn_name(
                 self.output_name, self.hidden_name, op)).copy_from(w.flat)
+
+        # Output bias
+        # For 'null'
+        w = np.zeros((self.output_size, 1))
+        w[null1] = 1
+        w[null2] = 1
+        syngen_net.net.get_weight_matrix(
+            get_conn_name(self.output_name, 'bias')).copy_from(w.flat)
 
         # Output to operands
         # Each output node is mapped back to a distributed representation
