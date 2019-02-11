@@ -8,11 +8,15 @@ from syngen import Network, Environment, create_io_callback, FloatArray
 from syngen import get_cpu, get_gpus, interrupt_engine
 
 class SyngenNVM:
-    def __init__(self, nvmnet):
+    def __init__(self, nvmnet, auxiliary=[]):
+        self.auxiliary = auxiliary
+        aux_structures = [aux.structure for aux in auxiliary]
+        aux_conns = [c for aux in auxiliary for c in aux.connections]
+
         structure, connections = make_syngen_network(nvmnet)
         self.net = Network({
-            "structures" : [structure],
-            "connections" : connections})
+            "structures" : [structure] + aux_structures,
+            "connections" : connections + aux_conns})
 
         # Initialize bias
         self.get_output("bias")[0] = 1.0
@@ -22,6 +26,8 @@ class SyngenNVM:
 
     def initialize_weights(self, nvmnet):
         init_syngen_nvm_weights(nvmnet, self.net)
+        for aux in self.auxiliary:
+            aux.initialize(self, nvmnet)
 
     def initialize_activity(self, nvmnet):
         try: init_syngen_nvm_activity(nvmnet.activity, self.net)
@@ -62,8 +68,8 @@ class SyngenEnvironment:
     def __init__(self):
         self.modules = [make_exit_module()]
 
-    def add_visualizer(self, layer_names):
-        self.modules.append(make_visualizer_module(layer_names))
+    def add_visualizer(self, structure, layer_names):
+        self.modules.append(make_visualizer_module(structure, layer_names))
 
     def add_printer(self, nvmnet, layer_names):
         self.modules.append(make_printer_module(nvmnet, layer_names))
@@ -71,8 +77,8 @@ class SyngenEnvironment:
     def add_checker(self, nvmnet):
         self.modules.append(make_checker_module(nvmnet))
 
-    def add_custom(self, layer_names, cb_name, cb):
-        self.modules.append(make_custom_module(layer_names, cb_name, cb))
+    def add_custom(self, structure, layer_names, cb_name, cb):
+        self.modules.append(make_custom_module(structure, layer_names, cb_name, cb))
 
 
 
@@ -168,13 +174,10 @@ def make_syngen_network(nvmnet):
                 "to layer" : layer.name,
                 "type" : "subset",
                 "subset config" : {
-                    "from row start" : 0,
                     "from row end" : 1,
                     "from column start" : decay_gate_index,
                     "from column end" : decay_gate_index+1,
-                    "to row start" : 0,
                     "to row end" : 1,
-                    "to column start" : 0,
                     "to column end" : 1,
                 },
                 "plastic" : False,
@@ -210,13 +213,10 @@ def make_syngen_network(nvmnet):
                 "to layer" : to_name,
                 "type" : "subset",
                 "subset config" : {
-                    "from row start" : 0,
                     "from row end" : 1,
                     "from column start" : gate_index,
                     "from column end" : gate_index+1,
-                    "to row start" : 0,
                     "to row end" : 1,
-                    "to column start" : 0,
                     "to column end" : 1,
                 },
                 "plastic" : False,
@@ -244,13 +244,10 @@ def make_syngen_network(nvmnet):
                 "to layer" : to_name,
                 "type" : "subset",
                 "subset config" : {
-                    "from row start" : 0,
                     "from row end" : 1,
                     "from column start" : gate_index,
                     "from column end" : gate_index+1,
-                    "to row start" : 0,
                     "to row end" : 1,
-                    "to column start" : 0,
                     "to column end" : 1,
                 },
                 "plastic" : False,
@@ -326,11 +323,11 @@ def init_syngen_nvm_activity(activity, syngen_net):
                 "nvm", layer_name, "output").copy_from(activity.flat)
 
 
-def make_visualizer_module(layer_names):
+def make_visualizer_module(structure, layer_names):
     return {
         "type" : "visualizer",
         "layers" : [
-            {"structure": "nvm", "layer": layer_name}
+            {"structure": structure, "layer": layer_name}
                 for layer_name in layer_names]
     }
 
@@ -419,7 +416,7 @@ def make_checker_module(nvmnet):
         ]
     }
 
-def make_custom_module(layer_names, name, cb):
+def make_custom_module(structure, layer_names, name, cb):
 
     def custom_callback(ID, size, ptr):
         cb(layer_names[ID], FloatArray(size,ptr).to_np_array())
@@ -430,7 +427,7 @@ def make_custom_module(layer_names, name, cb):
         "type" : "callback",
         "layers" : [
             {
-                "structure" : "nvm",
+                "structure" : structure,
                 "layer" : layer_name,
                 "output" : True,
                 "function" : name,
