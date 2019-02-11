@@ -7,7 +7,7 @@ from learning_rules import rehebbian
 from tests import *
 
 from syngen_nvm import *
-from arith_net import ArithNet, operations
+from op_net import *
 from syngen import Network, Environment
 from syngen import get_cpu, get_gpus, interrupt_engine
 
@@ -141,11 +141,12 @@ class SyngenNVMTestCase(NVMTestCase):
 class SyngenNVMArithTestCase(ut.TestCase):
 
     def _make_syngen_nvm(self, vm):
-        return SyngenNVM(vm.net, [ArithNet(vm.net, "r0", "r1", "r2")])
+        return SyngenNVM(vm.net,
+            [OpNet(vm.net, make_arith_opdef(),
+                ["r0", "r1"], ["r0", "r1"], "r2")])
 
     def _make_syngen_env(self, vm):
-        syn_env = SyngenEnvironment()
-        return syn_env
+        return SyngenEnvironment()
 
     def _test(self, programs, names, traces,
             memory=None, tokens=[], num_registers=1, verbose=0):
@@ -155,7 +156,7 @@ class SyngenNVMArithTestCase(ut.TestCase):
 
     def _make_vm(self, num_registers, tokens):
         orthogonal = True
-        layer_shape = (32,32) if orthogonal else (32,32)
+        layer_shape = (16,16) if orthogonal else (32,32)
         pad = 0.0001
         activator, learning_rule = tanh_activator, rehebbian
         register_names = ["r%d"%r for r in range(num_registers)]
@@ -197,17 +198,15 @@ class SyngenNVMArithTestCase(ut.TestCase):
         ]
 
         self._test({"test":program}, ["test"], [trace],
-            tokens = ["+", "A"] + [str(x) for x in range(-10,10)],
+            tokens = ["A"] + arith_tokens,
             num_registers=3, verbose=0)
 
 
-    def _test_op(self, op):
+    def _test_bin_op(self, opcode, opdef):
+        f0,f1 = opdef.operations[opcode]
 
-        num_range = 10
-        f0,f1 = operations[op]
-
-        values = {str(x): {"r0": str(x),"r1": str(x)} for x in range(num_range)}
-        values[str(num_range)] = {"r0": "null","r1": "null"}
+        values = {x: {"r0": x,"r1": x} for x in opdef.in_ops}
+        values[str(len(opdef.in_ops))] = {"r0": "null","r1": "null"}
         pointers = {"0": {"r3": "arr"}}
         memory = (pointers, values)
 
@@ -253,7 +252,7 @@ class SyngenNVMArithTestCase(ut.TestCase):
                 jmp loop
 
         end:    exit
-        """ % op
+        """ % opcode
         trace = [
             {},
             {"r3": "arr" },
@@ -264,33 +263,30 @@ class SyngenNVMArithTestCase(ut.TestCase):
             {"r3": "ptr", "r4": "ptr" },
         ]
 
-        for x in range(num_range):
-            sx = str(x)
-
-            for y in range(num_range):
-                a,b,sy = x,y,str(y)
-
-                try : v0,v1 = str(f0(a,b)), str(f1(a,b))
-                except ZeroDivisionError: v0,v1 = 'null','null'
+        for i,x in enumerate(opdef.in_ops):
+            for y in opdef.in_ops:
+                try: v0,v1 = f0(x,y), f1(x,y)
+                except: v0,v1 = 'null','null'
 
                 # Loop iteration without break
                 trace += [
                     {},                                    # drf
-                    {"r1": sy },                           # rem
+                    {"r1": y },                            # rem
                     {},                                    # nxt
                     {},                                    # ref
                     {"co": "false"},                       # cmp
                     {},                                    # jie
 
                     {},                                    # drf
-                    {"r0": sx , "r1": sy },                # rem
-                    {"r0": sx , "r1": sy ,"r2": op },      # mov
+                    {"r0": x , "r1": y },                  # rem
+                    {"r0": x , "r1": y ,"r2": opcode },    # mov
                     {"r0": v0 , "r1": v1 ,"r2": "null" },  # nop
 
                     {},                                    # jmp
                 ]
 
             # Last loop iteration with break, post-loop code
+            next_op = "null" if i == len(opdef.in_ops)-1 else opdef.in_ops[i+1]
             trace += [
                 {},                                        # drf
                 {"r1": "null" },                           # rem
@@ -302,7 +298,7 @@ class SyngenNVMArithTestCase(ut.TestCase):
                 {},                                        # drf
                 {},                                        # nxt
                 {},                                        # ref
-                {"r0": "null" if x == 9 else str(x+1)},    # rem
+                {"r0": next_op},                           # rem
                 {"cmp": "true"},                           # cmp
                 {},                                        # jie
 
@@ -315,25 +311,25 @@ class SyngenNVMArithTestCase(ut.TestCase):
         trace.append({}) # exit
 
         self._test({"test":program}, ["test"], [trace], memory = memory,
-            tokens = ["arr", "ptr", op] + [str(x) for x in range(-9,10)],
+            tokens = ["arr", "ptr"] + opdef.tokens,
             num_registers=5, verbose=0)
 
 
     # @ut.skip("")
     def test_add(self):
-        self._test_op("+")
+        self._test_bin_op("+", make_arith_opdef())
 
     # @ut.skip("")
     def test_sub(self):
-        self._test_op("-")
+        self._test_bin_op("-", make_arith_opdef())
 
     # @ut.skip("")
     def test_mult(self):
-        self._test_op("*")
+        self._test_bin_op("*", make_arith_opdef())
 
     # @ut.skip("")
     def test_div(self):
-        self._test_op("/")
+        self._test_bin_op("/", make_arith_opdef())
 
 
 

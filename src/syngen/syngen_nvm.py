@@ -84,7 +84,8 @@ class SyngenEnvironment:
 
 # Builds a name for a connection
 def get_conn_name(to_name, from_name, suffix=""):
-    return to_name + "<" + from_name + suffix
+    return "%s<%s%s" % (
+        to_name, from_name, "" if suffix is None else ("-%s" % suffix))
 
 def make_syngen_network(nvmnet):
     for layer in nvmnet.layers.values():
@@ -169,7 +170,7 @@ def make_syngen_network(nvmnet):
 
         if decay_gate_index not in gates_always_on:
             connections.append({
-                "name" : "%s-decay" % layer.name,
+                "name" : get_conn_name(layer.name, layer.name, "decay"),
                 "from layer" : "go",
                 "to layer" : layer.name,
                 "type" : "subset",
@@ -185,7 +186,7 @@ def make_syngen_network(nvmnet):
             })
 
             connections.append({
-                "name" : "%s-gain" % layer.name,
+                "name" : get_conn_name(layer.name, layer.name, "gain"),
                 "from layer" : layer.name,
                 "to layer" : layer.name,
                 "type" : "one to one",
@@ -208,7 +209,7 @@ def make_syngen_network(nvmnet):
         gated = gate_index not in gates_always_on
         if gated:
             connections.append({
-                "name" : get_conn_name(to_name, from_name, "-gate"),
+                "name" : get_conn_name(to_name, from_name, "gate"),
                 "from layer" : "go",
                 "to layer" : to_name,
                 "type" : "subset",
@@ -239,7 +240,7 @@ def make_syngen_network(nvmnet):
             gate_index = nvmnet.gate_map.get_gate_index(
                 (to_name, from_name, "l"))
             connections.append({
-                "name" : get_conn_name(to_name, from_name, "-learning"),
+                "name" : get_conn_name(to_name, from_name, "learning"),
                 "from layer" : "go",
                 "to layer" : to_name,
                 "type" : "subset",
@@ -262,7 +263,7 @@ def make_syngen_network(nvmnet):
 
         # Weights
         connections.append({
-            "name" : get_conn_name(to_name, from_name, "-weights"),
+            "name" : get_conn_name(to_name, from_name, "weights"),
             "from layer" : from_name,
             "to layer" : to_name,
             "type" : "fully connected",
@@ -275,7 +276,7 @@ def make_syngen_network(nvmnet):
         # Biases (skip if all zero)
         if np.count_nonzero(nvmnet.biases[(to_name, from_name)]) > 0:
             connections.append({
-                "name" : get_conn_name(to_name, from_name, "-biases"),
+                "name" : get_conn_name(to_name, from_name, "biases"),
                 "from layer" : "bias",
                 "to layer" : to_name,
                 "type" : "fully connected",
@@ -297,13 +298,13 @@ def init_syngen_nvm_weights(nvmnet, syngen_net):
     for (to_name, from_name), w in nvmnet.weights.items():
         if np.count_nonzero(w) > 0:
             syngen_net.get_weight_matrix(
-                get_conn_name(to_name, from_name, "-weights")).copy_from(w.flat)
+                get_conn_name(to_name, from_name, "weights")).copy_from(w.flat)
 
     # Initialize biases
     for (to_name, from_name), b in nvmnet.biases.items():
         if np.count_nonzero(b) > 0:
             syngen_net.get_weight_matrix(
-                get_conn_name(to_name, from_name, "-biases")).copy_from(b.flat)
+                get_conn_name(to_name, from_name, "biases")).copy_from(b.flat)
 
     # Initialize exit detector
     exit_pattern = np.sign(nvmnet.layers["opc"].coder.encode("exit"))
