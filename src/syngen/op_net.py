@@ -5,16 +5,31 @@ from sequencer import Sequencer
 from syngen_nvm import *
 
 import numpy as np
+from itertools import product
 
 arith_ops = {
-    "+" : (lambda x,y:str((int(x)+int(y))/10),
-           lambda x,y:str((int(x)+int(y))%10)),
-    "-" : (lambda x,y:str((int(x)-int(y))/10),
-           lambda x,y:str((int(x)-int(y))%10)),
-    "*" : (lambda x,y:str((int(x)*int(y))/10),
-           lambda x,y:str((int(x)*int(y))%10)),
-    "/" : (lambda x,y:str((int(x)%int(y))),
-           lambda x,y:str((int(x)/int(y)))),
+    "+" : (lambda x,y:str( (int(x) + int(y)) / 10 ),
+           lambda x,y:str( (int(x) + int(y)) % 10 )),
+    "-" : (lambda x,y:str( (int(x) - int(y)) / 10 ),
+           lambda x,y:str( (int(x) - int(y)) % 10 )),
+    "*" : (lambda x,y:str( (int(x) * int(y)) / 10 ),
+           lambda x,y:str( (int(x) * int(y)) % 10 )),
+    "/" : (lambda x,y:str( (int(x) % int(y)) ),
+           lambda x,y:str( (int(x) / int(y)) )),
+}
+
+unary_ops = {
+    "++" : (lambda x:str( (int(x)+1) / 10 ),
+            lambda x:str( (int(x)+1) % 10 )),
+    "--" : (lambda x:str( (int(x)-1) / 10 ),
+            lambda x:str( (int(x)-1) % 10 )),
+}
+
+comp_ops = {
+    "<"  : (lambda x,y:str( int(x) <  int(y) ).lower(), ),
+    ">"  : (lambda x,y:str( int(x) >  int(y) ).lower(), ),
+    "<=" : (lambda x,y:str( int(x) <= int(y) ).lower(), ),
+    ">=" : (lambda x,y:str( int(x) >= int(y) ).lower(), ),
 }
 
 
@@ -33,6 +48,16 @@ def make_arith_opdef(in_range=range(0,10),out_range=range(-9,10)):
     return OpDef("arith", arith_ops,
         (str(x) for x in in_range),
         (str(x) for x in out_range))
+
+def make_unary_opdef(in_range=range(0,10),out_range=range(-9,10)):
+    return OpDef("unary", unary_ops,
+        (str(x) for x in in_range),
+        (str(x) for x in out_range))
+
+def make_comp_opdef(in_range=range(0,10)):
+    return OpDef("comp", comp_ops,
+        (str(x) for x in in_range),
+        ("true", "false"))
 
 class OpNet:
     def __init__(self, nvmnet, opdef, in_regs, out_regs, op_reg):
@@ -54,7 +79,7 @@ class OpNet:
 
         self.gate_size = len(self.operations)
         self.input_size = len(self.in_ops) * len(self.input_registers)
-        self.hidden_size = len(self.in_ops) ** 2
+        self.hidden_size = len(self.in_ops) ** len(self.input_registers)
         self.output_size = len(self.out_ops) * len(self.output_registers)
 
         op_reg = nvmnet.layers[self.op_register]
@@ -187,7 +212,7 @@ class OpNet:
 
         # Output to operands
         for index,to_name in enumerate(self.output_registers):
-            self.connections.append(build_gate(to_name, suffix=op));
+            self.connections.append(build_gate(to_name, suffix=self.op_name));
 
             # Output
             self.connections.append(build_subset(to_name, self.output_name, {
@@ -200,7 +225,7 @@ class OpNet:
 
             # Squash
             self.connections.append({
-                "name" : get_conn_name(to_name, to_name, "squash"),
+                "name" : get_conn_name(to_name, to_name, "%s-squash" % self.op_name),
                 "from layer" : to_name,
                 "to layer" : to_name,
                 "type" : "one to one",
@@ -261,11 +286,10 @@ class OpNet:
         # Input to hidden
         # Each hidden node is a unique combination of operands
         w = np.zeros((self.hidden_size, self.input_size))
-        for i,x in enumerate(self.in_ops):
-            for j,y in enumerate(self.in_ops):
-                hid_index = i * len(self.in_ops) + j
-                w[hid_index,i] = 1
-                w[hid_index,j+len(self.in_ops)] = 1
+        combos = product(range(len(self.in_ops)), repeat=len(self.input_registers))
+        for hid_index,elems in enumerate(combos):
+            for i,e in enumerate(elems):
+                w[hid_index,i*len(self.in_ops)+e] = 1
 
         syngen_net.net.get_weight_matrix(
             get_conn_name(self.hidden_name, self.input_name)).copy_from(w.flat)
@@ -273,30 +297,28 @@ class OpNet:
         # Hidden to output
         # Each operation maps operand combos to outputs
         # Any exception yields a 'null' output
-        null1 = self.out_ops.index('null')
-        null2 = self.out_ops.index('null') + len(self.out_ops)
-        for op,(f0,f1) in self.operations.iteritems():
+        nulls = [self.out_ops.index('null') + i*len(self.out_ops)
+            for i in range(len(self.output_registers))]
+        for op,fs in self.operations.iteritems():
             w = np.zeros((self.output_size, self.hidden_size))
 
             # Create the map
             # 'null' is the default output if no hidden node is active
             # For this reason, weights to 'null' are 2, not 1
             # They will be decremented to 1, and 'null' will be biased
-            for i,x in enumerate(self.in_ops):
-                for j,y in enumerate(self.in_ops):
-                    try:
-                        v0,v1 = f0(x,y), f1(x,y)
-                    except:
-                        v0,v1 = 'null','null'
-                    v0,v1 = self.out_ops.index(v0), self.out_ops.index(v1)
+            combos = product(self.in_ops, repeat=len(self.input_registers))
+            for hid_index,elems in enumerate(combos):
+                try:
+                    outputs = tuple(self.out_ops.index(f(*elems)) for f in fs)
+                except:
+                    outputs = tuple(self.out_ops.index('null') for f in fs)
 
-                    hid_index = i * len(self.in_ops) + j
-                    w[v0,hid_index] = 1
-                    w[v1+len(self.out_ops),hid_index] = 1
+                for i,o in enumerate(outputs):
+                    w[o+(i*len(self.out_ops)),hid_index] = 1
 
             # Decrement all weights into 'null' outputs
-            w[null1,:] -= 1
-            w[null2,:] -= 1
+            for null_index in nulls:
+                w[null_index,:] -= 1
 
             syngen_net.net.get_weight_matrix(get_conn_name(
                 self.output_name, self.hidden_name, op)).copy_from(w.flat)
@@ -304,8 +326,8 @@ class OpNet:
         # Output bias
         # For 'null'
         w = np.zeros((self.output_size, 1))
-        w[null1] = 1
-        w[null2] = 1
+        for null_index in nulls:
+            w[null_index] = 1
         syngen_net.net.get_weight_matrix(
             get_conn_name(self.output_name, 'bias')).copy_from(w.flat)
 

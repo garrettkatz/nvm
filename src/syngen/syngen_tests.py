@@ -11,8 +11,8 @@ from op_net import *
 from syngen import Network, Environment
 from syngen import get_cpu, get_gpus, interrupt_engine
 
-from datetime import datetime
 import numpy as np
+from random import sample
 
 def test_syngen(tester, programs, names, traces, memory=None, tokens=[], num_registers=1, verbose=0):
     """
@@ -97,7 +97,7 @@ def test_syngen(tester, programs, names, traces, memory=None, tokens=[], num_reg
 
         ### RUN SYNGEN ENGINE ###
         report = syn_net.run(syn_env, {
-            "multithreaded" : False,
+            "multithreaded" : True,
             "worker threads" : 0,
             "verbose" : verbose})
 
@@ -139,14 +139,34 @@ class SyngenNVMTestCase(NVMTestCase):
             shapes={}, tokens=tokens, orthogonal=orthogonal)
 
 class SyngenNVMArithTestCase(ut.TestCase):
-    opdef = make_arith_opdef(in_range=range(-1,10), out_range=range(-9,10))
+    in_range = range(-1,10)
+    out_range = range(-9,10)
+    arith_opdef = make_arith_opdef(in_range=in_range, out_range=out_range)
+    unary_opdef = make_unary_opdef(in_range=in_range, out_range=out_range)
+    comp_opdef = make_comp_opdef(in_range=in_range)
+    all_tokens = [t
+        for op in [arith_opdef, unary_opdef, comp_opdef] for t in op.tokens]
 
     def _make_syngen_nvm(self, vm):
         return SyngenNVM(vm.net,
-            [OpNet(vm.net, self.opdef, ["r0", "r1"], ["r0", "r1"], "r2")])
+            [OpNet(vm.net, self.arith_opdef, ["r0", "r1"], ["r0", "r1"], "r2"),
+             OpNet(vm.net, self.unary_opdef, ["r1"], ["r0", "r1"], "r2"),
+             OpNet(vm.net, self.comp_opdef, ["r0", "r1"], ["r1"], "r2")])
 
     def _make_syngen_env(self, vm):
-        return SyngenEnvironment()
+        syn_env = SyngenEnvironment()
+
+        def callback(name, data):
+            if "input" in name:
+                print("")
+            print(name, data)
+
+        op = "comp"
+        #syn_env.add_custom(op,
+        #    ["%s_%s" % (op, suffix) for suffix in "input", "hidden", "output"],
+        #    "test", callback)
+
+        return syn_env
 
     def _test(self, programs, names, traces,
             memory=None, tokens=[], num_registers=1, verbose=0):
@@ -163,126 +183,143 @@ class SyngenNVMArithTestCase(ut.TestCase):
 
         return NVM(layer_shape,
             pad, activator, learning_rule, register_names,
-            shapes={"gh" : (32,32)}, tokens=tokens, orthogonal=orthogonal)
+            shapes={}, tokens=tokens, orthogonal=orthogonal)
 
     # @ut.skip("")
-    def test_add_simple(self):
+    def test_squash_op(self):
 
         program = """
-        start:  mov r0 1
-                mov r1 2
-                mov r2 +
+        start:  mov r2 +
                 nop
                 mov r2 A
                 nop
                 mov r2 +
                 nop
-                mov r0 9
-                mov r2 +
-                nop
-                mov r0 -1
-                mov r2 +
-                nop
-                mov r0 A
-                mov r2 +
-                nop
                 exit
         """
         trace = [
-            {"r0": None   , "r1": None   ,"r2": None   },
-            {"r0": "1"    , "r1": None   ,"r2": None   },
-            {"r0": "1"    , "r1": "2"    ,"r2": None   },
-            {"r0": "1"    , "r1": "2"    ,"r2": "+"    },
-            {"r0": "0"    , "r1": "3"    ,"r2": "null" }, # 1 + 2 = 3
-            {"r0": "0"    , "r1": "3"    ,"r2": "A"    },
-            {"r0": "0"    , "r1": "3"    ,"r2": "A"    }, # no change
-            {"r0": "0"    , "r1": "3"    ,"r2": "+"    },
-            {"r0": "0"    , "r1": "3"    ,"r2": "null" }, # 0 + 3 = 3
-            {"r0": "9"    , "r1": "3"    ,"r2": "null" },
-            {"r0": "9"    , "r1": "3"    ,"r2": "+"    },
-            {"r0": "1"    , "r1": "2"    ,"r2": "null" }, # 9 + 3 = 12
-            {"r0": "-1"   , "r1": "2"    ,"r2": "null" },
-            {"r0": "-1"   , "r1": "2"    ,"r2": "+"    },
-            {"r0": "0"    , "r1": "1"    ,"r2": "null" }, # -1 + 2 = 1
-            {"r0": "A"    , "r1": "1"    ,"r2": "null" },
-            {"r0": "A"    , "r1": "1"    ,"r2": "+"    },
-            {"r0": "null" , "r1": "null" ,"r2": "null" }, # A + 1 = ?
+            {},
+            {"r2": "+"    },
+            {"r2": "null" }, # squash
+            {"r2": "A"    },
+            {"r2": "A"    }, # no change
+            {"r2": "+"    },
+            {"r2": "null" }, # squash
         ]
 
         self._test({"test":program}, ["test"], [trace],
-            tokens = ["A"] + self.opdef.tokens,
+            tokens = ["A"] + self.all_tokens,
             num_registers=3, verbose=0)
 
 
-    def _test_bin_op(self, opcode):
-        f0,f1 = self.opdef.operations[opcode]
+    def _test_op(self, opcode, opdef, from_a=None, from_b=None):
+
+        # Default to all input values
+        if from_a is None: from_a = self.in_range
+        if from_b is None: from_b = self.in_range
+
+        # Ensure string inputs
+        from_a = list(str(x) for x in from_a)
+        from_b = list(str(x) for x in from_b)
+
+        # Ensure two functions
+        # For unary operations, thread first argument through
+        try:
+            fs = opdef.operations[opcode]
+            f0,f1 = fs
+        except ValueError:
+            f0 = lambda x,y : x
+            f1 = fs[0]
+
+        # Ensure each function can take two arguments
+        try: f0("0", "0")
+        except TypeError:
+            t0 = f0
+            f0 = lambda x,y: t0(y)
+        except: pass
+
+        try: f1("0", "0")
+        except TypeError:
+            t1 = f1
+            f1 = lambda x,y: t1(y)
+        except: pass
 
         values = {str(i): {"r0": x,"r1": x}
-            for i,x in enumerate(self.opdef.in_ops)}
-        values[str(len(self.opdef.in_ops))] = {"r0": "null","r1": "null"}
-        pointers = {"0": {"r3": "arr"}}
+            for i,x in enumerate(from_a + ["null"] + from_b + ["null"])}
+        pointers = {"0": {"r2": "arr1"},
+            str(len(from_a)+1) : {"r2": "arr2"}}
         memory = (pointers, values)
 
         # Advances pointers along memory, performing the
-        #   operation on all pairs of digits from 0-9.
+        #   operation on all combinations of specified inputs.
         #
-        # for x in range(10):
-        #     for y in range(10):
-        #         x + y
+        # for x in from_a:
+        #     for y in from_b:
+        #         x (op) y
+        #
+        # r0, r1: argument
+        # r2    : opcode, pointer
         program = """
-        start:  mov r3 arr
-                drf r3
-                mov r3 ptr
-                ref r3
-                mov r4 ptr
-                ref r4
+        start:  mov r2 arr1
+                drf r2
+                mov r2 ptr1
+                ref r2
+                mov r2 arr2
+                drf r2
+                mov r2 ptr2
+                ref r2
 
-        loop:   drf r3
+        loop:   mov r2 ptr2
+                drf r2
                 rem r1
                 nxt
-                ref r3
+                ref r2
                 cmp r1 null
                 jie break
 
-                drf r4
+                mov r2 ptr1
+                drf r2
                 rem r0
                 mov r2 %s
-                nop
 
                 jmp loop
 
-        break:  drf r4
+        break:  mov r2 ptr1
+                drf r2
                 nxt
-                ref r4
+                ref r2
                 rem r0
                 cmp r0 null
                 jie end
 
-                mov r3 arr
-                drf r3
-                mov r3 ptr
-                ref r3
+                mov r2 arr2
+                drf r2
+                mov r2 ptr2
+                ref r2
                 jmp loop
 
         end:    exit
         """ % opcode
         trace = [
             {},
-            {"r3": "arr" },
-            {"r3": "arr" },
-            {"r3": "ptr" },
-            {"r3": "ptr" },
-            {"r3": "ptr", "r4": "ptr" },
-            {"r3": "ptr", "r4": "ptr" },
+            {"r2": "arr1" },
+            {"r2": "arr1" },
+            {"r2": "ptr1" },
+            {"r2": "ptr1" },
+            {"r2": "arr2" },
+            {"r2": "arr2" },
+            {"r2": "ptr2" },
+            {"r2": "ptr2" },
         ]
 
-        for i,x in enumerate(self.opdef.in_ops):
-            for y in self.opdef.in_ops:
+        for i,x in enumerate(from_a):
+            for y in from_b:
                 try: v0,v1 = f0(x,y), f1(x,y)
                 except: v0,v1 = 'null','null'
 
                 # Loop iteration without break
                 trace += [
+                    {"r2" : "ptr2"},                       # mov
                     {},                                    # drf
                     {"r1": y },                            # rem
                     {},                                    # nxt
@@ -290,19 +327,18 @@ class SyngenNVMArithTestCase(ut.TestCase):
                     {"co": "false"},                       # cmp
                     {},                                    # jie
 
+                    {"r2" : "ptr1"},                       # mov
                     {},                                    # drf
                     {"r0": x , "r1": y },                  # rem
-                    {"r0": x , "r1": y ,"r2": opcode },    # mov
-                    {"r0": v0 , "r1": v1 ,"r2": "null" },  # nop
+                    {"r0": x , "r1": y  ,"r2": opcode },   # mov
 
-                    {},                                    # jmp
+                    {"r0": v0, "r1": v1 ,"r2": "null" },   # jmp
                 ]
 
             # Last loop iteration with break, post-loop code
-            next_op = (
-                "null" if i == len(self.opdef.in_ops)-1
-                       else self.opdef.in_ops[i+1])
+            next_op = ("null" if i == len(from_a)-1 else from_a[i+1])
             trace += [
+                {"r2" : "ptr2"},                           # mov
                 {},                                        # drf
                 {"r1": "null" },                           # rem
                 {},                                        # nxt
@@ -310,6 +346,7 @@ class SyngenNVMArithTestCase(ut.TestCase):
                 {"co": "true"},                            # cmp
                 {},                                        # jie
 
+                {"r2" : "ptr1"},                           # mov
                 {},                                        # drf
                 {},                                        # nxt
                 {},                                        # ref
@@ -317,34 +354,35 @@ class SyngenNVMArithTestCase(ut.TestCase):
                 {"cmp": "true"},                           # cmp
                 {},                                        # jie
 
-                {"r3": "arr"},                             # mov
+                {"r2": "arr2"},                            # mov
                 {},                                        # drf
-                {"r3": "ptr"},                             # mov
+                {"r2": "ptr2"},                            # mov
                 {},                                        # ref
                 {},                                        # jmp
             ]
         trace.append({}) # exit
 
         self._test({"test":program}, ["test"], [trace], memory = memory,
-            tokens = ["arr", "ptr"] + self.opdef.tokens,
-            num_registers=5, verbose=0)
+            tokens = ["arr1", "arr2", "ptr1", "ptr2"] + self.all_tokens,
+            num_registers=3, verbose=0)
 
 
     # @ut.skip("")
-    def test_add(self):
-        self._test_bin_op("+")
+    def test_arith(self):
+        for op in "+-*/":
+            self._test_op(op, self.arith_opdef,
+                sample(self.in_range, 3), sample(self.in_range, 3))
 
     # @ut.skip("")
-    def test_sub(self):
-        self._test_bin_op("-")
+    def test_unary(self):
+        for op in ["++", "--"]:
+            self._test_op(op, self.unary_opdef, ["0"], self.in_range)
 
     # @ut.skip("")
-    def test_mult(self):
-        self._test_bin_op("*")
-
-    # @ut.skip("")
-    def test_div(self):
-        self._test_bin_op("/")
+    def test_comp(self):
+        for op in ["<", ">", "<=", ">="]:
+            self._test_op(op, self.comp_opdef,
+                sample(self.in_range, 3), sample(self.in_range, 3))
 
 
 
