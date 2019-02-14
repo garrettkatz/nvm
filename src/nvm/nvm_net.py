@@ -7,6 +7,7 @@ from learning_rules import *
 from nvm_instruction_set import opcodes, flash_instruction_set
 from nvm_assembler import assemble
 from orthogonal_patterns import nearest_power_of_2
+from builtins import input
 
 def update_add(accumulator, summand):
     for k, v in summand.items():
@@ -40,8 +41,8 @@ def address_space(forward_layer, backward_layer, orthogonal=False):
     return weights, biases
 
 class NVMNet:
-    
-    def __init__(self, layer_shape, pad, activator, learning_rule, devices, shapes={}, tokens=[], orthogonal=False):
+    # changing devices to registers
+    def __init__(self, layer_shape, pad, activator, learning_rule, registers, shapes={}, tokens=[], orthogonal=False):
         # layer_shape is default, shapes[layer_name] are overrides
         if 'gh' not in shapes: shapes['gh'] = (32,16)
         if 'm' not in shapes: shapes['m'] = (16,16)
@@ -74,8 +75,10 @@ class NVMNet:
             for tf in co_true.flatten()]))
 
         # add device layers
-        layers.update(devices)
-        self.devices = devices
+        # changing devices to registers
+        layers.update(registers)
+        # changing devices to registers
+        self.registers = registers
         self.layers = layers
 
         # set up gates
@@ -97,9 +100,11 @@ class NVMNet:
         self.orthogonal = orthogonal
         self.layers["opc"].encode_tokens(opcodes, orthogonal=orthogonal)
         # explicitly convert to list for python3
-        all_tokens = list(set(tokens) | set(list(self.devices.keys()) + ["null"]))
+        # changing devices to registers
+        all_tokens = list(set(tokens) | set(list(self.registers.keys()) + ["null"]))
         # explicitly convert to list for python3
-        for name in list(self.devices.keys()) + ["op1","op2","ci"]:
+        # changing devices to registers
+        for name in list(self.registers.keys()) + ["op1","op2","ci"]:
             self.layers[name].encode_tokens(all_tokens, orthogonal=orthogonal)
 
         # set up connection matrices
@@ -113,11 +118,12 @@ class NVMNet:
             self.biases.update(ms_biases)
 
         # initialize fast connectivity
+        # changing devices to registers
         connect_pairs = \
-            [(device,'mf') for device in self.devices] + \
-            [('mf',device) for device in self.devices] + \
-            [(device,'mb') for device in self.devices] + \
-            [('mb',device) for device in self.devices] + \
+            [(register,'mf') for register in self.registers] + \
+            [('mf',register) for register in self.registers] + \
+            [(register,'mb') for register in self.registers] + \
+            [('mb',register) for register in self.registers] + \
             [('ip','sf')] + \
             [('co','ci')]
         for (to_name, from_name) in connect_pairs:
@@ -283,7 +289,8 @@ class NVMNet:
             s += "\n"
         return s
 
-def make_nvmnet(programs=None, devices=None):
+# changing devices to registers
+def make_nvmnet(programs=None, registers=None):
 
     # default program
     if programs is None:
@@ -308,12 +315,14 @@ def make_nvmnet(programs=None, devices=None):
     act = activator(pad, layer_size)
 
     # default devices
-    if devices is None:
-        devices = {"d%d"%d: Layer("d%d"%d, layer_shape, act, Coder(act))
+    # changing devices to registers
+    if registers is None:
+        registers = {"d%d"%d: Layer("d%d"%d, layer_shape, act, Coder(act))
             for d in range(3)}
 
     # assemble and link programs
-    nvmnet = NVMNet(layer_shape, pad, activator, learning_rule, devices)
+    # changing devices to registers
+    nvmnet = NVMNet(layer_shape, pad, activator, learning_rule, registers)
     for name, program in programs.items():
         nvmnet.assemble(program, name, verbose=1)
     nvmnet.link(verbose=1)
@@ -328,7 +337,9 @@ if __name__ == '__main__':
     np.set_printoptions(linewidth=200, formatter = {'float': lambda x: '% .2f'%x})
    
     nvmnet = make_nvmnet()
-    raw_input("continue?")
+    # raw_input("continue?")
+    # changed from raw_input to input for python3
+    input("continue?")
         
     show_layers = [
         ["go", "gh","ip"] + ["op"+x for x in "c12"] + ["d0","d1","d2"],

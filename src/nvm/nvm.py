@@ -52,7 +52,8 @@ class NVM:
             " ".join([
                 "%s"%state[x] for x in ["opc","op1","op2"]]) + ", " + \
             ",".join([
-                "%s:%s"%(r,state[r]) for r in self.net.devices])
+                "%s:%s"%(r,state[r]) for r in self.net.registers])
+    # changing devices to registers
 
     def at_start(self):
         return self.net.at_start()
@@ -104,7 +105,7 @@ def make_scaled_nvm(register_names, programs, orthogonal=False, capacity_factor=
     if num_addresses is not None:
         m_size = int(nearest_power_of_2(scale_factor * num_addresses)
         if orthogonal else scale_factor * num_addresses/capacity_factor)
-    	shapes['m'] = (m_size,1)
+        shapes['m'] = (m_size,1)
 
     # avoid non-deterministic transits with very small layer_size
     for layer_name in ["opc", "op1", "op2"]:
