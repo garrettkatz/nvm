@@ -121,3 +121,14 @@ We can check the final register states now that the program is finished:
 
 `r0` was correctly overwritten with the logical-and of the initial register values, `true` and `false`.
 
+
+## Testing
+
+We can test other implemented functionalities by running below 2 different tests from terminal:
+
+```
+python tests.py
+
+python dsst.py
+
+```
