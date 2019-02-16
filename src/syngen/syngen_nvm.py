@@ -77,8 +77,17 @@ class SyngenEnvironment:
     def add_checker(self, nvmnet):
         self.modules.append(make_checker_module(nvmnet))
 
-    def add_custom(self, structure, layer_names, cb_name, cb):
-        self.modules.append(make_custom_module(structure, layer_names, cb_name, cb))
+    def add_custom_input(self, structure, layer_names, cb_name, cb, clear=True):
+        self.modules.append(
+            make_custom_input_module(structure, layer_names, cb_name, cb, clear))
+
+    def add_custom_output(self, structure, layer_names, cb_name, cb):
+        self.modules.append(
+            make_custom_output_module(structure, layer_names, cb_name, cb))
+
+    def add_streams(self, nvmnet, op_reg, data_reg, producer, consumer):
+        self.modules += make_stream_modules(
+            nvmnet, op_reg, data_reg, producer, consumer)
 
 
 
@@ -91,7 +100,7 @@ def make_syngen_network(nvmnet):
     for layer in nvmnet.layers.values():
         if layer.activator.label not in ["tanh", "heaviside"]:
             raise ValueError("Syngen NVM must use tanh/heaviside")
-    
+
     ### LAYERS ###
     layer_configs = []
 
@@ -356,12 +365,16 @@ def make_exit_module():
 
 def make_printer_module(nvmnet, layer_names):
 
+    first = layer_names[0] if len(layer_names) > 0 else ""
+
     def print_callback(ID, size, ptr):
         layer_name = layer_names[ID]
+        if layer_name == first:
+            print("")
         syn_v = FloatArray(size,ptr).to_np_array()
         syn_tok = nvmnet.layers[layer_name].coder.decode(syn_v)
         print("%4s: %12s"%(layer_name, syn_tok))
-                    
+
     create_io_callback("nvm_print", print_callback)
 
     return {
@@ -401,7 +414,7 @@ def make_checker_module(nvmnet):
                 layer_name, syn_tok, py_tok, residual))
 
             interrupt_engine()
-                    
+
     create_io_callback("nvm_checker", checker_callback)
 
     return {
@@ -417,11 +430,32 @@ def make_checker_module(nvmnet):
         ]
     }
 
-def make_custom_module(structure, layer_names, name, cb):
+def make_custom_input_module(structure, layer_names, name, cb, clear):
 
     def custom_callback(ID, size, ptr):
         cb(layer_names[ID], FloatArray(size,ptr).to_np_array())
-                    
+
+    create_io_callback(name, custom_callback)
+
+    return {
+        "type" : "callback",
+        "clear" : clear,
+        "layers" : [
+            {
+                "structure" : structure,
+                "layer" : layer_name,
+                "input" : True,
+                "function" : name,
+                "id" : i
+            } for i,layer_name in enumerate(layer_names)
+        ]
+    }
+
+def make_custom_output_module(structure, layer_names, name, cb):
+
+    def custom_callback(ID, size, ptr):
+        cb(layer_names[ID], FloatArray(size,ptr).to_np_array())
+
     create_io_callback(name, custom_callback)
 
     return {
@@ -436,3 +470,54 @@ def make_custom_module(structure, layer_names, name, cb):
             } for i,layer_name in enumerate(layer_names)
         ]
     }
+
+def make_stream_modules(nvmnet, op_reg, data_reg, producer, consumer):
+    data_layer = nvmnet.layers[data_reg]
+    op_layer = nvmnet.layers[op_reg]
+    read_pattern = nvmnet.w_gain[op_reg] * op_layer.coder.encode("read")
+    write_pattern = nvmnet.w_gain[op_reg] * op_layer.coder.encode("write")
+    null_pattern = nvmnet.w_gain[op_reg] * op_layer.coder.encode("null")
+
+    class StreamState:
+        # waiting, read, write, reset
+        state = "waiting"
+
+    def stream_data_in(name, data):
+        if StreamState.state == "read":
+            ready,sym = producer()
+            if ready:
+                StreamState.state = "reset"
+                data += data_layer.activator.g(data_layer.coder.encode(sym)).flat
+                data *= 10
+
+    def stream_data_out(name, data):
+        if StreamState.state == "write":
+            ready = consumer(nvmnet.layers[name].coder.decode(data))
+            if ready:
+                StreamState.state = "reset"
+
+    def stream_operator_in(name, data):
+        if StreamState.state == "reset":
+            data += null_pattern.flat
+            data *= 10
+            StreamState.state = "waiting"
+
+    def stream_operator_out(name, data):
+        output = nvmnet.layers[name].coder.decode(data)
+
+        if output in ["read", "write"]:
+            StreamState.state = output
+
+    modules = []
+
+    modules.append(make_custom_input_module("nvm", [data_reg],
+        "stream_data_in", stream_data_in, clear=True))
+    modules.append(make_custom_input_module("nvm", [op_reg],
+        "stream_operator_in", stream_operator_in, clear=True))
+
+    modules.append(make_custom_output_module("nvm", [op_reg],
+        "stream_operator_out", stream_operator_out))
+    modules.append(make_custom_output_module("nvm", [data_reg],
+        "stream_data_out", stream_data_out))
+
+    return modules

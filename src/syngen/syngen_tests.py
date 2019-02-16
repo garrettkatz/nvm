@@ -12,7 +12,7 @@ from syngen import Network, Environment
 from syngen import get_cpu, get_gpus, interrupt_engine
 
 import numpy as np
-from random import sample
+from random import random, sample, choice
 
 def test_syngen(tester, programs, names, traces, memory=None, tokens=[], num_registers=1, verbose=0):
     """
@@ -66,23 +66,24 @@ def test_syngen(tester, programs, names, traces, memory=None, tokens=[], num_reg
 
             elif TestState.start:
                 state = vm.net.layers[layer_name].coder.decode(data)
-                trace_t = trace[TestState.t]
-
                 #print(layer_name, state)
 
-                if layer_name in trace_t and state != trace_t[layer_name]:
-                    print("Trace mismatch!")
-                    print(TestState.t, layer_name, state, trace_t[layer_name])
-                    interrupt_engine()
-                    TestState.failed = True
+                if TestState.t < len(trace):
+                    trace_t = trace[TestState.t]
 
-        ### BUILD ENVIRONMENG ####
+                    if layer_name in trace_t and state != trace_t[layer_name]:
+                        print("Trace mismatch!")
+                        print(TestState.t, layer_name, state, trace_t[layer_name])
+                        interrupt_engine()
+                        TestState.failed = True
+
+        ### BUILD ENVIRONMENT ####
         output_layers = vm.net.layers.keys() if verbose else []
 
         syn_env = tester._make_syngen_env(vm)
         syn_env.add_visualizer("nvm", output_layers)
         syn_env.add_printer(vm.net, output_layers)
-        syn_env.add_custom("nvm",
+        syn_env.add_custom_output("nvm",
             ["gh"] + vm.register_names, "validator", callback)
 
         ### CHECK INITIAL STATE ###
@@ -138,6 +139,7 @@ class SyngenNVMTestCase(NVMTestCase):
             pad, activator, learning_rule, register_names,
             shapes={}, tokens=tokens, orthogonal=orthogonal)
 
+
 class SyngenNVMArithTestCase(ut.TestCase):
     in_range = range(-1,10)
     out_range = range(-9,10)
@@ -162,7 +164,7 @@ class SyngenNVMArithTestCase(ut.TestCase):
             print(name, data)
 
         op = "comp"
-        #syn_env.add_custom(op,
+        #syn_env.add_custom_output(op,
         #    ["%s_%s" % (op, suffix) for suffix in "input", "hidden", "output"],
         #    "test", callback)
 
@@ -385,10 +387,119 @@ class SyngenNVMArithTestCase(ut.TestCase):
                 sample(self.in_range, 3), sample(self.in_range, 3))
 
 
+class SyngenNVMStreamTestCase(ut.TestCase):
+    numerals = [str(x) for x in range(0,10)]
+    all_tokens = numerals + ["read", "write", "null"]
+
+    def _make_syngen_nvm(self, vm):
+        return SyngenNVM(vm.net)
+
+    def _make_syngen_env(self, vm):
+        syn_env = SyngenEnvironment()
+
+        # Stream in a null terminated random sequence of numerals
+        # Validate when network streams them back out
+        data = list(choice(self.numerals) for _ in range(12)) + ["null"]
+        read_stream = iter(data)
+        write_stream = iter(data)
+
+        def producer():
+            if random() < 0.01:
+                sym = next(read_stream)
+                #print("Produced %s" % sym)
+                return True, sym
+            else:
+                return False, None
+
+        def consumer(output):
+            if random() < 0.01:
+                #print("Consumed %s" % output)
+                if output != next(write_stream):
+                    print("Stream mismatch!")
+                    interrupt_engine()
+                return True
+            else:
+                return False
+
+        syn_env.add_streams(vm.net, "r0", "r1", producer, consumer)
+
+        return syn_env
+
+    def _test(self, programs, names, traces,
+            memory=None, tokens=[], num_registers=1, verbose=0):
+        self.assertTrue(test_syngen(
+            self, programs, names, traces,
+            memory, tokens, num_registers, verbose))
+
+    def _make_vm(self, num_registers, tokens):
+        orthogonal = True
+        layer_shape = (16,16) if orthogonal else (32,32)
+        pad = 0.0001
+        activator, learning_rule = tanh_activator, rehebbian
+        register_names = ["r%d"%r for r in range(num_registers)]
+
+        return NVM(layer_shape,
+            pad, activator, learning_rule, register_names,
+            shapes={}, tokens=tokens, orthogonal=orthogonal)
+
+    # @ut.skip("")
+    def test_stream(self):
+
+        values = {}
+        pointers = {"0": {"r0": "ptr"}}
+        memory = (pointers, values)
+
+        # Stream in null terminated data and write to memory
+        # Then, stream them back out in order
+        program = """
+        start:  mov r0 ptr
+                drf r0
+
+        input:  mov r0 read
+
+        wait:   cmp r0 read
+                jie wait
+
+                mem r1
+                nxt
+
+                cmp r1 null
+                jie output
+                jmp input
+
+        output: mov r0 ptr
+                drf r0
+
+        loop:   rem r1
+                mov r0 write
+                nxt
+
+        wait2:  cmp r0 write
+                jie wait2
+
+                cmp r1 null
+                jie end
+                jmp loop
+
+        end:    exit
+        """
+        trace = [
+            {},
+        ]
+
+        self._test({"test":program}, ["test"], [trace], memory=memory,
+            tokens = self.all_tokens + ["ptr"],
+            num_registers=2, verbose=0)
+
+
+
 
 if __name__ == "__main__":
     test_suite = ut.TestLoader().loadTestsFromTestCase(SyngenNVMTestCase)
     ut.TextTestRunner(verbosity=2).run(test_suite)
 
     test_suite = ut.TestLoader().loadTestsFromTestCase(SyngenNVMArithTestCase)
+    ut.TextTestRunner(verbosity=2).run(test_suite)
+
+    test_suite = ut.TestLoader().loadTestsFromTestCase(SyngenNVMStreamTestCase)
     ut.TextTestRunner(verbosity=2).run(test_suite)
