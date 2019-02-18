@@ -34,8 +34,18 @@ def test_syngen(tester, programs, names, traces, memory=None, tokens=[], num_reg
             print()
             print(name)
 
+        if len(trace) == 0:
+            trace = [{}]
+
         vm.load(name, trace[0])
         syn_net.initialize_activity(vm.net)
+
+        ### BUILD ENVIRONMENT ####
+        output_layers = vm.net.layers.keys() if verbose else []
+
+        syn_env = tester._make_syngen_env(vm)
+        syn_env.add_visualizer("nvm", output_layers)
+        syn_env.add_printer(vm.net, output_layers)
 
         ### SET UP VALIDATION CALLBACK ####
         class TestState:
@@ -44,47 +54,44 @@ def test_syngen(tester, programs, names, traces, memory=None, tokens=[], num_reg
             start = False
             failed = False
 
-        def callback(layer_name, data):
-            if layer_name == "gh":
-                state = vm.net.layers["gh"].coder.decode(data)
+        if len(trace) > 1:
+            def callback(layer_name, data):
+                if layer_name == "gh":
+                    state = vm.net.layers["gh"].coder.decode(data)
 
-                if state == "start":
-                    TestState.start = True
-                    TestState.t += 1
-                    #print("\n%d" % TestState.t)
-                else:
-                    TestState.start = False
+                    if state == "start":
+                        TestState.start = True
+                        TestState.t += 1
+                        #print("\n%d" % TestState.t)
+                    else:
+                        TestState.start = False
 
-                if state == "?":
-                    if TestState.unk_count > 20:
-                        print("Gate mechanism derailed!")
+                    if state == "?":
+                        if TestState.unk_count > 20:
+                            print("Gate mechanism derailed!")
+                            interrupt_engine()
+                            TestState.failed = True
+                        TestState.unk_count += 1
+                    else:
+                        TestState.unk_count = 0
+
+                elif TestState.start:
+                    state = vm.net.layers[layer_name].coder.decode(data)
+                    #print(layer_name, state)
+                    if state == "?":
                         interrupt_engine()
-                        TestState.failed = True
-                    TestState.unk_count += 1
-                else:
-                    TestState.unk_count = 0
 
-            elif TestState.start:
-                state = vm.net.layers[layer_name].coder.decode(data)
-                #print(layer_name, state)
+                    if TestState.t < len(trace):
+                        trace_t = trace[TestState.t]
 
-                if TestState.t < len(trace):
-                    trace_t = trace[TestState.t]
+                        if layer_name in trace_t and state != trace_t[layer_name]:
+                            print("Trace mismatch!")
+                            print(TestState.t, layer_name, state, trace_t[layer_name])
+                            interrupt_engine()
+                            TestState.failed = True
 
-                    if layer_name in trace_t and state != trace_t[layer_name]:
-                        print("Trace mismatch!")
-                        print(TestState.t, layer_name, state, trace_t[layer_name])
-                        interrupt_engine()
-                        TestState.failed = True
-
-        ### BUILD ENVIRONMENT ####
-        output_layers = vm.net.layers.keys() if verbose else []
-
-        syn_env = tester._make_syngen_env(vm)
-        syn_env.add_visualizer("nvm", output_layers)
-        syn_env.add_printer(vm.net, output_layers)
-        syn_env.add_custom_output("nvm",
-            ["gh"] + vm.register_names, "validator", callback)
+            syn_env.add_custom_output("nvm",
+                ["gh"] + vm.register_names, "validator", callback)
 
         ### CHECK INITIAL STATE ###
         for r in vm.register_names:
@@ -492,6 +499,461 @@ class SyngenNVMStreamTestCase(ut.TestCase):
             num_registers=2, verbose=0)
 
 
+class SyngenNVMTreeTestCase(ut.TestCase):
+    indices = [str(x) for x in range(0,50)]
+    all_tokens = indices + [
+        "read", "write",
+        "++", "--",
+        "null",
+        "counter", "mem_end", "prev", "curr",
+        "(", ",", ")", "+", "*"]
+
+    class IOState:
+        input_data = None
+        input_iter = None
+        output_data = None
+
+    def _make_syngen_nvm(self, vm):
+        operations = {
+            "++" : (lambda x: str(int(x)+1),),
+            "--" : (lambda x: str(int(x)-1),)
+        }
+        ops = [str(x) for x in range(0, 20)]
+        opdef = OpDef("incr/decr", operations, ops, ops)
+        return SyngenNVM(vm.net, [OpNet(vm.net, opdef, ["r1"], ["r1"], "r0")])
+
+    def _make_syngen_env(self, vm):
+        syn_env = SyngenEnvironment()
+
+        self.IOState.input_iter = iter(self.IOState.input_data)
+        self.IOState.output_data = []
+
+        def producer():
+            sym = next(self.IOState.input_iter)
+            #print("Produced %s" % sym)
+            return True, sym
+
+        def consumer(output):
+            #print("Consumed %s" % output)
+            self.IOState.output_data.append(output)
+            if output == "?":
+                print("Unrecognized output!")
+                interrupt_engine()
+            return True
+
+        syn_env.add_streams(vm.net, "r0", "r1", producer, consumer)
+        return syn_env
+
+    def _test(self, programs, names, traces,
+            memory=None, tokens=[], num_registers=1, verbose=0):
+        self.assertTrue(test_syngen(
+            self, programs, names, traces,
+            memory, tokens, num_registers, verbose))
+
+    def _make_vm(self, num_registers, tokens):
+        orthogonal = True
+        layer_shape = (16,16) if orthogonal else (32,32)
+        pad = 0.0001
+        activator, learning_rule = tanh_activator, rehebbian
+        register_names = ["r%d"%r for r in range(num_registers)]
+
+        return NVM(layer_shape,
+            pad, activator, learning_rule, register_names,
+            shapes={}, tokens=tokens, orthogonal=orthogonal)
+
+    # @ut.skip("")
+    def test_tree(self):
+
+        # Memory address 0 holds a counter of nodes used for generating indices
+        values = {}
+        pointers = {"0": {"r2": "counter"}}
+        memory = (pointers, values)
+
+        # r0: operator
+        # r1: value
+        # r2: pointers
+        program = (
+
+            ### Main entry point
+            # Assumes:
+            #   empty memory
+            #
+            # Create counter, init 0, create pointer
+            # Create mem_end pointer
+            # Create prev pointer (points to current for root)
+            # Create the tree (create_child)
+            # Return head to root node (one address past counter)
+            # Print tree (print_node)
+            """
+            start:        sub input
+                          cmp r1 (
+                          jie process_tree
+                          jmp end
+
+            process_tree: mov r2 counter
+                          drf r2
+                          mov r1 0
+                          mem r1
+
+                          mov r2 mem_end
+                          nxt
+                          ref r2
+
+                          mov r2 prev
+                          ref r2
+
+                          sub create_child
+
+                          mov r2 counter
+                          drf r2
+                          nxt
+
+                          sub print_node
+
+            end:          exit
+            """
+
+            ### Reads external input
+            """
+            input:        mov r0 read
+            in_w:         cmp r0 read
+                          jie in_w
+                          ret
+            """
+
+            ### Writes external output
+            """
+            output:       mov r0 write
+            out_w:        cmp r0 write
+                          jie out_w
+                          ret
+            """
+
+            ### Increments or decrements r1
+            """
+            incr:         mov r0 ++
+                          ret
+
+            decr:         mov r0 --
+                          ret
+            """
+
+            ### Creates a node
+            # Assumes:
+            #   counter points to counter address
+            #   mem_end points to free address
+            #
+            # Get current index from counter
+            # Increment counter
+            # Set curr pointer
+            # Set index pointer and save to node
+            """
+            create_pre:   mov r2 counter
+                          drf r2
+                          rem r1
+
+                          sub incr
+                          mem r1
+                          sub decr
+
+                          mov r2 mem_end
+                          drf r2
+                          mov r2 curr
+                          ref r2
+
+                          mov r2 r1
+                          mem r2
+                          ref r2
+            """
+            # Null out pointers
+            # Advance to data segment of node
+            # Read and save node data (null terminated)
+            # Update the mem_end pointer
+            # Return head to curr
+            """
+                          mov r2 null
+                          nxt
+                          mem r2
+                          nxt
+                          mem r2
+                          nxt
+                          mem r2
+                          nxt
+
+            loop1_s:      sub input
+                          cmp r1 ,
+                          jie loop1_e
+                          mem r1
+                          nxt
+                          jmp loop1_s
+            loop1_e:      mov r1 null
+                          mem r1
+                          nxt
+
+                          mov r2 mem_end
+                          ref r2
+
+                          mov r2 curr
+                          drf r2
+
+                          ret
+            """
+
+            ### Creates and initializes a first child node
+            # Assumes:
+            #   prev points to the parent node address
+            #     or the current address if this is the root of the tree
+            #
+            # Create node (create_pre)
+            # Get parent index in r1
+            # Return head to curr node
+            # Get current index in r2
+            # Set parent index (if r1 == r2, curr is root, so use null)
+            # Return head to curr node
+            """
+            create_child: sub create_pre
+
+                          mov r2 prev
+                          drf r2
+                          rem r2
+                          mov r1 r2
+
+                          mov r2 curr
+                          drf r2
+
+                          rem r2
+
+                          nxt
+                          cmp r1 r2
+                          jie par_null_t
+            par_null_f:   mov r2 r1
+                          jmp par_null_e
+            par_null_t:   mov r2 null
+            par_null_e:   mem r2
+
+                          mov r2 curr
+                          drf r2
+            """
+            # Get current index in r1
+            # Update the parent's child pointer
+            # Return head to curr node
+            # Parse node children (create_post)
+            """
+                          rem r2
+                          mov r1 r2
+
+                          nxt
+                          rem r2
+                          cmp r2 null
+                          jie set_par_end
+                          drf r2
+                          nxt
+                          nxt
+                          mov r2 r1
+                          mem r2
+
+            set_par_end:  mov r2 curr
+                          drf r2
+
+                          sub create_post
+                          ret
+            """
+
+            ### Creates and initializes a sibling node
+            # Assumes:
+            #   prev points to the previous sibling
+            #
+            # Create node (create_pre)
+            # Get prev's parent index in r1
+            # Return head to curr node
+            # Set parent index
+            # Return head to curr node
+            """
+            create_sib:   sub create_pre
+
+                          mov r2 prev
+                          drf r2
+                          nxt
+                          rem r2
+                          mov r1 r2
+
+                          mov r2 curr
+                          drf r2
+
+                          rem r2
+                          nxt
+                          mov r2 r1
+                          mem r2
+
+                          mov r2 curr
+                          drf r2
+            """
+            # Get current index in r1
+            # Update prev's sibling pointer
+            # Return head to curr node
+            # Parse node children (create_post)
+            """
+                          rem r2
+                          mov r1 r2
+
+                          mov r2 prev
+                          drf r2
+                          nxt
+                          nxt
+                          nxt
+                          mov r2 r1
+                          mem r2
+
+                          mov r2 curr
+                          drf r2
+
+                          sub create_post
+                          ret
+            """
+
+            ### Parses the children of the current node
+            # Assumes:
+            #   memory head is at current node
+            #
+            # Set prev pointer to current node
+            # Check for child
+            #   Create child
+            #   Loop over siblings
+            #     Create sibling
+            # Set prev pointer
+            # Return head to parent if not null
+            """
+            create_post:  mov r2 prev
+                          ref r2
+
+                          sub input
+                          cmp r1 )
+                          jie skip_child
+
+                          sub create_child
+
+            sib_loop:     sub input
+                          cmp r1 )
+                          jie skip_child
+                          sub input
+                          sub create_sib
+                          jmp sib_loop
+
+            skip_child:   mov r2 prev
+                          ref r2
+
+                          nxt
+                          rem r2
+                          cmp r2 null
+                          jie post_end
+                          drf r2
+            post_end:     ret
+            """
+
+            ### Prints the tree
+            # Assumes:
+            #   memory head is at current node to print
+            #
+            # Set curr pointer to current node
+            # print (val,
+            # Return head to current node
+            """
+            print_node:   mov r2 curr
+                          ref r2
+
+                          mov r1 (
+                          sub output
+
+                          nxt
+                          nxt
+                          nxt
+                          nxt
+            val_start:    rem r1
+                          cmp r1 null
+                          jie val_end
+                          sub output
+                          nxt
+                          jmp val_start
+
+            val_end:      mov r1 ,
+                          sub output
+
+                          mov r2 curr
+                          drf r2
+            """
+            # Recurse on child if it exists
+            #   Child will recurse on siblings
+            #   When this returns, the current node is done printing
+            # print )
+            """
+                          nxt
+                          nxt
+                          rem r2
+                          cmp r2 null
+                          jie ch_null_t
+            ch_null_f:    drf r2
+                          sub print_node
+                          jmp ch_null_e
+            ch_null_t:    prv
+                          prv
+            ch_null_e:    mov r1 )
+                          sub output
+            """
+            # Recurse on sibling if it exists
+            # Otherwise, return to parent if it exists
+            """
+                          nxt
+                          nxt
+                          nxt
+                          rem r2
+                          cmp r2 null
+                          jie sib_null_t
+            sib_null_f:   mov r1 ,
+                          sub output
+                          drf r2
+                          sub print_node
+                          jmp sib_null_e
+            sib_null_t:   prv
+                          prv
+                          rem r2
+                          cmp r2 null
+                          jie sib_null_e
+                          drf r2
+            sib_null_e:   ret
+        """)
+
+        # Prepare a test tree in self.IOState
+        tree = ("""
+            (*,
+                (*,
+                    (2,)),
+                (10,),
+                (*,
+                    (6,),
+                    (+,
+                        (16,),
+                        (18,))),
+                (+,
+                    (+,
+                        (+,
+                            (9,),
+                            (9,)),
+                        (8,)),
+                    (*,
+                        (5,))))
+        """.replace(" ","").replace("\n", ""))
+        self.IOState.input_data = [c for c in tree]
+
+        # Set registers to null
+        trace = [ {"r"+str(r) : "null" for r in "012"} ]
+
+        self._test({"test":program}, ["test"], [trace], memory=memory,
+            tokens = self.all_tokens,
+            num_registers=3, verbose=0)
+
+        self.assertTrue(self.IOState.input_data == self.IOState.output_data)
+
+
 
 
 if __name__ == "__main__":
@@ -502,4 +964,7 @@ if __name__ == "__main__":
     ut.TextTestRunner(verbosity=2).run(test_suite)
 
     test_suite = ut.TestLoader().loadTestsFromTestCase(SyngenNVMStreamTestCase)
+    ut.TextTestRunner(verbosity=2).run(test_suite)
+
+    test_suite = ut.TestLoader().loadTestsFromTestCase(SyngenNVMTreeTestCase)
     ut.TextTestRunner(verbosity=2).run(test_suite)
