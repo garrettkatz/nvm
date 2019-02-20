@@ -14,6 +14,7 @@ class RefVM:
             ["ip","opc","op1","op2","co","mf"]}
         self.memory = {}
         self.pointers = {}
+        self.mpointers = {}
         self.stack = []
         self.exit = False
         self.error = None
@@ -136,6 +137,21 @@ class RefVM:
                 self.layers["mf"] = self.pointers[reg][val]
             else:
                 self.error = "drf non-existent pointer"
+                self.exit = True
+        if opc == "mref":
+            reg, mf = op1, self.layers["mf"]
+            val = self.layers[reg]
+            if reg not in self.pointers or val not in self.pointers[reg]:
+                self.error = "mref non-existent pointer"
+                self.exit = True
+            else:
+                self.mpointers[self.pointers[reg][val]] = mf
+        if opc == "mdrf":
+            mf = self.layers["mf"]
+            if mf in self.mpointers:
+                self.layers["mf"] = self.mpointers[mf]
+            else:
+                self.error = "mdrf non-existent pointer"
                 self.exit = True
 
         if opc == "subv":

@@ -48,47 +48,45 @@ def test_syngen(tester, programs, names, traces, memory=None, tokens=[], num_reg
         syn_env.add_printer(vm.net, output_layers)
 
         ### SET UP VALIDATION CALLBACK ####
-        class TestState:
-            t = 0
-            unk_count = 0
-            start = False
-            failed = False
-
+        test_state = {
+            "t" : 0,
+            "unk_count" : 0,
+            "start" : False,
+            "failed" : False,
+        }
         if len(trace) > 1:
             def callback(layer_name, data):
                 if layer_name == "gh":
                     state = vm.net.layers["gh"].coder.decode(data)
 
                     if state == "start":
-                        TestState.start = True
-                        TestState.t += 1
-                        #print("\n%d" % TestState.t)
+                        test_state["start"] = True
+                        test_state["t"] += 1
+                        #print("\n%d" % test_state["t"])
                     else:
-                        TestState.start = False
+                        test_state["start"] = False
 
                     if state == "?":
-                        if TestState.unk_count > 20:
+                        if test_state["unk_count"] > 20:
                             print("Gate mechanism derailed!")
                             interrupt_engine()
-                            TestState.failed = True
-                        TestState.unk_count += 1
+                            test_state["failed"] = True
+                        test_state["unk_count"] += 1
                     else:
-                        TestState.unk_count = 0
+                        test_state["unk_count"] = 0
 
-                elif TestState.start:
+                elif test_state["start"]:
                     state = vm.net.layers[layer_name].coder.decode(data)
                     #print(layer_name, state)
-                    if state == "?":
-                        interrupt_engine()
 
-                    if TestState.t < len(trace):
-                        trace_t = trace[TestState.t]
+                    if test_state["t"] < len(trace):
+                        trace_t = trace[test_state["t"]]
 
                         if layer_name in trace_t and state != trace_t[layer_name]:
                             print("Trace mismatch!")
-                            print(TestState.t, layer_name, state, trace_t[layer_name])
+                            print(test_state["t"], layer_name, state, trace_t[layer_name])
                             interrupt_engine()
-                            TestState.failed = True
+                            test_state["failed"] = True
 
             syn_env.add_custom_output("nvm",
                 ["gh"] + vm.register_names, "validator", callback)
@@ -112,7 +110,7 @@ def test_syngen(tester, programs, names, traces, memory=None, tokens=[], num_reg
         if verbose:
             print(report)
 
-        if TestState.failed:
+        if test_state["failed"]:
             syn_net.free()
             return False
 
@@ -397,6 +395,7 @@ class SyngenNVMArithTestCase(ut.TestCase):
 class SyngenNVMStreamTestCase(ut.TestCase):
     numerals = [str(x) for x in range(0,10)]
     all_tokens = numerals + ["read", "write", "null"]
+    failed = False
 
     def _make_syngen_nvm(self, vm):
         return SyngenNVM(vm.net)
@@ -423,6 +422,7 @@ class SyngenNVMStreamTestCase(ut.TestCase):
                 #print("Consumed %s" % output)
                 if output != next(write_stream):
                     print("Stream mismatch!")
+                    self.failed = True
                     interrupt_engine()
                 return True
             else:
@@ -498,47 +498,38 @@ class SyngenNVMStreamTestCase(ut.TestCase):
             tokens = self.all_tokens + ["ptr"],
             num_registers=2, verbose=0)
 
+        self.assertTrue(self.failed is False)
+
 
 class SyngenNVMTreeTestCase(ut.TestCase):
-    indices = [str(x) for x in range(0,50)]
-    all_tokens = indices + [
+    all_tokens = [str(x) for x in range(0,20)] + [
         "read", "write",
-        "++", "--",
-        "null",
-        "counter", "mem_end", "prev", "curr",
+        "null", "root",
+        "mem_start", "mem_end", "prev", "curr",
         "(", ",", ")", "+", "*"]
 
-    class IOState:
-        input_data = None
-        input_iter = None
-        output_data = None
+    input_data = None
+    input_iter = None
+    output_data = None
+
 
     def _make_syngen_nvm(self, vm):
-        operations = {
-            "++" : (lambda x: str(int(x)+1),),
-            "--" : (lambda x: str(int(x)-1),)
-        }
-        ops = [str(x) for x in range(0, 20)]
-        opdef = OpDef("incr/decr", operations, ops, ops)
-        return SyngenNVM(vm.net, [OpNet(vm.net, opdef, ["r1"], ["r1"], "r0")])
+        return SyngenNVM(vm.net)
 
     def _make_syngen_env(self, vm):
         syn_env = SyngenEnvironment()
 
-        self.IOState.input_iter = iter(self.IOState.input_data)
-        self.IOState.output_data = []
+        self.input_iter = iter(self.input_data)
+        self.output_data = []
 
         def producer():
-            sym = next(self.IOState.input_iter)
+            sym = next(self.input_iter)
             #print("Produced %s" % sym)
             return True, sym
 
         def consumer(output):
             #print("Consumed %s" % output)
-            self.IOState.output_data.append(output)
-            if output == "?":
-                print("Unrecognized output!")
-                interrupt_engine()
+            self.output_data.append(output)
             return True
 
         syn_env.add_streams(vm.net, "r0", "r1", producer, consumer)
@@ -564,9 +555,8 @@ class SyngenNVMTreeTestCase(ut.TestCase):
     # @ut.skip("")
     def test_tree(self):
 
-        # Memory address 0 holds a counter of nodes used for generating indices
-        values = {}
-        pointers = {"0": {"r2": "counter"}}
+        values = {"0": {"r2": "root"}}
+        pointers = {"1": {"r2": "mem_end"}, "0": {"r2": "mem_start"}}
         memory = (pointers, values)
 
         # r0: operator
@@ -578,11 +568,8 @@ class SyngenNVMTreeTestCase(ut.TestCase):
             # Assumes:
             #   empty memory
             #
-            # Create counter, init 0, create pointer
-            # Create mem_end pointer
-            # Create prev pointer (points to current for root)
+            # Create prev pointer (points to root cell)
             # Create the tree (create_child)
-            # Return head to root node (one address past counter)
             # Print tree (print_node)
             """
             start:        sub input
@@ -590,21 +577,12 @@ class SyngenNVMTreeTestCase(ut.TestCase):
                           jie process_tree
                           jmp end
 
-            process_tree: mov r2 counter
-                          drf r2
-                          mov r1 0
-                          mem r1
-
-                          mov r2 mem_end
-                          nxt
-                          ref r2
-
-                          mov r2 prev
+            process_tree: mov r2 prev
                           ref r2
 
                           sub create_child
 
-                          mov r2 counter
+                          mov r2 mem_start
                           drf r2
                           nxt
 
@@ -629,50 +607,22 @@ class SyngenNVMTreeTestCase(ut.TestCase):
                           ret
             """
 
-            ### Increments or decrements r1
-            """
-            incr:         mov r0 ++
-                          ret
-
-            decr:         mov r0 --
-                          ret
-            """
-
             ### Creates a node
             # Assumes:
-            #   counter points to counter address
             #   mem_end points to free address
             #
-            # Get current index from counter
-            # Increment counter
             # Set curr pointer
-            # Set index pointer and save to node
-            """
-            create_pre:   mov r2 counter
-                          drf r2
-                          rem r1
-
-                          sub incr
-                          mem r1
-                          sub decr
-
-                          mov r2 mem_end
-                          drf r2
-                          mov r2 curr
-                          ref r2
-
-                          mov r2 r1
-                          mem r2
-                          ref r2
-            """
-            # Null out pointers
-            # Advance to data segment of node
+            # Null out pointers and advance to data segment of node
             # Read and save node data (null terminated)
             # Update the mem_end pointer
             # Return head to curr
             """
+            create_pre:   mov r2 mem_end
+                          drf r2
+                          mov r2 curr
+                          ref r2
+
                           mov r2 null
-                          nxt
                           mem r2
                           nxt
                           mem r2
@@ -702,60 +652,46 @@ class SyngenNVMTreeTestCase(ut.TestCase):
             ### Creates and initializes a first child node
             # Assumes:
             #   prev points to the parent node address
-            #     or the current address if this is the root of the tree
+            #     or the root address if this is the root of the tree
             #
             # Create node (create_pre)
-            # Get parent index in r1
-            # Return head to curr node
-            # Get current index in r2
-            # Set parent index (if r1 == r2, curr is root, so use null)
-            # Return head to curr node
+            # Set parent pointer to prev and retrieve *prev
+            # Check *prev
+            #   if *prev != root (prev->parent), curr is not root
+            #       Overwrite prev->parent to non-null value
+            #       Move prev to parent's child pointer
+            #       Return to curr
+            #       Set parent's child pointer
+            #   else, curr is root
+            #       Return to curr
+            # Parse node children (create_post)
             """
             create_child: sub create_pre
 
                           mov r2 prev
                           drf r2
+                          mov r2 curr
+                          mref r2
                           rem r2
-                          mov r1 r2
+
+                          cmp r2 root
+                          jie is_root_t
+            is_root_f:    mov r2 prev
+                          nxt
+                          ref r2
 
                           mov r2 curr
-                          drf r2
-
-                          rem r2
-
-                          nxt
-                          cmp r1 r2
-                          jie par_null_t
-            par_null_f:   mov r2 r1
-                          jmp par_null_e
-            par_null_t:   mov r2 null
-            par_null_e:   mem r2
-
-                          mov r2 curr
-                          drf r2
-            """
-            # Get current index in r1
-            # Update the parent's child pointer
-            # Return head to curr node
-            # Parse node children (create_post)
-            """
-                          rem r2
-                          mov r1 r2
-
-                          nxt
-                          rem r2
-                          cmp r2 null
-                          jie set_par_end
-                          drf r2
-                          nxt
-                          nxt
-                          mov r2 r1
                           mem r2
+                          drf r2
+                          mov r2 prev
+                          mref r2
 
-            set_par_end:  mov r2 curr
+                          jmp is_root_e
+
+            is_root_t:    mov r2 curr
                           drf r2
 
-                          sub create_post
+            is_root_e:    sub create_post
                           ret
             """
 
@@ -764,48 +700,30 @@ class SyngenNVMTreeTestCase(ut.TestCase):
             #   prev points to the previous sibling
             #
             # Create node (create_pre)
-            # Get prev's parent index in r1
-            # Return head to curr node
-            # Set parent index
-            # Return head to curr node
+            # Jump to prev and move prev to prev's sibling pointer
+            #       Overwrite prev->sibling to non-null value
+            # Jump to prev's parent and set curr's parent pointer
+            # Return to curr and set prev's sibling pointer
+            # Parse node children (create_post)
             """
             create_sib:   sub create_pre
 
                           mov r2 prev
                           drf r2
                           nxt
-                          rem r2
-                          mov r1 r2
-
-                          mov r2 curr
-                          drf r2
-
-                          rem r2
                           nxt
-                          mov r2 r1
+                          ref r2
                           mem r2
+                          prv
+                          prv
 
+                          mdrf
                           mov r2 curr
+                          mref r2
                           drf r2
-            """
-            # Get current index in r1
-            # Update prev's sibling pointer
-            # Return head to curr node
-            # Parse node children (create_post)
-            """
-                          rem r2
-                          mov r1 r2
 
                           mov r2 prev
-                          drf r2
-                          nxt
-                          nxt
-                          nxt
-                          mov r2 r1
-                          mem r2
-
-                          mov r2 curr
-                          drf r2
+                          mref r2
 
                           sub create_post
                           ret
@@ -821,7 +739,7 @@ class SyngenNVMTreeTestCase(ut.TestCase):
             #   Loop over siblings
             #     Create sibling
             # Set prev pointer
-            # Return head to parent if not null
+            # Return head to parent (root cell if curr is root)
             """
             create_post:  mov r2 prev
                           ref r2
@@ -841,12 +759,7 @@ class SyngenNVMTreeTestCase(ut.TestCase):
 
             skip_child:   mov r2 prev
                           ref r2
-
-                          nxt
-                          rem r2
-                          cmp r2 null
-                          jie post_end
-                          drf r2
+                          mdrf
             post_end:     ret
             """
 
@@ -864,7 +777,6 @@ class SyngenNVMTreeTestCase(ut.TestCase):
                           mov r1 (
                           sub output
 
-                          nxt
                           nxt
                           nxt
                           nxt
@@ -887,22 +799,19 @@ class SyngenNVMTreeTestCase(ut.TestCase):
             # print )
             """
                           nxt
-                          nxt
                           rem r2
                           cmp r2 null
                           jie ch_null_t
-            ch_null_f:    drf r2
+            ch_null_f:    mdrf
                           sub print_node
                           jmp ch_null_e
             ch_null_t:    prv
-                          prv
             ch_null_e:    mov r1 )
                           sub output
             """
             # Recurse on sibling if it exists
-            # Otherwise, return to parent if it exists
+            # Otherwise, return to parent
             """
-                          nxt
                           nxt
                           nxt
                           rem r2
@@ -910,19 +819,16 @@ class SyngenNVMTreeTestCase(ut.TestCase):
                           jie sib_null_t
             sib_null_f:   mov r1 ,
                           sub output
-                          drf r2
+                          mdrf
                           sub print_node
                           jmp sib_null_e
             sib_null_t:   prv
                           prv
-                          rem r2
-                          cmp r2 null
-                          jie sib_null_e
-                          drf r2
+                          mdrf
             sib_null_e:   ret
         """)
 
-        # Prepare a test tree in self.IOState
+        # Prepare a test tree in self
         tree = ("""
             (*,
                 (*,
@@ -942,7 +848,7 @@ class SyngenNVMTreeTestCase(ut.TestCase):
                     (*,
                         (5,))))
         """.replace(" ","").replace("\n", ""))
-        self.IOState.input_data = [c for c in tree]
+        self.input_data = [c for c in tree]
 
         # Set registers to null
         trace = [ {"r"+str(r) : "null" for r in "012"} ]
@@ -951,7 +857,7 @@ class SyngenNVMTreeTestCase(ut.TestCase):
             tokens = self.all_tokens,
             num_registers=3, verbose=0)
 
-        self.assertTrue(self.IOState.input_data == self.IOState.output_data)
+        self.assertTrue(self.input_data == self.output_data)
 
 
 

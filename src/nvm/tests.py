@@ -419,6 +419,80 @@ class VMTestCase(ut.TestCase):
             memory=memory, tokens=["start","t0","t1","t2","p0"],
             num_registers=2, verbose=0)
 
+    # @ut.skip("")
+    def test_dir_ptr(self):
+
+        # Create pointer chain 0->1->2->0
+        # Save memory [0:X, 1:Y, 2:Z]
+        program = """
+        start:  mov r1 P
+
+                mov r0 X
+                mem r0
+                ref r1
+
+                nxt
+                mref r1
+                mov r0 Y
+                mem r0
+                ref r1
+
+                nxt
+                mref r1
+                mov r0 Z
+                mem r0
+                ref r1
+
+                prv
+                prv
+                mref r1
+
+                rem r0
+                mdrf
+                rem r0
+                mdrf
+                rem r0
+                mdrf
+                rem r0
+                exit
+        """
+        trace = [
+            {"r0": None, "r1": None}, # start: mov
+
+            {"r0": None, "r1": "P"}, # mov
+            {"r0": "X", "r1": "P"}, # mem
+            {"r0": "X", "r1": "P"}, # ref
+
+            {"r0": "X", "r1": "P"}, # nxt
+            {"r0": "X", "r1": "P"}, # mref
+            {"r0": "X", "r1": "P"}, # mov
+            {"r0": "Y", "r1": "P"}, # mem
+            {"r0": "Y", "r1": "P"}, # ref
+
+            {"r0": "Y", "r1": "P"}, # nxt
+            {"r0": "Y", "r1": "P"}, # mref
+            {"r0": "Y", "r1": "P"}, # mov
+            {"r0": "Z", "r1": "P"}, # mem
+            {"r0": "Z", "r1": "P"}, # ref
+
+            {"r0": "Z", "r1": "P"}, # prv
+            {"r0": "Z", "r1": "P"}, # prv
+            {"r0": "Z", "r1": "P"}, # mref
+
+            {"r0": "Z", "r1": "P"}, # rem
+            {"r0": "X", "r1": "P"}, # mdrf
+            {"r0": "X", "r1": "P"}, # rem
+            {"r0": "Y", "r1": "P"}, # mdrf
+            {"r0": "Y", "r1": "P"}, # rem
+            {"r0": "Z", "r1": "P"}, # mdrf
+            {"r0": "Z", "r1": "P"}, # rem
+            {"r0": "X", "r1": "P"}, # exit
+            ]
+
+        self._test({"test": program}, ["test"], [trace],
+            tokens=["start","S","P","X","Y","Z"],
+            num_registers=2, verbose=0)
+
 class RefVMTestCase(VMTestCase):
     def _make_vm(self, num_registers, tokens):
         return RefVM(["r%d"%r for r in range(num_registers)])

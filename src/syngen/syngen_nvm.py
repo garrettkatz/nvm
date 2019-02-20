@@ -239,10 +239,12 @@ def make_syngen_network(nvmnet):
         #   ip <- sf
         #   mf <- device
         #   mb <- device
+        #   mp <- mf
         plastic = (to_name in nvmnet.devices and from_name == "mf") or \
            (to_name == "co") or \
            (to_name == "ip" and from_name == "sf") or \
-           (to_name in ["mf", "mb"] and from_name in nvmnet.devices)
+           (to_name in ["mf", "mb"] and from_name in nvmnet.devices) or \
+           (to_name == 'mp' and from_name == 'mf')
 
         # Learning gate (skip if never used)
         if plastic:

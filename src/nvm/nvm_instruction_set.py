@@ -5,6 +5,7 @@ opcodes = [
     "cmpv","cmpd","jie",
     "subv","subd","ret",
     "mem","rem","nxt","prv","ref","drf",
+    "mref", "mdrf",
     "exit","nop"]
 
 def gflow(to_layer, from_layer):
@@ -504,6 +505,69 @@ def flash_instruction_set(nvmnet, verbose=False):
         gs.add_transit(
             new_gates = g_start, new_hidden = h_start,
             old_gates = g, old_hidden = h)
+
+    ####### MREF
+
+    # Let op1 bias the gate layer
+    # Let mb drive mp
+    g, h = gs.add_transit(ungate = [('gh','op1','u')] + gflow('mp', 'mb'),
+        old_gates = g_ready, old_hidden = h_ready, opc='mref')
+    g_mref, h_mref = g.copy(), h.copy()
+    gate_hidden.coder.encode('mref', h_mref)
+
+    h_mref_conv = gate_hidden.coder.encode('mref_conv')
+
+    for mref_name, mref_device in devices.items():
+
+        # Open flow from device to mf and mb (perform dereference)
+        g, h = gs.add_transit(
+            ungate = gflow("mf", mref_name) + gflow("mb", mref_name),
+            old_gates = g_mref, old_hidden = h_mref,
+            op1 = mref_name)
+        gate_hidden.coder.encode('mref_'+mref_name, h)
+        gate_output.coder.encode("mref_mx<" + mref_name, g)
+
+        # Open plasticity from mf to mp
+        g, h = gs.add_transit(
+            ungate = [('mp', 'mf', 'l')],
+            old_gates = g, old_hidden = h,
+            new_hidden = h_mref_conv)
+
+    # Let mp drive mf and mb
+    g, h = gs.add_transit(
+        ungate = gflow('mf', 'mp') + gflow('mb', 'mp'),
+        old_hidden = h_mref_conv)
+    g_mref_end, h_mref_end = g.copy(), h.copy()
+    gate_hidden.coder.encode('mref_end', h_mref_end)
+    gate_output.coder.encode('mref_end', g_mref_end)
+
+    # then return to start state
+    gs.add_transit(
+        new_gates = g_start, new_hidden = h_start,
+        old_hidden = h_mref_end, old_gates = g_mref_end)
+
+    ####### MDRF
+
+    # Let mf drive mp
+    g, h = gs.add_transit(
+        ungate = gflow('mp', 'mf'),
+        old_gates = g_ready, old_hidden = h_ready, opc='mdrf')
+    g_mdrf, h_mdrf = g.copy(), h.copy()
+    gate_hidden.coder.encode('mdrf_1', h_mdrf)
+    gate_output.coder.encode('mdrf_1', g_mdrf)
+
+    # Let mp drive mf and mb
+    g, h = gs.add_transit(
+        ungate = gflow('mf', 'mp') + gflow('mb', 'mp'),
+        old_gates = g_mdrf, old_hidden = h_mdrf)
+    g_mdrf, h_mdrf = g.copy(), h.copy()
+    gate_hidden.coder.encode('mdrf_2', h_mdrf)
+    gate_output.coder.encode('mdrf_2', g_mdrf)
+
+    # then return to start state
+    gs.add_transit(
+        new_gates = g_start, new_hidden = h_start,
+        old_gates = g_mdrf, old_hidden = h_mdrf)
 
     weights, biases, residual = gs.flash(verbose)
     return weights, biases

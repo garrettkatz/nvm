@@ -14,29 +14,47 @@ def update_add(accumulator, summand):
             accumulator[k] += v
         else: accumulator[k] = v
 
-def address_space(forward_layer, backward_layer, orthogonal=False):
+def address_space(forward_layer, backward_layer, pointer_layer=None, orthogonal=False):
     # set up memory address space
     layers = {'f': forward_layer, 'b': backward_layer}
+    if pointer_layer is not None:
+        layers['p'] = pointer_layer
+
     N = layers['f'].size
     A = {}
-    for d in ['f','b']:
+    for d in layers.keys():
         A[d] = layers[d].encode_tokens(
             tokens = [str(a) for a in range(N)],
             orthogonal=orthogonal)
+
     weights, biases = {}, {}
+
+    # Set up forward-backward and recurrent matrices
     for d_to in ['f','b']:
         for d_from in ['f','b']:
             key = (layers[d_to].name, layers[d_from].name)
             Y, X = A[d_to], A[d_from]
             if d_from == 'f': X = np.roll(X, 1, axis=1)
             if d_from == 'b': Y = np.roll(Y, 1, axis=1)
-            # print("%s residuals:"%str(key))
             weights[key], biases[key], _ = flash_mem(
                 np.zeros((N, N)), np.zeros((N, 1)),
                 X, Y,
                 layers[d_from].activator,
                 layers[d_to].activator,
                 linear_solve, verbose=False)
+
+    # Set up pointer matrices
+    if pointer_layer is not None:
+        for d_to,d_from in [('f','p'),('b','p'),('p','b')]:
+            key = (layers[d_to].name, layers[d_from].name)
+            Y, X = A[d_to], A[d_from]
+            weights[key], biases[key], _ = flash_mem(
+                np.zeros((N, N)), np.zeros((N, 1)),
+                X, Y,
+                layers[d_from].activator,
+                layers[d_to].activator,
+                linear_solve, verbose=False)
+
     return weights, biases
 
 class NVMNet:
@@ -60,8 +78,8 @@ class NVMNet:
         # set up memory and stack layers
         NM, NS = shapes['m'][0]*shapes['m'][1], shapes['s'][0]*shapes['s'][1]
         actm, acts = activator(pad, NM), activator(pad, NS)
-        for m in ['mf','mb']: layers[m] = Layer(m, shapes['m'], actm, Coder(actm))
-        for s in ['sf','sb']: layers[s] = Layer(s, shapes['s'], acts, Coder(acts))
+        for m in ['mf','mb','mp']: layers[m] = Layer(m, shapes['m'], actm, Coder(actm))
+        for s in ['sf','sb']:      layers[s] = Layer(s, shapes['s'], acts, Coder(acts))
 
         # set up comparison layers
         c_shape = shapes.get('c', layer_shape)
@@ -105,9 +123,10 @@ class NVMNet:
         # set up connection matrices
         self.weights, self.biases = flash_instruction_set(self, verbose=False)
 
+        ptr_layers = {'m': layers['mp'], 's': None}
         for ms in 'ms':
             ms_weights, ms_biases = address_space(
-                layers[ms+'f'], layers[ms+'b'],
+                layers[ms+'f'], layers[ms+'b'], ptr_layers[ms],
                 orthogonal=orthogonal)
             self.weights.update(ms_weights)
             self.biases.update(ms_biases)
@@ -119,7 +138,8 @@ class NVMNet:
             [(device,'mb') for device in self.devices] + \
             [('mb',device) for device in self.devices] + \
             [('ip','sf')] + \
-            [('co','ci')]
+            [('co','ci')] + \
+            [('mp','mf')]
         for (to_name, from_name) in connect_pairs:
             N_to = self.layers[to_name].size
             N_from = self.layers[from_name].size
@@ -176,6 +196,7 @@ class NVMNet:
         for ms in 'ms':
             self.activity[ms+'f'] = self.layers[ms+'f'].coder.encode('0')
             self.activity[ms+'b'] = self.layers[ms+'b'].coder.encode('0')
+        self.activity['mp'] = self.layers['mp'].coder.encode('0')
 
         # initialize comparison
         self.activity["co"] = self.layers["co"].coder.encode('false')
