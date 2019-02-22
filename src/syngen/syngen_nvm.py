@@ -27,11 +27,13 @@ class SyngenNVM:
     def initialize_weights(self, nvmnet):
         init_syngen_nvm_weights(nvmnet, self.net)
         for aux in self.auxiliary:
-            aux.initialize(self, nvmnet)
+            aux.initialize_weights(self, nvmnet)
 
     def initialize_activity(self, nvmnet):
         try: init_syngen_nvm_activity(nvmnet.activity, self.net)
         except AttributeError: pass
+        for aux in self.auxiliary:
+            aux.initialize_activity(self, nvmnet)
 
     def get_output(self, layer_name):
         return self.net.get_neuron_data(

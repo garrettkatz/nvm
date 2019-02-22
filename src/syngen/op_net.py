@@ -2,6 +2,11 @@ import sys
 sys.path.append('../nvm')
 
 from sequencer import Sequencer
+from gate_sequencer import GateSequencer
+from gate_map import GateMap
+from activator import heaviside_activator, tanh_activator
+from layer import Layer
+from coder import Coder
 from syngen_nvm import *
 
 import numpy as np
@@ -60,7 +65,7 @@ def make_comp_opdef(in_range=range(0,10)):
         ("true", "false"))
 
 class OpNet:
-    def __init__(self, nvmnet, opdef, in_regs, out_regs, op_reg):
+    def __init__(self, nvmnet, opdef, arg_regs, res_regs, op_reg):
         self.opdef = opdef
         self.op_name = opdef.op_name
         self.operations = dict(opdef.operations)
@@ -68,67 +73,54 @@ class OpNet:
         self.out_ops = list(opdef.out_ops)
         self.tokens = list(opdef.tokens)
 
-        self.input_registers = in_regs
-        self.output_registers = out_regs
+        self.arg_registers = arg_regs
+        self.res_registers = res_regs
         self.op_register = op_reg
 
-        self.gate_name = "%s_gate" % self.op_name
-        self.input_name = "%s_input" % self.op_name
-        self.hidden_name = "%s_hidden" % self.op_name
-        self.output_name = "%s_output" % self.op_name
+        self.hidden_name = "%s_gh" % self.op_name
+        self.gate_name = "%s_go" % self.op_name
 
-        self.gate_size = len(self.operations)
-        self.input_size = len(self.in_ops) * len(self.input_registers)
-        self.hidden_size = len(self.in_ops) ** len(self.input_registers)
-        self.output_size = len(self.out_ops) * len(self.output_registers)
+        # 1. OP->HID, 2. OP->OP, [3. RESX->RESX, 4. RESX->RESY for op in ops]
+        self.gate_map = GateMap(
+            [(self.hidden_name, self.op_register, "u"),
+             (self.op_register, self.op_register, "u")]
+            + [("res","res",op) for op in self.operations]
+            + [("res","arg",op) for op in self.operations])
 
-        op_reg = nvmnet.layers[self.op_register]
-        gate_bias = op_reg.activator.on * -(op_reg.size - 1)
+        # Hidden gate layer
+        N = 16
+        self.hidden_size = N**2
+        hid_activator = tanh_activator(nvmnet.pad, self.hidden_size)
+        self.hidden_layer = Layer(self.hidden_name,
+            (N,N), hid_activator, Coder(hid_activator))
+
+        # Gate output layer
+        self.gate_size = self.gate_map.get_gate_count()
+        gate_activator = heaviside_activator(self.gate_size)
+        self.gate_layer = Layer(self.gate_name,
+            (self.gate_size,1), gate_activator, Coder(gate_activator))
 
         # Gate layer (detects operator)
-        gate_layer = {
-            "name" : self.gate_name,
-            "neural model" : "binary threshold",
-            "rows" : 1,
-            "columns" : self.gate_size,
-            "init config": {
-                "type": "flat",
-                "value": gate_bias
-            }
-        }
-        # Input layer
-        input_layer = {
-            "name" : self.input_name,
-            "neural model" : "nvm_heaviside",
-            "rows" : 1,
-            "columns" : self.input_size,
-        }
-        # Hidden layer
-        # Bias is set according to the number of input registers
-        hidden_layer = {
+        hidden_gate_layer = {
             "name" : self.hidden_name,
-            "neural model" : "nvm_heaviside",
+            "neural model" : "nvm",
             "rows" : 1,
             "columns" : self.hidden_size,
-            "init config": {
-                "type": "flat",
-                "value": -len(self.input_registers)+0.5
-            }
         }
-        # Output layer
-        output_layer = {
-            "name" : self.output_name,
+        gate_layer = {
+            "name" : self.gate_name,
             "neural model" : "nvm_heaviside",
             "rows" : 1,
-            "columns" : self.output_size,
+            "columns" : self.gate_size,
         }
         self.structure = {
             "name" : self.op_name,
-            "type" : "sequential",
-            "layers": [gate_layer, input_layer, hidden_layer, output_layer]
+            "type" : "parallel",
+            "layers": [hidden_gate_layer, gate_layer]
         }
 
-        def build_gate(to_name, indices=(0, self.gate_size), suffix=""):
+        # Make gate connection
+        def build_gate(to_name, index, suffix=""):
             return {
                 "name" : get_conn_name(to_name, self.gate_name, suffix),
                 "from layer" : self.gate_name,
@@ -137,8 +129,8 @@ class OpNet:
                 "opcode" : "add",
                 "subset config" : {
                     "from row end" : 1,
-                    "from column start" : indices[0],
-                    "from column end" : indices[1],
+                    "from column start" : index,
+                    "from column end" : index+1,
                     "to row end" : 1,
                     "to column end" : 1,
                 },
@@ -146,10 +138,11 @@ class OpNet:
                 "gate" : True,
             }
 
-        def build_fc(to_name, from_name, gated=True, suffix=""):
+        # Squash weights to cancel gain
+        def build_squash(to_name, suffix="", gated=True):
             return {
-                "name" : get_conn_name(to_name, from_name, suffix),
-                "from layer" : from_name,
+                "name" : get_conn_name(to_name, to_name, suffix),
+                "from layer" : "bias",
                 "to layer" : to_name,
                 "type" : "fully connected",
                 "opcode" : "add",
@@ -157,205 +150,187 @@ class OpNet:
                 "gated" : gated,
             }
 
-        def build_subset(to_name, from_name, sub_conf, gated=True, suffix=""):
-            return {
-                "name" : get_conn_name(to_name, from_name, suffix),
+        # Make weight/bias connections
+        def build_conns(to_name, from_name, suffix="", gated=True):
+            return [{
+                "name" : get_conn_name(to_name, from_name, suffix + "-w"),
                 "from layer" : from_name,
                 "to layer" : to_name,
-                "type" : "subset",
+                "type" : "fully connected",
                 "opcode" : "add",
-                "subset config" : sub_conf,
                 "plastic" : False,
-                "gated" : gated,
-            }
-
+                "gated" : gated
+            },
+            {
+                "name" : get_conn_name(to_name, from_name, suffix + "-b"),
+                "from layer" : 'bias',
+                "to layer" : to_name,
+                "type" : "fully connected",
+                "opcode" : "add",
+                "plastic" : False,
+                "gated" : gated
+            }]
 
         self.connections = []
 
-        # Operation gate activation (detect operation)
+        # Hidden gate input
         self.connections.append(
-            build_fc(self.gate_name, self.op_register, gated=False))
+            build_gate(self.hidden_name,
+                self.gate_map.get_gate_index(
+                    (self.hidden_name, self.op_register, "u"))))
+        self.connections += build_conns(
+            self.hidden_name, self.op_register, gated=True)
 
-        # Operands to input
-        self.connections.append(
-            build_gate(self.input_name));
+        # Hidden gate recurrence
+        self.connections += build_conns(
+            self.hidden_name, self.hidden_name, gated=False)
 
-        # Input bias (for different sized x/y layers)
-        self.connections.append(
-            build_fc(self.input_name, 'bias', gated=True))
-
-        for index,from_name in enumerate(self.input_registers):
-            self.connections.append(build_subset(self.input_name, from_name, {
-                "from row end" : nvmnet.layers[from_name].shape[0],
-                "from column end" : nvmnet.layers[from_name].shape[1],
-                "to row end" : 1,
-                "to column start" : index*len(self.in_ops),
-                "to column end" : (index+1)*len(self.in_ops),
-            }, gated=True))
-
-        # Input to hidden
-        self.connections.append(
-            build_gate(self.hidden_name));
-        self.connections.append(
-            build_fc(self.hidden_name, self.input_name, gated=True))
-
-        # Hidden to output
-        for index,op in enumerate(self.operations):
-            self.connections.append(
-                build_gate(self.output_name, (index, index+1), op));
-            self.connections.append(
-                build_fc(self.output_name, self.hidden_name, gated=True, suffix=op))
-
-        # Output bias (for 'null')
-        self.connections.append(
-            build_fc(self.output_name, 'bias', gated=False))
-
-        # Output to operands
-        for index,to_name in enumerate(self.output_registers):
-            self.connections.append(build_gate(to_name, suffix=self.op_name));
-
-            # Output
-            self.connections.append(build_subset(to_name, self.output_name, {
-                "from row end" : 1,
-                "from column start" : index*len(self.out_ops),
-                "from column end" : (index+1)*len(self.out_ops),
-                "to row end" : nvmnet.layers[from_name].shape[0],
-                "to column end" : nvmnet.layers[from_name].shape[1],
-            }, gated=True))
-
-            # Squash
-            self.connections.append({
-                "name" : get_conn_name(to_name, to_name, "%s-squash" % self.op_name),
-                "from layer" : to_name,
-                "to layer" : to_name,
-                "type" : "one to one",
-                "opcode" : "add",
-                "weight config" : {
-                    "type" : "flat",
-                    "weight" : -nvmnet.w_gain[to_name],
-                },
-                "plastic" : False,
-                "gated" : True,
-            })
+        # Gate activation
+        self.connections += build_conns(
+            self.gate_name, self.hidden_name, gated=False)
 
         # Operation squash
         self.connections.append(
-            build_fc(self.op_register, self.gate_name, gated=False))
+            build_gate(self.op_register,
+                self.gate_map.get_gate_index(
+                    (self.op_register, self.op_register, "u")),
+                self.op_name))
+        self.connections.append(build_squash(
+            self.op_register, suffix=self.op_name+"-squash"))
+
+        for op in self.operations:
+            for to_name in self.res_registers:
+                # Recurrent connections
+                self.connections.append(
+                    build_gate(to_name,
+                        self.gate_map.get_gate_index(
+                            ("res", "res", op)),
+                        op+"-1"))
+                self.connections += build_conns(
+                    to_name, to_name, suffix=op, gated=True)
+
+                # Inter-layer connections
+                self.connections.append(
+                    build_gate(to_name,
+                        self.gate_map.get_gate_index(
+                            ("res", "arg", op)),
+                        op+"-2"))
+                for from_name in self.arg_registers:
+                    if to_name != from_name:
+                        self.connections += build_conns(
+                            to_name, from_name, suffix=op, gated=True)
+
+        self.layer_map = { name : nvmnet.layers[name] for name in
+            self.arg_registers + self.res_registers + [self.op_register] }
+        self.layer_map[self.gate_name] = self.gate_layer
+        self.layer_map[self.hidden_name] = self.hidden_layer
+
+        self.conn_names = tuple(conn["name"] for conn in self.connections)
 
 
-    def initialize(self, syngen_net, nvmnet):
 
-        # Detector weights
-        # Map each operator to a gate node
+    def initialize_weights(self, syngen_net, nvmnet):
+
+        def set_seq_weights(ws, bs, suffix=""):
+            for to_name, from_name in ws:
+                w = ws[(to_name,from_name)]
+                b = bs[(to_name,from_name)]
+
+                # Recurrent connections need to overcome gain
+                # TODO: Eventually, this should be resolved by gating
+                #     (to_name, to_name, 'd')
+                if to_name == from_name:
+                    try: w = w + (-nvmnet.w_gain[to_name] * np.eye(w.shape[0]))
+                    except KeyError: pass
+
+                w_name = get_conn_name(to_name, from_name, suffix + "-w")
+                if w_name in self.conn_names:
+                    syngen_net.net.get_weight_matrix(w_name).copy_from(w.flat)
+
+                b_name = get_conn_name(to_name, from_name, suffix + "-b")
+                if b_name in self.conn_names:
+                    syngen_net.net.get_weight_matrix(b_name).copy_from(b.flat)
+
         op_layer = nvmnet.layers[self.op_register]
 
-        w = np.zeros((0,op_layer.size))
+        # Hidden gate transits
+        hid_seq = GateSequencer(
+            self.gate_map, self.gate_layer, self.hidden_layer,
+            { self.hidden_name: self.hidden_layer, self.op_register: op_layer },
+            default_gates=[])
+
+        # Start state recurrence
+        v_start = self.hidden_layer.coder.encode("START")
+        v_end = self.hidden_layer.coder.encode("END")
+        self.hidden_start_state = v_start
+        self.hidden_end_state = v_end
+
+        # START -> END
+        hid_seq.add_transit(new_hidden = v_end, old_hidden = v_start)
+
+        # END -> START
+        # OP -> Hidden Gate
+        load_gates,_ = hid_seq.add_transit(
+            new_hidden = v_start, old_hidden = v_end,
+            ungate=[(self.hidden_name, self.op_register, "u")])
+
         for op in self.operations.keys():
-            op_pattern = np.sign(
-                op_layer.coder.encode(op).reshape((1,op_layer.size)))
-            w = np.append(w, op_pattern, axis=0)
+            # Squash OP + RES Recurrence + Inter-RES
+            hid_seq.add_transit(new_hidden = op, old_hidden = v_start,
+                ungate = [
+                    (self.op_register, self.op_register, "u"),
+                    ("res", "res", op),
+                    ("res", "arg", op)],
+                old_gates=load_gates, **{ self.op_register : op})
 
+            # RES Recurrence
+            hid_seq.add_transit(new_hidden = v_end, old_hidden = op,
+                intermediate_ungate = [("res", "res", op)])
+
+        ws, bs,  _ = hid_seq.flash(False)
+        set_seq_weights(ws, bs)
+
+
+        # OP squash
+        w = op_layer.activator.g(op_layer.coder.encode("null")) * 10
         syngen_net.net.get_weight_matrix(
-            get_conn_name(self.gate_name, self.op_register)).copy_from(w.flat)
+            get_conn_name(self.op_register, self.op_register,
+                self.op_name + "-squash")).copy_from(w.flat)
 
-        # Input bias
-        # For mutually exlusive operand detection
-        w = np.zeros((0,1))
-        for name in self.input_registers:
-            reg = nvmnet.layers[name]
-            bias = reg.activator.on * -(reg.size - 1)
-            w = np.append(w, bias * np.ones((len(self.in_ops),1)), axis=0)
-        syngen_net.net.get_weight_matrix(
-            get_conn_name(self.input_name, 'bias')).copy_from(w.flat)
-
-        # Operands to input
-        # Map each operand to an input node
-        for from_name in self.input_registers:
-            from_layer = nvmnet.layers[from_name]
-            w = np.zeros((0,from_layer.size))
-
-            for operand in self.in_ops:
-                op_pattern = np.sign(
-                    from_layer.coder.encode(
-                        operand).reshape((1,from_layer.size)))
-                w = np.append(w, op_pattern, axis=0)
-
-            syngen_net.net.get_weight_matrix(
-                get_conn_name(self.input_name, from_name)).copy_from(w.flat)
-
-        # Input to hidden
-        # Each hidden node is a unique combination of operands
-        w = np.zeros((self.hidden_size, self.input_size))
-        combos = product(range(len(self.in_ops)), repeat=len(self.input_registers))
-        for hid_index,elems in enumerate(combos):
-            for i,e in enumerate(elems):
-                w[hid_index,i*len(self.in_ops)+e] = 1
-
-        syngen_net.net.get_weight_matrix(
-            get_conn_name(self.hidden_name, self.input_name)).copy_from(w.flat)
-
-        # Hidden to output
-        # Each operation maps operand combos to outputs
-        # Any exception yields a 'null' output
-        nulls = [self.out_ops.index('null') + i*len(self.out_ops)
-            for i in range(len(self.output_registers))]
+        # Result transits
         for op,fs in self.operations.iteritems():
-            w = np.zeros((self.output_size, self.hidden_size))
+
+            input_layers = { name : nvmnet.layers[name]
+                for name in self.arg_registers + self.res_registers }
+            seqs = [ Sequencer(nvmnet.layers[name], input_layers)
+                for name in self.res_registers ]
 
             # Create the map
-            # 'null' is the default output if no hidden node is active
-            # For this reason, weights to 'null' are 2, not 1
-            # They will be decremented to 1, and 'null' will be biased
-            combos = product(self.in_ops, repeat=len(self.input_registers))
-            for hid_index,elems in enumerate(combos):
+            combos = product(self.in_ops, repeat=len(self.arg_registers))
+            for elems in combos:
+                input_states = dict(zip(self.arg_registers, elems))
+
+                # Ensure that res_layers are represented in the input
+                for res_layer in self.res_registers:
+                    if res_layer not in input_states:
+                        input_states[res_layer] = np.zeros(
+                            (nvmnet.layers[res_layer].size,1))
+
                 try:
-                    outputs = tuple(self.out_ops.index(f(*elems)) for f in fs)
+                    outputs = tuple(f(*elems) for f in fs)
                 except:
-                    outputs = tuple(self.out_ops.index('null') for f in fs)
+                    outputs = tuple('null' for f in fs)
 
-                for i,o in enumerate(outputs):
-                    w[o+(i*len(self.out_ops)),hid_index] = 1
+                for name,output,seq in zip(self.res_registers, outputs, seqs):
+                    seq.add_transit(output, **input_states)
 
-            # Decrement all weights into 'null' outputs
-            for null_index in nulls:
-                w[null_index,:] -= 1
+            for seq in seqs:
+                ws, bs, _, _ = seq.flash(False)
+                set_seq_weights(ws, bs, op)
 
-            syngen_net.net.get_weight_matrix(get_conn_name(
-                self.output_name, self.hidden_name, op)).copy_from(w.flat)
 
-        # Output bias
-        # For 'null'
-        w = np.zeros((self.output_size, 1))
-        for null_index in nulls:
-            w[null_index] = 1
-        syngen_net.net.get_weight_matrix(
-            get_conn_name(self.output_name, 'bias')).copy_from(w.flat)
-
-        # Output to operands
-        # Each output node is mapped back to a distributed representation
-        for index,to_name in enumerate(self.output_registers):
-            to_layer = nvmnet.layers[to_name]
-            w = np.zeros((to_layer.size,0))
-
-            for operand in self.out_ops:
-                op_pattern = to_layer.activator.g(
-                    to_layer.coder.encode(operand).reshape((to_layer.size,1)))
-                w = np.append(w, op_pattern, axis=1)
-
-            syngen_net.net.get_weight_matrix(
-                get_conn_name(to_name, self.output_name)).copy_from(w.flat)
-
-        # Operation squash
-        # Pushes the operand layer to 'null' to avoid repeated operations
-        op_layer = nvmnet.layers[self.op_register]
-        null_pattern = op_layer.activator.g(
-            op_layer.coder.encode('null').reshape((op_layer.size,1)))
-
-        w = np.zeros((op_layer.size,0))
-        for op in self.operations.keys():
-            op_pattern = nvmnet.w_gain[self.op_register] * \
-                op_layer.coder.encode(op).reshape((op_layer.size,1))
-            w = np.append(w, null_pattern - op_pattern, axis=1)
-
-        syngen_net.net.get_weight_matrix(
-            get_conn_name(self.op_register, self.gate_name)).copy_from(w.flat)
+    def initialize_activity(self, syngen_net, nvmnet):
+        # Initial hidden state
+        syngen_net.net.get_neuron_data(
+            self.op_name, self.hidden_name, "output").copy_from(
+                self.hidden_start_state.flat)

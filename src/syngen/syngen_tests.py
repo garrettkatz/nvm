@@ -168,10 +168,10 @@ class SyngenNVMArithTestCase(ut.TestCase):
                 print("")
             print(name, data)
 
-        op = "comp"
-        #syn_env.add_custom_output(op,
-        #    ["%s_%s" % (op, suffix) for suffix in "input", "hidden", "output"],
-        #    "test", callback)
+        #for op in ("arith", "comp", "unary"):
+        #    syn_env.add_custom_output(op,
+        #        ["%s_hidden_gate" % (op)] + ["%s_gate" % (op)],
+        #        "test_%s" % op, callback)
 
         return syn_env
 
@@ -205,7 +205,7 @@ class SyngenNVMArithTestCase(ut.TestCase):
                 exit
         """
         trace = [
-            {},
+            {"r0": "null", "r1": "null", "r2": "null"},
             {"r2": "+"    },
             {"r2": "null" }, # squash
             {"r2": "A"    },
@@ -308,7 +308,7 @@ class SyngenNVMArithTestCase(ut.TestCase):
         end:    exit
         """ % opcode
         trace = [
-            {},
+            {"r0": "null", "r1": "null", "r2": "null"},
             {"r2": "arr1" },
             {"r2": "arr1" },
             {"r2": "ptr1" },

@@ -5,7 +5,7 @@ from sequencer import Sequencer
 import gate_map as gm
 
 class GateSequencer(Sequencer, object):
-    def __init__(self, gate_map, gate_output, gate_hidden, input_layers):
+    def __init__(self, gate_map, gate_output, gate_hidden, input_layers, default_gates=None):
         self.gate_map = gate_map
         self.gate_output = gate_output
         super(GateSequencer, self).__init__(gate_hidden, input_layers)
@@ -13,19 +13,22 @@ class GateSequencer(Sequencer, object):
         self.transit_outputs = []
         self.intermediate_outputs = []
 
+        # Internal gate activity always on
+        if default_gates is None:
+            default_gates = [
+                (gate_hidden.name, gate_hidden.name, 'u'),
+                (gate_hidden.name, gate_hidden.name, 'd'),
+                (gate_output.name, gate_hidden.name, 'u'),
+                (gate_output.name, gate_output.name, 'd')]
+        self.default_gates = default_gates
+
     def make_gate_output(self, ungate=[]):
         """Make gate output pattern where specified gate key units are on"""
 
-        # Internal gate activity always on
         pattern = self.gate_output.activator.off * np.ones((self.gate_output.size,1))
-        gate_keys = [
-            (self.gate_hidden.name, self.gate_hidden.name, 'u'),
-            (self.gate_hidden.name, self.gate_hidden.name, 'd'),
-            (self.gate_output.name, self.gate_hidden.name, 'u'),
-            (self.gate_output.name, self.gate_output.name, 'd')]
 
         # Ungate provided keys
-        for k in gate_keys + ungate:
+        for k in self.default_gates + ungate:
             i = self.gate_map.get_gate_index(k)
             pattern[i,0] = self.gate_output.activator.on
 
@@ -57,7 +60,8 @@ class GateSequencer(Sequencer, object):
                 if not gate_type == 'u': continue
                 if from_name in input_states: continue
                 if from_name == self.gate_hidden.name: continue
-                raise Exception("No input provided for ungated layer!  Expected "+str(gate_key))
+                raise Exception(
+                    "No input provided for ungated layer!  Expected "+str(gate_key))
 
         # Provide new gates, or ungate, but not both
         if len(ungate) > 0 and new_gates is not None:
@@ -73,7 +77,8 @@ class GateSequencer(Sequencer, object):
         if new_gates is None: new_gates = self.make_gate_output(ungate)
         self.transit_outputs.append(new_gates)
 
-        if intermediate_gates is None: intermediate_gates = self.make_gate_output(intermediate_ungate)
+        if intermediate_gates is None:
+            intermediate_gates = self.make_gate_output(intermediate_ungate)
         self.intermediate_outputs.append(intermediate_gates)
 
         return new_gates, new_hidden
