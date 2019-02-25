@@ -24,8 +24,8 @@ def flash_instruction_set(nvmnet, verbose=False):
     # if verbose:
     #     for name in nvmnet.layers:
     #         print("|%s|=%d"%(name, nvmnet.layers[name].size))
-    
-    gate_map, layers, devices = nvmnet.gate_map, nvmnet.layers, nvmnet.devices
+    # changing devices to registers
+    gate_map, layers, registers = nvmnet.gate_map, nvmnet.layers, nvmnet.registers
     gate_output, gate_hidden = layers['go'], layers['gh']
     gs = GateSequencer(gate_map, gate_output, gate_hidden, layers)
 
@@ -67,8 +67,8 @@ def flash_instruction_set(nvmnet, verbose=False):
     g_movv, h_movv = g.copy(), h.copy()
     gate_hidden.coder.encode('movv', h_movv)
     gate_output.coder.encode('op1', g_movv)
-
-    for name, device in devices.items():
+    # changing devices to registers
+    for name, register in registers.items():
         # Open flow from op2 to device in op1
         g, h = gs.add_transit(
             ungate = gflow(name, 'op2'),
@@ -90,11 +90,11 @@ def flash_instruction_set(nvmnet, verbose=False):
         old_gates = g_ready, old_hidden = h_ready, opc='movd')
     g_movd, h_movd = g.copy(), h.copy()
     gate_hidden.coder.encode('movd', h_movd)
-    gate_output.coder.encode('movd', g_movd)    
-
-    for from_name, from_device in devices.items():
-        for to_name, to_device in devices.items():
-            # Open flow between devices
+    gate_output.coder.encode('movd', g_movd)
+    # changing devices to registers
+    for from_name, from_register in registers.items():
+        for to_name, to_register in registers.items():
+            # Open flow between registers
             g, h = gs.add_transit(
                 ungate = gflow(to_name, from_name),
                 old_gates = g_movd, old_hidden = h_movd,
@@ -161,17 +161,17 @@ def flash_instruction_set(nvmnet, verbose=False):
         old_gates = g_ready, old_hidden = h_ready, opc='jmpd')
     g_jmpd, h_jmpd = g.copy(), h.copy()
     gate_hidden.coder.encode('jmpd', h_jmpd)
-
-    for device in devices:
+    # changing devices to registers
+    for register in registers:
 
         # Open flow from device in op1 to ip
         g, h = gs.add_transit(
-            ungate = gflow('ip', device),
+            ungate = gflow('ip', register),
             old_gates = g_jmpd, old_hidden = h_jmpd,
-            op1 = device)
+            op1 = register)
         g_jmpd_dev, h_jmpd_dev = g.copy(), h.copy()
-        gate_hidden.coder.encode('jmpd_'+device, h_jmpd_dev)
-        gate_output.coder.encode('jmpd_'+device, g_jmpd_dev)
+        gate_hidden.coder.encode('jmpd_'+register, h_jmpd_dev)
+        gate_output.coder.encode('jmpd_'+register, g_jmpd_dev)
 
         # Stabilize ip
         g, h = gs.stabilize(h, num_iters=3)
@@ -188,17 +188,17 @@ def flash_instruction_set(nvmnet, verbose=False):
         old_gates = g_ready, old_hidden = h_ready, opc='mem')
     g_mem, h_mem = g.copy(), h.copy()
     gate_hidden.coder.encode('mem', h_mem)
-
-    for device in devices:
+    # changing devices to registers
+    for register in registers:
 
         # Open plasticity from mf to device in op1
         g, h = gs.add_transit(
-            ungate = [(device, 'mf', 'l')],
+            ungate = [(register, 'mf', 'l')],
             old_gates = g_mem, old_hidden = h_mem,
-            op1 = device)
+            op1 = register)
         g_mem_dev, h_mem_dev = g.copy(), h.copy()
-        gate_hidden.coder.encode('mem_'+device, h_mem_dev)
-        gate_output.coder.encode('mem_'+device, g_mem_dev)
+        gate_hidden.coder.encode('mem_'+register, h_mem_dev)
+        gate_output.coder.encode('mem_'+register, g_mem_dev)
 
         # then return to start state
         gs.add_transit(
@@ -212,17 +212,17 @@ def flash_instruction_set(nvmnet, verbose=False):
         old_gates = g_ready, old_hidden = h_ready, opc='rem')
     g_rem, h_rem = g.copy(), h.copy()
     gate_hidden.coder.encode('rem', h_rem)
-
-    for device in devices:
+    # changing devices to registers
+    for register in registers:
 
         # Open flow from mf to device in op1
         g, h = gs.add_transit(
-            ungate = gflow(device, 'mf'),
+            ungate = gflow(register, 'mf'),
             old_gates = g_rem, old_hidden = h_rem,
-            op1 = device)
+            op1 = register)
         g_rem_dev, h_rem_dev = g.copy(), h.copy()
-        gate_hidden.coder.encode('rem_'+device, h_rem_dev)
-        gate_output.coder.encode('rem_'+device, g_rem_dev)
+        gate_hidden.coder.encode('rem_'+register, h_rem_dev)
+        gate_output.coder.encode('rem_'+register, g_rem_dev)
 
         # then return to start state
         gs.add_transit(
@@ -267,9 +267,9 @@ def flash_instruction_set(nvmnet, verbose=False):
         old_gates = g_ready, old_hidden = h_ready, opc='cmpd')
     g_cmpd, h_cmpd = g.copy(), h.copy()
     gate_hidden.coder.encode('cmpd', h_cmpd)
-    gate_output.coder.encode('cmpd', g_cmpd)    
-
-    for cmpd_a_name, cmpd_a_device in devices.items():
+    gate_output.coder.encode('cmpd', g_cmpd)
+    # changing devices to registers
+    for cmpd_a_name, cmpd_a_register in registers.items():
         # Open flow from device A to ci
         g, h = gs.add_transit(
             ungate = gflow("ci", cmpd_a_name),
@@ -292,8 +292,8 @@ def flash_instruction_set(nvmnet, verbose=False):
         g_cmpd2, h_cmpd2 = g.copy(), h.copy()
         gate_hidden.coder.encode('cmpd2_'+cmpd_a_name, h_cmpd2)
         gate_output.coder.encode('cmpd2', g_cmpd2)
-    
-        for cmpd_b_name, cmpd_b_device in devices.items():
+        # changing devices to registers
+        for cmpd_b_name, cmpd_b_register in registers.items():
 
             # Open flow from device B to ci
             g, h = gs.add_transit(
@@ -323,9 +323,9 @@ def flash_instruction_set(nvmnet, verbose=False):
         old_gates = g_ready, old_hidden = h_ready, opc='cmpv')
     g_cmpv, h_cmpv = g.copy(), h.copy()
     gate_hidden.coder.encode('cmpv', h_cmpv)
-    gate_output.coder.encode('cmpv', g_cmpv)    
-
-    for cmpv_a_name, cmpv_a_device in devices.items():
+    gate_output.coder.encode('cmpv', g_cmpv)
+    # changing devices to registers
+    for cmpv_a_name, cmpv_a_register in registers.items():
         # Open flow from device A to ci
         g, h = gs.add_transit(
             ungate = gflow("ci", cmpv_a_name),
@@ -416,9 +416,9 @@ def flash_instruction_set(nvmnet, verbose=False):
         old_gates = g_subd_nxt, old_hidden = h_subd_nxt)
     g_subd_op1, h_subd_op1 = g.copy(), h.copy()
     gate_hidden.coder.encode('subd_op1', h_subd_op1)
-    gate_output.coder.encode('gh+op1', g_subd_op1)    
-
-    for subd_name, subd_device in devices.items():
+    gate_output.coder.encode('gh+op1', g_subd_op1)
+    # changing devices to registers
+    for subd_name, subd_register in registers.items():
         # Open flow from device to ip
         g, h = gs.add_transit(ungate = gflow('ip', subd_name),
             old_gates = g_subd_op1, old_hidden = h_subd_op1,
@@ -465,17 +465,17 @@ def flash_instruction_set(nvmnet, verbose=False):
         old_gates = g_ready, old_hidden = h_ready, opc='ref')
     g_ref, h_ref = g.copy(), h.copy()
     gate_hidden.coder.encode('ref', h_ref)
-
-    for device in devices:
+    # changing devices to registers
+    for register in registers:
 
         # Open plasticity from device in op1 to mf and mb
         g, h = gs.add_transit(
-            ungate = [('m'+x, device, 'l') for x in "fb"],
+            ungate = [('m'+x, register, 'l') for x in "fb"],
             old_gates = g_ref, old_hidden = h_ref,
-            op1 = device)
+            op1 = register)
         g_ref_dev, h_ref_dev = g.copy(), h.copy()
-        gate_hidden.coder.encode('ref_'+device, h_ref_dev)
-        gate_output.coder.encode('ref_'+device, g_ref_dev)
+        gate_hidden.coder.encode('ref_'+register, h_ref_dev)
+        gate_output.coder.encode('ref_'+register, g_ref_dev)
 
         # then return to start state
         gs.add_transit(
@@ -491,8 +491,8 @@ def flash_instruction_set(nvmnet, verbose=False):
     g_drf, h_drf = g.copy(), h.copy()
     gate_hidden.coder.encode('drf', h_drf)
     gate_output.coder.encode('drf', g_drf)
-
-    for drf_name, drf_device in devices.items():
+    # changing devices to registers
+    for drf_name, drf_register in registers.items():
         # Open flow from device to mf and mb
         g, h = gs.add_transit(
             ungate = gflow("mf", drf_name) + gflow("mb", drf_name),

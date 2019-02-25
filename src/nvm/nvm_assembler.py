@@ -6,8 +6,8 @@ def unique(x):
     return list(set(x))
 
 def assemble(nvmnet, programs, verbose=False, orthogonal=False, other_tokens=[]):
-
-    registers = nvmnet.devices.keys()
+    # changing devices to registers
+    registers = nvmnet.registers.keys()
 
     ### Preprocess program strings
     lines, labels, tokens = preprocess(programs, registers)
@@ -103,13 +103,14 @@ if __name__ == '__main__':
 
     layer_size = 64
     pad = 0.95
-    devices = {}
+    # changing devices to registers
+    registers = {}
 
     from nvm_net import NVMNet
     # activator, learning_rule = logistic_activator, logistic_hebbian
     activator, learning_rule = tanh_activator, tanh_hebbian
-    
-    nvmnet = NVMNet(layer_size, pad, activator, learning_rule, devices)
+    # changing devices to registers
+    nvmnet = NVMNet(layer_size, pad, activator, learning_rule, register)
 
     program = """
     
