@@ -24,10 +24,8 @@ arith_ops = {
 }
 
 unary_ops = {
-    "++" : (lambda x:str( (int(x)+1) / 10 ),
-            lambda x:str( (int(x)+1) % 10 )),
-    "--" : (lambda x:str( (int(x)-1) / 10 ),
-            lambda x:str( (int(x)-1) % 10 )),
+    "++" : (lambda x:str( (int(x)+1) % 10 ), ),
+    "--" : (lambda x:str( (int(x)-1) % 10 ), ),
 }
 
 comp_ops = {
@@ -47,7 +45,7 @@ class OpDef:
         if 'null' not in out_ops:
             self.out_ops.append('null')
         self.tokens = list(set(
-            self.operations.keys() + self.in_ops + self.out_ops))
+            list(self.operations.keys()) + self.in_ops + self.out_ops))
 
 def make_arith_opdef(in_range=range(0,10),out_range=range(-9,10)):
     return OpDef("arith", arith_ops,
@@ -298,7 +296,7 @@ class OpNet:
                 self.op_name + "-squash")).copy_from(w.flat)
 
         # Result transits
-        for op,fs in self.operations.iteritems():
+        for op,fs in self.operations.items():
 
             input_layers = { name : nvmnet.layers[name]
                 for name in self.arg_registers + self.res_registers }

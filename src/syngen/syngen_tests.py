@@ -157,7 +157,7 @@ class SyngenNVMArithTestCase(ut.TestCase):
     def _make_syngen_nvm(self, vm):
         return SyngenNVM(vm.net,
             [OpNet(vm.net, self.arith_opdef, ["r0", "r1"], ["r0", "r1"], "r2"),
-             OpNet(vm.net, self.unary_opdef, ["r1"], ["r0", "r1"], "r2"),
+             OpNet(vm.net, self.unary_opdef, ["r1"], ["r1"], "r2"),
              OpNet(vm.net, self.comp_opdef, ["r0", "r1"], ["r1"], "r2")])
 
     def _make_syngen_env(self, vm):

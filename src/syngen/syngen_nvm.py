@@ -53,7 +53,7 @@ class SyngenNVM:
             "verbose" : False,
             "learning flag" : False}
 
-        for key,val in default_args.iteritems():
+        for key,val in default_args.items():
             if key not in args:
                 args[key] = val
 
@@ -169,7 +169,7 @@ def make_syngen_network(nvmnet):
     # Determine which gates are always active to save computations
     #   For decay gates, omit gain connection
     #   For update gates, use non-gated kernel
-    gate_map, layers, devices = nvmnet.gate_map, nvmnet.layers, nvmnet.devices
+    gate_map, layers, registers = nvmnet.gate_map, nvmnet.layers, nvmnet.registers
     gate_output, gate_hidden = layers['go'], layers['gh']
     gs = GateSequencer(gate_map, gate_output, gate_hidden, layers)
     gates_always_on = np.where(gs.make_gate_output() > 0.0)[0]
@@ -236,16 +236,16 @@ def make_syngen_network(nvmnet):
             })
 
         # Connections with gated learning
-        #   device <- mf
+        #   register <- mf
         #   co <- ci
         #   ip <- sf
-        #   mf <- device
-        #   mb <- device
+        #   mf <- register
+        #   mb <- register
         #   mp <- mf
-        plastic = (to_name in nvmnet.devices and from_name == "mf") or \
+        plastic = (to_name in nvmnet.registers and from_name == "mf") or \
            (to_name == "co") or \
            (to_name == "ip" and from_name == "sf") or \
-           (to_name in ["mf", "mb"] and from_name in nvmnet.devices) or \
+           (to_name in ["mf", "mb"] and from_name in nvmnet.registers) or \
            (to_name == 'mp' and from_name == 'mf')
 
         # Learning gate (skip if never used)
@@ -396,7 +396,7 @@ def make_printer_module(nvmnet, layer_names):
 
 def make_checker_module(nvmnet):
 
-    layer_names = nvmnet.layers.keys()
+    layer_names = list(nvmnet.layers.keys())
 
     def checker_callback(ID, size, ptr):
         if ID == 0:
