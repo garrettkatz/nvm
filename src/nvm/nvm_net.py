@@ -103,7 +103,7 @@ class NVMNet:
         NL = len(layers) + 2 # +2 for gate out/hidden
         NG = NL + 2*NL**2 # number of gates (d + u + l)
         NH = shapes['gh'][0]*shapes['gh'][1] # number of hidden units
-        acto = heaviside_activator(NG)
+        acto = gate_activator(pad,NG)
         acth = activator(pad,NH)
         layers['go'] = Layer('go', (1,NG), acto, Coder(acto))
         layers['gh'] = Layer('gh', shapes['gh'], acth, Coder(acth))

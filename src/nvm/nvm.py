@@ -1,6 +1,3 @@
-"""
-Symbolically implemented reference machine
-"""
 from activator import *
 from learning_rules import *
 from layer import Layer

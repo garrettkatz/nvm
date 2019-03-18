@@ -55,3 +55,14 @@ def heaviside_activator(layer_size):
         off = 0.,
         label = "heaviside")
 
+def gate_activator(pad, layer_size):
+    return Activator(
+        f = np.tanh,
+        g = lambda v: np.arctanh(np.clip(v, 0., 1. - pad)),
+        e = lambda a, b: ((a > .5) == (b > .5)),
+        make_pattern = lambda : (1.-pad)*(np.random.randn(layer_size,1) > 0.),
+        hash_pattern = lambda p: (p > .5).tobytes(),
+        on = 1. - pad,
+        off = 0.,
+        label = "gate")
+
