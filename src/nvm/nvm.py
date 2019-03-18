@@ -50,7 +50,6 @@ class NVM:
                 "%s"%state[x] for x in ["opc","op1","op2"]]) + ", " + \
             ",".join([
                 "%s:%s"%(r,state[r]) for r in self.net.registers])
-    # changing devices to registers
 
     def at_start(self):
         return self.net.at_start()
