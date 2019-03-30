@@ -88,8 +88,8 @@ class CHL_Net:
 
         return err, float(correct)/len(patterns)
 
-    def train(self, epochs, patterns, verbose=False):
-        ada = 1.0
+    def train(self, epochs, patterns, learning_rate=None, verbose=False):
+        ada = 1.0 if learning_rate is None else learning_rate
 
         for epoch in range(epochs):
             for in_pattern,target in patterns:
@@ -126,7 +126,8 @@ class CHL_Net:
                 print("Epoch %4d:   err= %12.4f   acc= %6.4f" % (epoch, err, acc))
 
             if acc == 1.0: return
-            ada = 1.0 - acc
+            if learning_rate is None:
+                ada = 1.0 - acc
 
 
 ### Digits ###
