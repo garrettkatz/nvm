@@ -92,10 +92,8 @@ class NVMNet:
             [actc.on if tf == actc.off else actc.off]
             for tf in co_true.flatten()]))
 
-        # add device layers
-        # changing devices to registers
+        # add register layers
         layers.update(registers)
-        # changing devices to registers
         self.registers = registers
         self.layers = layers
 
@@ -103,7 +101,7 @@ class NVMNet:
         NL = len(layers) + 2 # +2 for gate out/hidden
         NG = NL + 2*NL**2 # number of gates (d + u + l)
         NH = shapes['gh'][0]*shapes['gh'][1] # number of hidden units
-        acto = heaviside_activator(NG)
+        acto = gate_activator(pad,NG)
         acth = activator(pad,NH)
         layers['go'] = Layer('go', (1,NG), acto, Coder(acto))
         layers['gh'] = Layer('gh', shapes['gh'], acth, Coder(acth))
@@ -118,10 +116,7 @@ class NVMNet:
         self.orthogonal = orthogonal
         self.layers["opc"].encode_tokens(opcodes, orthogonal=orthogonal)
         # explicitly convert to list for python3
-        # changing devices to registers
         all_tokens = list(set(tokens) | set(list(self.registers.keys()) + ["null"]))
-        # explicitly convert to list for python3
-        # changing devices to registers
         for name in list(self.registers.keys()) + ["op1","op2","ci"]:
             self.layers[name].encode_tokens(all_tokens, orthogonal=orthogonal)
 
@@ -245,6 +240,9 @@ class NVMNet:
         ### NVM tick
         current_gates = self.activity['go']
 
+        # non-binary gate output scaling
+        ohr = 1. / (1. - self.pad)
+
         # activity
         activity_new = {name: np.zeros(pattern.shape)
             for name, pattern in self.activity.items()}
@@ -252,18 +250,19 @@ class NVMNet:
             u = self.gate_map.get_gate_value(
                 (to_layer, from_layer, 'u'), current_gates)
 
-            if u != 0:
+            if u > .5:
                 w = self.weights[(to_layer, from_layer)]
                 b = self.biases[(to_layer, from_layer)]
-                wvb = u * (w.dot(self.activity[from_layer]) + b)
+                wvb = u * ohr * (w.dot(self.activity[from_layer]) + b)
                 activity_new[to_layer] += wvb
 
         for name, layer in self.layers.items():
             d = self.gate_map.get_gate_value((name, name, 'd'), current_gates)
+            s = (1 - self.pad) - d
 
-            if d != 1:
+            if s > .5:
                 wvb = self.w_gain[name] * self.activity[name] + self.b_gain[name]
-                activity_new[name] += (1-d) * wvb
+                activity_new[name] += s * ohr * wvb
     
         for name in activity_new:
             activity_new[name] = self.layers[name].activator.f(activity_new[name])
@@ -277,7 +276,7 @@ class NVMNet:
             # actg = self.layers["go"].activator
             # if np.fabs(l - actg.on) < np.fabs(l - actg.off):
             # if True:
-            if l != 0:
+            if l > .5:
 
                 dw, db = self.learning_rules[pair_key](
                     self.weights[pair_key],
@@ -287,8 +286,8 @@ class NVMNet:
                     self.layers[from_layer].activator,
                     self.layers[to_layer].activator)
 
-                self.weights[pair_key] += l*dw
-                self.biases[pair_key] += l*db
+                self.weights[pair_key] += ohr * l *dw
+                self.biases[pair_key] += ohr * l *db
 
         self.activity = activity_new
 

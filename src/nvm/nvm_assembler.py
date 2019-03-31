@@ -6,7 +6,7 @@ def unique(x):
     return list(set(x))
 
 def assemble(nvmnet, programs, verbose=False, orthogonal=False, other_tokens=[]):
-    # changing devices to registers
+
     registers = nvmnet.registers.keys()
 
     ### Preprocess program strings
