@@ -100,17 +100,15 @@ def get_conn_name(to_name, from_name, suffix=""):
 
 def make_syngen_network(nvmnet):
     for layer in nvmnet.layers.values():
-        if layer.activator.label not in ["tanh", "heaviside"]:
-            raise ValueError("Syngen NVM must use tanh/heaviside")
+        if layer.activator.label not in ["tanh", "gate"]:
+            raise ValueError("Syngen NVM must use tanh/gate")
 
     ### LAYERS ###
     layer_configs = []
 
     for layer_name, layer in nvmnet.layers.items():
-        # 'go' and 'co' use special neural models
-        if layer_name == "go":
-            model = "nvm_heaviside"
-        elif layer_name == "co":
+        # 'co' uses special neural model
+        if layer_name == "co":
             model = "nvm_compare"
         else:
             model = "nvm"
@@ -121,6 +119,7 @@ def make_syngen_network(nvmnet):
             "neural model" : model,
             "rows" : layer.shape[0],
             "columns" : layer.shape[1],
+            "pad" : nvmnet.pad
         })
 
     # bias layer

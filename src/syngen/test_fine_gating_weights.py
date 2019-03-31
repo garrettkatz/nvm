@@ -4,7 +4,7 @@ sys.path.append('../nvm')
 from random import randint
 
 from layer import Layer
-from activator import tanh_activator
+from activator import tanh_activator, logistic_activator
 from coder import Coder
 from learning_rules import rehebbian
 
@@ -32,13 +32,21 @@ def test(N, pad, mask_frac, mappings, stabil=5):
     size = N**2
 
     act = tanh_activator(pad, size)
+    act_log = logistic_activator(pad, size)
     input_layer, fsm_layer = (Layer(k, shape, act, Coder(act)) for k in "ab")
-    input_layer.encode_tokens(input_states, orthogonal=False)
-    fsm_layer.encode_tokens(fsm_states, orthogonal=False)
+    input_layer.encode_tokens(input_states, orthogonal=True)
+    fsm_layer.encode_tokens(fsm_states, orthogonal=True)
 
     ########### OLD METHOD ###################
 
-    # Learn weight matrices
+    # Learn recurrent weights
+    w_r = np.zeros((size,size))
+    b = np.zeros((size,1))
+    X = fsm_layer.encode_tokens(fsm_states)
+    dw,db = rehebbian(w_r, b, X, X, act, act)
+    w_r = w_r + dw
+
+    # Learn inter-regional weights
     w = np.zeros((size,size*2))
     b = np.zeros((size,1))
     for s,m in mappings.items():
@@ -60,6 +68,13 @@ def test(N, pad, mask_frac, mappings, stabil=5):
         for inp,end in m:
             x = np.concatenate((input_layer.coder.encode(inp), start), axis=0)
             y = act.f(w.dot(x))
+
+            # Stabilize
+            for _ in range(stabil):
+                old_y = y
+                y = act.f(w_r.dot(y))
+                if np.array_equal(y, old_y):
+                    break
             out = fsm_layer.coder.decode(y)
 
             if out == end:
@@ -80,53 +95,38 @@ def test(N, pad, mask_frac, mappings, stabil=5):
     fsm_layer.encode_tokens(fsm_states, orthogonal=False)
 
     # Create gating masks for each state
-    masks = {
-        s: (np.random.random(shape) < (1. / mask_frac)
-                ).astype(np.float).reshape(-1,1)
+    w_masks = {
+        s: (np.random.random((size,size)) < (1. / mask_frac)).astype(np.float)
             for s in fsm_states }
-            #for s in input_states }
 
     # Ensure nonzero masks
-    for mask in masks.values():
-        if sum(mask) == 0:
-            mask[randint(0, mask.shape[0]-1),0] = 1.
+    for mask in w_masks.values():
+        if np.sum(mask) == 0:
+            mask[randint(0, mask.shape[0]-1),
+                randint(0, mask.shape[1]-1)] = 1.
+
+    # Test learning of masks
+    w_m = np.zeros((size**2, size))
+    b = np.zeros((size**2, 1))
+    X = fsm_layer.encode_tokens(fsm_states)
+    Y = np.concatenate(tuple(w_masks[s].reshape(-1,1) for s in fsm_states), axis=1)
+    Y = Y * 2 - 1
+    dw,db = rehebbian(w_m, b, X, Y, act, act)
+    w_m = w_m + dw
+
+    '''
+    for s in fsm_states:
+        x = fsm_layer.coder.encode(s)
+        y = act_log.f(w_m.dot(x))
+        print(np.sum((y.reshape(size,size) > 0.5) != (w_masks[s] > 0.5)))
+    '''
 
     # Learn recurrent weights
     w_r = np.zeros((size,size))
     b = np.zeros((size,1))
     X = fsm_layer.encode_tokens(fsm_states)
     dw,db = rehebbian(w_r, b, X, X, act, act)
-    w_r = w_r + (dw * mask_frac)
-
-    # Test pattern recovery
-    correct = 0
-    weighted = 0.
-    total = 0
-    for mask in masks.values():
-        for tok in fsm_states:
-            complete = fsm_layer.coder.encode(tok)
-            partial = np.multiply(complete, mask)
-            y = act.f(w_r.dot(partial))
-
-            # Stabilize
-            for _ in range(stabil):
-                old_y = y
-                y = act.f(w_r.dot(y))
-                if np.array_equal(y, old_y):
-                    break
-            out = fsm_layer.coder.decode(y)
-
-            # Check output
-            if out == tok:
-                correct += 1
-                weighted += 1.0
-            else:
-                weighted += float(len(np.where(
-                    np.sign(y) == np.sign(complete)))) / size
-            total += 1
-    rec_acc = float(correct) / total
-    weighted_rec_acc = weighted / total
-
+    w_r = w_r + dw
 
     # Learn inter-regional weights
     w = np.zeros((size,size))
@@ -136,20 +136,9 @@ def test(N, pad, mask_frac, mappings, stabil=5):
         X = input_layer.encode_tokens([k for k,v in m])
         Y = fsm_layer.encode_tokens([v for k,v in m])
 
-        dw,db = rehebbian(w, b, X, Y, act, act)
-        mask = np.repeat(masks[start], size, axis=1)
-        w = w + np.multiply(dw, mask)
-
-        '''
-        # Input layer mask, start state input
-        for k,v in m:
-            X = fsm_layer.encode_tokens([start])
-            Y = fsm_layer.encode_tokens([v])
-
-            dw,db = rehebbian(w, b, X, Y, act, act)
-            mask = np.repeat(masks[k], size, axis=1)
-            w = w + np.multiply(dw, mask)
-        '''
+        w_mask = w_masks[start]
+        dw,db = rehebbian(np.multiply(w, w_mask), b, X, Y, act, act)
+        w = w + (np.multiply(dw, w_mask) * mask_frac)
 
 
     # Test
@@ -159,30 +148,14 @@ def test(N, pad, mask_frac, mappings, stabil=5):
     correct = 0
     masked_correct = 0
     for start,m in mappings.items():
+        #w_masked = np.multiply(w_masks[start], w)
+
+        x = fsm_layer.coder.encode(start)
+        w_masked = np.multiply(w, act_log.f(w_m.dot(x)).reshape(size,size))
+        
         for inp,end in m:
-            # Start state mask, input_layer input
-            mask = masks[start]
             x = input_layer.coder.encode(inp)
-
-            '''
-            # Input layer mask, start state input
-            mask = masks[inp]
-            x = fsm_layer.coder.encode(start)
-            '''
-
-            y = np.multiply(act.f(w.dot(x)), mask)
-
-            # Check partial match
-            end_pat = fsm_layer.coder.encode(end)
-            wh = np.where(np.multiply(
-                mask, np.sign(y) != np.sign(end_pat)) > 0.)
-
-            if len(wh[0]) == 0:
-                masked_correct += 1
-                masked_weighted += 1.0
-            else:
-                mask_size = sum(mask > 0.)
-                masked_weighted += (mask_size - len(wh[0])) / mask_size
+            y = act.f(w_masked.dot(x))
 
             # Stabilize
             for _ in range(stabil+1):
@@ -201,31 +174,25 @@ def test(N, pad, mask_frac, mappings, stabil=5):
                     np.sign(y) == np.sign(fsm_layer.coder.encode(end))))) / size
             total += 1
     new_acc = float(correct) / total
-    masked_acc = float(masked_correct) / total
     weighted_new_acc = weighted / total
-    weighted_masked_acc = masked_weighted / total
 
     return {
         "old_acc" : old_acc,
         "new_acc" : new_acc,
-        "rec_acc" : rec_acc,
-        "masked_acc" : masked_acc,
         "weighted_old_acc" : weighted_old_acc,
-        "weighted_new_acc" : weighted_new_acc,
-        "weighted_rec_acc" : weighted_rec_acc,
-        "weighted_masked_acc" : weighted_masked_acc }
+        "weighted_new_acc" : weighted_new_acc }
+
 
 def print_results(prefix, results):
     print(
         ("%5s" % prefix) +
         " ".join("%10.4f" % results[k]
             for k in [
-                "old_acc", "new_acc", "rec_acc", "masked_acc" ])
+                "old_acc", "new_acc" ])
         + " | " +
         " ".join("%10.4f" % results[k]
             for k in [
-                "weighted_old_acc", "weighted_new_acc",
-                "weighted_rec_acc", "weighted_masked_acc" ])
+                "weighted_old_acc", "weighted_new_acc" ])
     )
 
 
@@ -281,12 +248,8 @@ for i,x in enumerate(fracs):
 keys = [
     "old_acc",
     "new_acc",
-    "rec_acc",
-    "masked_acc",
     "weighted_old_acc",
     "weighted_new_acc",
-    "weighted_rec_acc",
-    "weighted_masked_acc"
 ]
 for key in keys:
     print(key)
@@ -296,7 +259,7 @@ for key in keys:
     print("")
 
 
-print("     " + " ".join("%10s" % x for x in ["old_acc", "new_acc", "rec_acc", "masked_acc" ]))
+print("     " + " ".join("%10s" % x for x in ["old_acc", "new_acc"]))
 
 # mask_frac should be equal to N
 # redundancy in transition inputs should be minimized
