@@ -23,6 +23,7 @@ class VMTestCase(ut.TestCase):
             if verbose > 0:
                 print()
                 print(name)
+
             for t in it.count(0):
                 if vm.at_exit(): break
                 state = vm.decode_state()

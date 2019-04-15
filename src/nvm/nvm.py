@@ -4,7 +4,7 @@ from layer import Layer
 from coder import Coder
 from nvm_net import NVMNet
 from preprocessing import *
-from orthogonal_patterns import nearest_power_of_2
+from orthogonal_patterns import nearest_valid_hadamard_size
 
 class NVM:
     def __init__(self, layer_shape, pad, activator, learning_rule, register_names, shapes={}, tokens=[], orthogonal=False):
@@ -71,7 +71,8 @@ class NVM:
         return False
 
 def make_default_nvm(register_names, layer_shape=None, orthogonal=False, shapes={}, tokens=[]):
-    if layer_shape is None: layer_shape = (16,16) if orthogonal else (32,32)
+    # if layer_shape is None: layer_shape = (16,16) if orthogonal else (32,32)
+    if layer_shape is None: layer_shape = (12,20) if orthogonal else (32,32) # test non-pow-2 hadamard
     pad = 0.0001
     # activator, learning_rule = tanh_activator, rehebbian
     activator, learning_rule = logistic_activator, rehebbian
@@ -90,16 +91,16 @@ def make_scaled_nvm(register_names, programs, orthogonal=False, capacity_factor=
     num_lines, num_patterns, all_tokens = measure_programs(
         programs, register_names, extra_tokens=extra_tokens)
     
-    layer_size = int(nearest_power_of_2(scale_factor * num_patterns)
+    layer_size = int(nearest_valid_hadamard_size(scale_factor * num_patterns)
         if orthogonal else scale_factor * num_patterns / capacity_factor)
-    ip_size = int(nearest_power_of_2(scale_factor * num_lines)
+    ip_size = int(nearest_valid_hadamard_size(scale_factor * num_lines)
         if orthogonal else scale_factor * num_lines/capacity_factor)
     
     layer_shape = (layer_size, 1)
     shapes = {'ip': (ip_size, 1)}
 
     if num_addresses is not None:
-        m_size = int(nearest_power_of_2(scale_factor * num_addresses)
+        m_size = int(nearest_valid_hadamard_size(scale_factor * num_addresses)
         if orthogonal else scale_factor * num_addresses/capacity_factor)
         shapes['m'] = (m_size,1)
 
