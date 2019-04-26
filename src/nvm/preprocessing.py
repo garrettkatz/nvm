@@ -3,6 +3,7 @@ Preprocessor for VM assembly
 """
 
 def preprocess(programs, register_names):
+    # extracts tokens actually explicit in program, excluding labels
 
     lines, labels, tokens = {}, {}, set()
     for name, program in programs.items():
@@ -32,14 +33,15 @@ def preprocess(programs, register_names):
             while len(lines[name][l]) < 3:
                 lines[name][l].append("null")
     
-            # replace generic instructions with value/device distinctions
+            # replace generic instructions with value/register distinctions
             if lines[name][l][0] in ["mov", "cmp"]:
                 if lines[name][l][2] in register_names: lines[name][l][0] += "d"
                 else: lines[name][l][0] += "v"
             if lines[name][l][0] in ["jmp","sub"]:
                 if lines[name][l][1] in register_names: lines[name][l][0] += "d"
                 else: lines[name][l][0] += "v"
-    
+
+        # get tokens actually explicit in program, excluding labels
         tokens = tokens.union([tok for line in lines[name] for tok in line[1:]])
     
     return lines, labels, tokens
@@ -50,5 +52,5 @@ def measure_programs(programs, register_names, extra_tokens=[]):
     for name in labels:
         all_tokens |= set(labels[name].keys())
     num_lines = sum([len(lines[name]) for name in lines])
-    num_patterns = len(tokens | set(extra_tokens))
+    num_patterns = len(all_tokens)
     return num_lines, num_patterns, all_tokens

@@ -56,7 +56,7 @@ def dipole(w, b, X, Y, actx, acty):
 
     return dw, db
 
-def flash_mem(w, b, X, Y, actx, acty, learning_rule, verbose=False):
+def learn(w, b, X, Y, actx, acty, learning_rule, verbose=False):
     
     if X.shape[1] > 0:
 
@@ -68,9 +68,9 @@ def flash_mem(w, b, X, Y, actx, acty, learning_rule, verbose=False):
 
         # if verbose and diff_count > 0:
         if verbose:
-            print("Flash residual max: %f"%np.fabs(Y - _Y).max())
-            print("Flash residual mad: %f"%np.fabs(Y - _Y).mean())
-            print("Flash diff count: %d"%(diff_count))
+            print("Learn residual max: %f"%np.fabs(Y - _Y).max())
+            print("Learn residual mad: %f"%np.fabs(Y - _Y).mean())
+            print("Learn diff count: %d"%(diff_count))
 
     else:
 
