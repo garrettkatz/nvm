@@ -1836,7 +1836,7 @@ my_nvm = make_scaled_nvm(
 my_nvm.assemble(programs,verbose=2)
 
 my_nvm.initialize_memory(pointers={"0": {"r3": "A"} , "4": {"r4": "B"} , "6": {"r5": "R"}},
-values={"0": {"r0": "8"} , "1": {"r0": "4"} ,"2": {"r0": "/"} ,"3": {"r0": "/"},"4": {"r1": "9"},"5": {"r1": "/"},"6": {"r2": "/"} })
+values={"0": {"r0": "8"} , "1": {"r0": "/"} ,"2": {"r0": "/"} ,"3": {"r0": "/"},"4": {"r1": "9"},"5": {"r1": "/"},"6": {"r2": "/"} })
 
 my_nvm.load("myfirstprogram",
      initial_state = {"rc":"0"})
@@ -1849,7 +1849,8 @@ print(my_nvm.net.layers["r0"].coder.encodings.keys())
 
 
 for t in itertools.count():
-     my_nvm.step()
+     my_nvm.net.tick()
+     #my_nvm.step()
      if my_nvm.at_exit(): break
 
 t
