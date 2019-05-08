@@ -1849,8 +1849,8 @@ print(my_nvm.net.layers["r0"].coder.encodings.keys())
 
 
 for t in itertools.count():
-     my_nvm.net.tick()
-     #my_nvm.step()
+     #my_nvm.net.tick()
+     my_nvm.step()
      if my_nvm.at_exit(): break
 
 t
