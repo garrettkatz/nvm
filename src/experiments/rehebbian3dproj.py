@@ -1,3 +1,6 @@
+"""
+Used to generate Figure 11 in the 2019 NVM paper
+"""
 import numpy as np
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D

@@ -132,3 +132,17 @@ python tests.py
 python dsst.py
 
 ```
+
+## Experiments
+
+The following scripts in the `src/experiments` directory were used to generate experimental results and figures for the 2019 NVM paper:
+
+- `rehebbian_experiments.py` (Figure 9)
+- `rehebbian_experiments2.py` (Figure 10)
+- `rehebbian3dproj.py` (Figure 11)
+- `list_program.py` (Figure 12)
+- `random_program.py` (Figures 13-15)
+
+The repository has been improved since that paper was submitted, but the code state at time of submission is preserved in release [v1.0](https://github.com/garrettkatz/nvm/releases/tag/v1.0).
+
+

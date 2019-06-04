@@ -1,3 +1,6 @@
+"""
+Used to generate Figure 10 in the 2019 NVM paper
+"""
 import numpy as np
 import matplotlib.pyplot as pt
 from matplotlib.lines import Line2D

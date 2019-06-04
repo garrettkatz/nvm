@@ -1,21 +1,5 @@
 """
-Experiment: want to assess program capacity.
-    variables:
-    how many lines/tokens in the program that have to be stored
-    how well vm performs (leading match count out of total trial steps, or binary success/fail)
-    how big the vm is (layer size/total # units and connections)
-    orthogonal vs not.
-    
-    plot:
-    different markers for orthogonal vs not
-    different grayscales for vm layer sizes
-    match count/total steps (ratio or line connected? fixed max steps?) vs program size
-    
-    or:
-    
-    different marker/color for orthogonal vs not
-    different marker/color for success vs not
-    program size vs network size
+Used to generate Figures 13-15 in the 2019 NVM paper.
 """
 import pickle as pk
 import numpy as np
