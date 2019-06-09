@@ -863,8 +863,6 @@ class SyngenNVMTreeTestCase(ut.TestCase):
 
 
 if __name__ == "__main__":
-    np.float = np.float32
-
     test_suite = ut.TestLoader().loadTestsFromTestCase(SyngenNVMTestCase)
     ut.TextTestRunner(verbosity=2).run(test_suite)
 
