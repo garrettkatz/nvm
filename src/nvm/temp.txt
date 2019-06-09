@@ -1,0 +1,190 @@
+REG
+    MOVV
+    MOVD
+    CMPD
+    CMPV
+    JMPD
+    SUBD
+    MEM
+    REM
+    REF
+    DRF
+    MREF
+PROG
+    MOVV
+    CMPV
+    JIE
+    JMPV
+    JMPD
+    SUBD
+    SUBV
+    RET
+CMP
+    CMPD
+    CMPV
+    JIE
+STACK
+    SUBV
+    SUBD
+    RET
+MEM
+    MEM
+    REM
+    REF
+    DRF
+    MREF
+    MDRF
+    NXT
+    PRV
+
+      | PROG  | REG | CMP | STACK | MEM |
+======|=======|=====|=====|=======|=====|
+NOP   |~~~~~~~|~~~~~|~~~~~|~~~~~~~|~~~~~|
+======|=======|=====|=====|=======|=====|
+JMPV  |   X   |     |~~~~~|~~~~~~~|~~~~~|
+MOVD  |       |  X  |~~~~~|~~~~~~~|~~~~~|
+MOVV  |   X   |  X  |~~~~~|~~~~~~~|~~~~~|
+JMPD  |   X   |  X  |~~~~~|~~~~~~~|~~~~~|
+======|=======|=====|=====|=======|=====|
+JIE   |   X   |     |  X  |~~~~~~~|~~~~~|
+CMPD  |       |  X  |  X  |~~~~~~~|~~~~~|
+CMPV  |   X   |  X  |  X  |~~~~~~~|~~~~~|
+======|=======|=====|=====|=======|=====|
+SUBV  |   X   |     |~~~~~|   X   |~~~~~|
+RET   |   X   |     |~~~~~|   X   |~~~~~|
+SUBD  |   X   |  X  |~~~~~|   X   |~~~~~|
+======|=======|=====|=====|=======|=====|
+MEM   |~~~~~~~|  X  |~~~~~|~~~~~~~|  X  |
+REM   |~~~~~~~|  X  |~~~~~|~~~~~~~|  X  |
+REF   |~~~~~~~|  X  |~~~~~|~~~~~~~|  X  |
+DRF   |~~~~~~~|  X  |~~~~~|~~~~~~~|  X  |
+MREF  |~~~~~~~|  X  |~~~~~|~~~~~~~|  X  |
+======|=======|=====|=====|=======|=====|
+MDRF  |~~~~~~~|~~~~~|~~~~~|~~~~~~~|  X  |
+NXT   |~~~~~~~|~~~~~|~~~~~|~~~~~~~|  X  |
+PRV   |~~~~~~~|~~~~~|~~~~~|~~~~~~~|  X  |
+======|=======|=====|=====|=======|=====|
+
+   STACK        MOTOR
+    |             |
+   PROG---------REGS----+
+   |  |         |  |    |
+   |  +---+ +---+  |   MEM
+   |      | |      |    |
+   |  +---CMP---SENS----+
+   |  |         |  | 
+   GATE         |  | 
+    ||           \ \___
+>---++---<        \_===X
+
+
+
+
+    ###### NOP
+
+REGISTERS (REG, PROG)
+    ###### MOVV
+    REG, PROG
+        reg < op2
+
+    ###### MOVD
+    REG
+        reg < reg
+
+
+
+
+COMPARISON (CMP, PROG, REG)
+    ###### CMPD
+    CMP, REG
+        ci < reg
+        co < ci (l)
+        ci < reg
+        co < ci
+
+    ###### CMPV
+    CMP, REG, PROG
+        ci < reg
+        co < ci (l)
+        ci < op2
+        co < ci
+
+    ###### JIE
+    CMP, PROG
+        co < gh
+        ip < op1
+
+
+
+INSTRUCTIONS (PROG, REG)
+    ###### JMPV
+    PROG
+        ip < op1
+
+    ###### JMPD
+    PROG, REG
+        ip < reg
+
+STACK (STACK, PROG, REG)
+    ###### SUBV
+    STACK, PROG
+        ip < sf (l)
+        sf < sf
+        sb < sf
+        ip < op1
+
+    ###### SUBD
+    STACK, PROG, REG
+        ip < sf (l)
+        sf < sf
+        sb < sf
+        ip < reg
+
+    ###### RET
+    STACK, PROG
+        sb < sb
+        sf < sb
+        ip < sf
+
+
+
+
+
+MEMORY (REG, MEM)
+    ###### MEM
+    MEM, REG
+        reg < mf (l)
+
+    ###### REM
+    MEM, REG
+        reg < mf
+
+    ####### REF
+    MEM, REG
+        mx < reg (l)
+
+    ####### DRF
+    MEM, REG
+        mx < reg
+
+    ####### MREF
+    MEM, REG
+        mp < mb
+        mx < reg
+        mp < mf (l)
+        mx < mp
+
+    ####### MDRF
+    MEM
+        mp < mf
+        mx < mp
+
+    ###### NXT
+    MEM
+        mf < mf
+        mb < mf
+
+    ###### PRV
+    MEM
+        mb < mb
+        mf < mb

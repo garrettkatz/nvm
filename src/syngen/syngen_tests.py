@@ -14,14 +14,14 @@ from syngen import get_cpu, get_gpus, interrupt_engine
 import numpy as np
 from random import random, sample, choice
 
-def test_syngen(tester, programs, names, traces, memory=None, tokens=[], num_registers=1, verbose=0):
+def test_syngen(tester, programs, names, traces, memory=None, extra_tokens=[], num_registers=1, verbose=0):
     """
     Assemble all programs
     run all programs in list of names
     memory = (pointers, values)
     """
 
-    vm = tester._make_vm(num_registers, tokens=tokens)
+    vm = tester._make_vm(num_registers, programs, extra_tokens=extra_tokens)
     if memory is not None: vm.initialize_memory(*memory)
 
     vm.assemble(programs, verbose=0)
@@ -41,7 +41,7 @@ def test_syngen(tester, programs, names, traces, memory=None, tokens=[], num_reg
         syn_net.initialize_activity(vm.net)
 
         ### BUILD ENVIRONMENT ####
-        output_layers = vm.net.layers.keys() if verbose else []
+        output_layers = [k for k in vm.net.layers.keys()] if verbose else []
 
         syn_env = tester._make_syngen_env(vm)
         syn_env.add_visualizer("nvm", output_layers)
@@ -128,21 +128,21 @@ class SyngenNVMTestCase(NVMTestCase):
         return syn_env
 
     def _test(self, programs, names, traces,
-            memory=None, tokens=[], num_registers=1, verbose=0):
+            memory=None, extra_tokens=[], num_registers=1, verbose=0):
         self.assertTrue(test_syngen(
             self, programs, names, traces,
-            memory, tokens, num_registers, verbose))
+            memory, extra_tokens, num_registers, verbose))
 
-    def _make_vm(self, num_registers, tokens):
-        orthogonal = False
-        layer_shape = (16,16) if orthogonal else (32,32)
-        pad = 0.0001
-        activator, learning_rule = tanh_activator, rehebbian
-        register_names = ["r%d"%r for r in range(num_registers)]
-
-        return NVM(layer_shape,
-            pad, activator, learning_rule, register_names,
-            shapes={}, tokens=tokens, orthogonal=orthogonal)
+    def _make_vm(self, num_registers, programs, extra_tokens, verbose=False):
+        gh_shape = (32,16) if num_registers < 4 else (32,48)
+        return make_scaled_nvm(
+            register_names = ["r%d"%r for r in range(num_registers)],
+            programs = programs,
+            orthogonal=False,
+            extra_tokens=extra_tokens,
+            scale_factor=1.05,
+            shapes_override={'gh':gh_shape},
+            verbose=verbose)
 
 
 class SyngenNVMArithTestCase(ut.TestCase):
@@ -176,12 +176,12 @@ class SyngenNVMArithTestCase(ut.TestCase):
         return syn_env
 
     def _test(self, programs, names, traces,
-            memory=None, tokens=[], num_registers=1, verbose=0):
+            memory=None, extra_tokens=[], num_registers=1, verbose=0):
         self.assertTrue(test_syngen(
             self, programs, names, traces,
-            memory, tokens, num_registers, verbose))
+            memory, extra_tokens, num_registers, verbose))
 
-    def _make_vm(self, num_registers, tokens):
+    def _make_vm(self, num_registers, programs, extra_tokens):
         orthogonal = True
         layer_shape = (16,16) if orthogonal else (32,32)
         pad = 0.0001
@@ -190,7 +190,7 @@ class SyngenNVMArithTestCase(ut.TestCase):
 
         return NVM(layer_shape,
             pad, activator, learning_rule, register_names,
-            shapes={}, tokens=tokens, orthogonal=orthogonal)
+            shapes={}, tokens=set(extra_tokens), orthogonal=orthogonal)
 
     # @ut.skip("")
     def test_squash_op(self):
@@ -215,7 +215,7 @@ class SyngenNVMArithTestCase(ut.TestCase):
         ]
 
         self._test({"test":program}, ["test"], [trace],
-            tokens = ["A"] + self.all_tokens,
+            extra_tokens = ["A"] + self.all_tokens,
             num_registers=3, verbose=0)
 
 
@@ -370,7 +370,7 @@ class SyngenNVMArithTestCase(ut.TestCase):
         trace.append({}) # exit
 
         self._test({"test":program}, ["test"], [trace], memory = memory,
-            tokens = ["arr1", "arr2", "ptr1", "ptr2"] + self.all_tokens,
+            extra_tokens = ["arr1", "arr2", "ptr1", "ptr2"] + self.all_tokens,
             num_registers=3, verbose=0)
 
 
@@ -433,12 +433,12 @@ class SyngenNVMStreamTestCase(ut.TestCase):
         return syn_env
 
     def _test(self, programs, names, traces,
-            memory=None, tokens=[], num_registers=1, verbose=0):
+            memory=None, extra_tokens=[], num_registers=1, verbose=0):
         self.assertTrue(test_syngen(
             self, programs, names, traces,
-            memory, tokens, num_registers, verbose))
+            memory, extra_tokens, num_registers, verbose))
 
-    def _make_vm(self, num_registers, tokens):
+    def _make_vm(self, num_registers, programs, extra_tokens):
         orthogonal = True
         layer_shape = (16,16) if orthogonal else (32,32)
         pad = 0.0001
@@ -447,7 +447,7 @@ class SyngenNVMStreamTestCase(ut.TestCase):
 
         return NVM(layer_shape,
             pad, activator, learning_rule, register_names,
-            shapes={}, tokens=tokens, orthogonal=orthogonal)
+            shapes={}, tokens=set(extra_tokens), orthogonal=orthogonal)
 
     # @ut.skip("")
     def test_stream(self):
@@ -495,7 +495,7 @@ class SyngenNVMStreamTestCase(ut.TestCase):
         ]
 
         self._test({"test":program}, ["test"], [trace], memory=memory,
-            tokens = self.all_tokens + ["ptr"],
+            extra_tokens = self.all_tokens + ["ptr"],
             num_registers=2, verbose=0)
 
         self.assertTrue(self.failed is False)
@@ -536,12 +536,12 @@ class SyngenNVMTreeTestCase(ut.TestCase):
         return syn_env
 
     def _test(self, programs, names, traces,
-            memory=None, tokens=[], num_registers=1, verbose=0):
+            memory=None, extra_tokens=[], num_registers=1, verbose=0):
         self.assertTrue(test_syngen(
             self, programs, names, traces,
-            memory, tokens, num_registers, verbose))
+            memory, extra_tokens, num_registers, verbose))
 
-    def _make_vm(self, num_registers, tokens):
+    def _make_vm(self, num_registers, programs, extra_tokens):
         orthogonal = True
         layer_shape = (16,16) if orthogonal else (32,32)
         pad = 0.0001
@@ -550,7 +550,7 @@ class SyngenNVMTreeTestCase(ut.TestCase):
 
         return NVM(layer_shape,
             pad, activator, learning_rule, register_names,
-            shapes={}, tokens=tokens, orthogonal=orthogonal)
+            shapes={}, tokens=set(extra_tokens), orthogonal=orthogonal)
 
     # @ut.skip("")
     def test_tree(self):
@@ -854,7 +854,7 @@ class SyngenNVMTreeTestCase(ut.TestCase):
         trace = [ {"r"+str(r) : "null" for r in "012"} ]
 
         self._test({"test":program}, ["test"], [trace], memory=memory,
-            tokens = self.all_tokens,
+            extra_tokens = self.all_tokens,
             num_registers=3, verbose=0)
 
         self.assertTrue(self.input_data == self.output_data)
@@ -863,6 +863,8 @@ class SyngenNVMTreeTestCase(ut.TestCase):
 
 
 if __name__ == "__main__":
+    np.float = np.float32
+
     test_suite = ut.TestLoader().loadTestsFromTestCase(SyngenNVMTestCase)
     ut.TextTestRunner(verbosity=2).run(test_suite)
 
