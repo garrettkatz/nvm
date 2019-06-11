@@ -35,8 +35,9 @@ def run_trial(N, P, T, verbose = False):
 
     return net_err
 
-Ns = [32, 64, 128, 256, 512, 1024]
+# Ns = [32, 64, 128, 256, 512, 1024]
 # Ns = [256, 512, 1024]
+Ns = [64, 256, 1024]
 T_ratios = [.05, .1, .15, .2, .25, .3]
 P_ratios = [.05, .08, .11, .14, .17, .2]
 reps = 30
@@ -60,13 +61,13 @@ if False:
                 avg_net_errs[N, T_ratio, P_ratio] = np.mean(net_errs)
                 std_net_errs[N, T_ratio, P_ratio] = np.std(net_errs)
     
-    with open("tmp.pkl","w") as tmp: pk.dump((avg_net_errs, std_net_errs), tmp)
+    with open("rh_cap.pkl","w") as rh_cap: pk.dump((avg_net_errs, std_net_errs), rh_cap)
 
-with open("tmp.pkl","r") as tmp: (avg_net_errs, std_net_errs) = pk.load(tmp)
+with open("rh_cap.pkl","r") as rh_cap: (avg_net_errs, std_net_errs) = pk.load(rh_cap)
 
 # Set this to True to load and plot the results
 if True:
-    pt.figure()
+    pt.figure(figsize=(6,2.5))
     sp = 1
     # for N in Ns:
     for N in [64, 256, 1024]:
