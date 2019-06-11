@@ -4,7 +4,7 @@ from hadamard_base_matrices import H_20, H_12, H_4
 
 def give_new_number(n):
     if n < 4:
-        return (n,-1)
+        return (n,4)
     if multiple(n):
         result = calculate_half(n)
         if result == -1:
@@ -49,6 +49,7 @@ def calculate_half(n):
 def nearest_valid_hadamard_size(i):
     multiple = give_new_number(i)
     return multiple[0]
+    # return nearest_power_of_2(i)
 
 def nearest_power_of_2(i):
     return 2**int(np.ceil(np.log2(i)))

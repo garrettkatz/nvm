@@ -37,7 +37,7 @@ def assemble(nvmnet, programs, verbose=False, orthogonal=False, other_tokens=[])
 
     ### Sequence ip
     if verbose: print("Sequencing ip -> ip")
-    weights[("ip","ip")], biases[("ip","ip")], dc = flash_mem(
+    weights[("ip","ip")], biases[("ip","ip")], dc = learn(
         np.zeros((ip_patterns.shape[0], ip_patterns.shape[0])),
         np.zeros((ip_patterns.shape[0], 1)),
         ip_patterns[:,:-1], ip_patterns[:,1:],
@@ -57,7 +57,7 @@ def assemble(nvmnet, programs, verbose=False, orthogonal=False, other_tokens=[])
                 [line[i] for line in lines[name]])
             ip_patterns = nvmnet.layers["ip"].encode_tokens(
                 ip_tokens[name_offsets[name]:name_offsets[name]+len(lines[name])])
-            weights[("op"+x,"ip")], biases[("op"+x,"ip")], dc = flash_mem(
+            weights[("op"+x,"ip")], biases[("op"+x,"ip")], dc = learn(
                 weights[("op"+x,"ip")], biases[("op"+x,"ip")],
                 ip_patterns, encodings,
                 nvmnet.layers["ip"].activator,
@@ -87,7 +87,7 @@ def assemble(nvmnet, programs, verbose=False, orthogonal=False, other_tokens=[])
         Y = to_layer.encode_tokens(common_tokens)
         
         # Learn associations
-        weights[pathway], biases[pathway], dc = flash_mem(
+        weights[pathway], biases[pathway], dc = learn(
             np.zeros((to_layer.size, from_layer.size)),
             np.zeros((to_layer.size, 1)),
             X, Y, from_layer.activator, to_layer.activator,

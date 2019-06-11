@@ -25,7 +25,7 @@ import numpy as np
 # --- 4. Make mask based on input instead of state
 
 def test(N, pad, mask_frac, mappings, stabil=5):
-    fsm_states = mappings.keys()
+    fsm_states = mappings.keys() + list(set(v for m in mappings.values() for k,v in m))
     input_states = list(set(k for m in mappings.values() for k,v in m))
 
     shape = (N,N)
@@ -110,7 +110,6 @@ def test(N, pad, mask_frac, mappings, stabil=5):
     b = np.zeros((size**2, 1))
     X = fsm_layer.encode_tokens(fsm_states)
     Y = np.concatenate(tuple(w_masks[s].reshape(-1,1) for s in fsm_states), axis=1)
-    Y = Y * 2 - 1
     dw,db = rehebbian(w_m, b, X, Y, act, act)
     w_m = w_m + dw
 
@@ -152,6 +151,7 @@ def test(N, pad, mask_frac, mappings, stabil=5):
 
         x = fsm_layer.coder.encode(start)
         w_masked = np.multiply(w, act_log.f(w_m.dot(x)).reshape(size,size))
+        #w_masked = np.multiply(w, (w_m.dot(x) > 0).astype(np.int).reshape(size,size))
         
         for inp,end in m:
             x = input_layer.coder.encode(inp)
@@ -228,11 +228,13 @@ pad = 0.0001
 print("N=%d" % N)
 print("")
 
-mask_frac = N
-num_states = N
-num_inputs = N
-num_trans = N / 2 - 1
+M = 32
+mask_frac = M
+num_states = M
+num_inputs = M
+num_trans = M / 2 - 1
 
+'''
 fracs = [4, 8, 16, 32, 64, 128]
 ns = [4, 8, 16, 32]
 
@@ -257,6 +259,7 @@ for key in keys:
     for i,row in enumerate(res):
         print(" ".join(["%4d" % fracs[i]] + ["%6.4f" % x[key] for x in row]))
     print("")
+'''
 
 
 print("     " + " ".join("%10s" % x for x in ["old_acc", "new_acc"]))
@@ -301,25 +304,25 @@ print("")
 
 
 print("mask_frac")
-for x in [N/4, N/2, N, N*2]:
+for x in [M/4, M/2, M, M*2]:
     mappings = gen_mappings(num_states, num_inputs, num_trans)
     print_results(x, test(N, pad, x, mappings))
 print("")
 
 print("num_states")
-for x in [N/2, N, N*2]:
+for x in [M/2, M, M*2]:
     mappings = gen_mappings(x, num_inputs, num_trans)
     print_results(x, test(N, pad, mask_frac, mappings))
 print("")
 
 print("num_inputs")
-for x in [N/2, N, N*2]:
+for x in [M/2, M, M*2]:
     mappings = gen_mappings(num_states, x, num_trans)
     print_results(x, test(N, pad, mask_frac, mappings))
 print("")
 
 print("num_trans")
-for x in [N/8, N/4, N/2, N-1]:
+for x in [M/8, M/4, M/2, M-1]:
     mappings = gen_mappings(num_states, num_inputs, x)
     print_results(x, test(N, pad, mask_frac, mappings))
 print("")

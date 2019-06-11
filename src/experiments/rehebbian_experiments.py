@@ -1,3 +1,6 @@
+"""
+Used to generate Figure 8 in the 2019 NVM paper
+"""
 import numpy as np
 import matplotlib.pyplot as pt
 import pickle as pk
@@ -40,6 +43,7 @@ reps = 30
 avg_net_errs = {}
 std_net_errs = {}
 
+# Set this to True to actually run the trials and save the results
 if False:
     for N in Ns:
         print(N)
@@ -60,33 +64,7 @@ if False:
 
 with open("tmp.pkl","r") as tmp: (avg_net_errs, std_net_errs) = pk.load(tmp)
 
-if False:
-    pt.figure()
-    sp = 1
-    for N in Ns:
-    
-        pt.subplot(2,3, sp)
-        pt.title("N = %d" % N)
-        pt.plot([np.min(P_ratios),np.max(P_ratios)], [100./N, 100./N], 'k--')
-    
-        for i,T_ratio in enumerate(T_ratios):
-            c = 0.75*i / len(T_ratios)
-        
-            T = float(int(T_ratio * N))
-            # avg_errs = [avg_net_errs[N, T_ratio, P_ratio] / T for P_ratio in P_ratios]
-            # pt.plot(P_ratios, avg_errs, color=(c,c,c), marker='o')
-            avg_percent_errs = [100.*avg_net_errs[N, T_ratio, P_ratio] / N / T for P_ratio in P_ratios]
-            pt.plot(P_ratios, avg_percent_errs, color=(c,c,c), marker='o')
-        
-        if sp == 1: pt.legend(["1 error"] + ["T/N = %.2f" % T_ratio for T_ratio in T_ratios])
-        if sp > 3: pt.xlabel("P/N")
-        # if sp in [1, 4]: pt.ylabel("Average # errors per t")
-        if sp in [1, 4]: pt.ylabel("Average % errors per t")
-        sp += 1
-    
-    pt.tight_layout()
-    pt.show()
-
+# Set this to True to load and plot the results
 if True:
     pt.figure()
     sp = 1

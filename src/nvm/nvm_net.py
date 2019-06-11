@@ -6,7 +6,6 @@ from activator import *
 from learning_rules import *
 from nvm_instruction_set import opcodes, flash_instruction_set
 from nvm_assembler import assemble
-from orthogonal_patterns import nearest_power_of_2
 from builtins import input
 
 def update_add(accumulator, summand):
@@ -37,7 +36,7 @@ def address_space(forward_layer, backward_layer, pointer_layer=None, orthogonal=
             Y, X = A[d_to], A[d_from]
             if d_from == 'f': X = np.roll(X, 1, axis=1)
             if d_from == 'b': Y = np.roll(Y, 1, axis=1)
-            weights[key], biases[key], _ = flash_mem(
+            weights[key], biases[key], _ = learn(
                 np.zeros((N, N)), np.zeros((N, 1)),
                 X, Y,
                 layers[d_from].activator,
@@ -49,7 +48,7 @@ def address_space(forward_layer, backward_layer, pointer_layer=None, orthogonal=
         for d_to,d_from in [('f','p'),('b','p'),('p','b')]:
             key = (layers[d_to].name, layers[d_from].name)
             Y, X = A[d_to], A[d_from]
-            weights[key], biases[key], _ = flash_mem(
+            weights[key], biases[key], _ = learn(
                 np.zeros((N, N)), np.zeros((N, 1)),
                 X, Y,
                 layers[d_from].activator,
@@ -60,9 +59,9 @@ def address_space(forward_layer, backward_layer, pointer_layer=None, orthogonal=
 
 class NVMNet:
     # changing devices to registers
-    def __init__(self, layer_shape, pad, activator, learning_rule, registers, shapes={}, tokens=[], orthogonal=False):
+    def __init__(self, layer_shape, pad, activator, learning_rule, registers, shapes={}, tokens=[], orthogonal=False, verbose=False):
         # layer_shape is default, shapes[layer_name] are overrides
-        if 'gh' not in shapes: shapes['gh'] = (32,16)
+        if 'gh' not in shapes: shapes['gh'] = (32,32) # important for many registers
         if 'm' not in shapes: shapes['m'] = (16,16)
         if 's' not in shapes: shapes['s'] = (8,8)
 
@@ -121,7 +120,7 @@ class NVMNet:
             self.layers[name].encode_tokens(all_tokens, orthogonal=orthogonal)
 
         # set up connection matrices
-        self.weights, self.biases = flash_instruction_set(self, verbose=False)
+        self.weights, self.biases = flash_instruction_set(self, verbose=verbose)
 
         ptr_layers = {'m': layers['mp'], 's': None}
         for ms in 'ms':

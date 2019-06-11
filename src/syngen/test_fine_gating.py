@@ -4,7 +4,7 @@ sys.path.append('../nvm')
 from random import randint
 
 from layer import Layer
-from activator import tanh_activator
+from activator import tanh_activator, gate_activator
 from coder import Coder
 from learning_rules import rehebbian
 
@@ -25,13 +25,14 @@ import numpy as np
 # --- 4. Make mask based on input instead of state
 
 def test(N, pad, mask_frac, mappings, stabil=5):
-    fsm_states = mappings.keys()
+    fsm_states = mappings.keys() + list(set(v for m in mappings.values() for k,v in m))
     input_states = list(set(k for m in mappings.values() for k,v in m))
 
     shape = (N,N)
     size = N**2
 
     act = tanh_activator(pad, size)
+    act_log = gate_activator(pad, size)
     input_layer, fsm_layer = (Layer(k, shape, act, Coder(act)) for k in "ab")
     input_layer.encode_tokens(input_states, orthogonal=False)
     fsm_layer.encode_tokens(fsm_states, orthogonal=False)
@@ -90,6 +91,15 @@ def test(N, pad, mask_frac, mappings, stabil=5):
     for mask in masks.values():
         if sum(mask) == 0:
             mask[randint(0, mask.shape[0]-1),0] = 1.
+
+    # Learn masks
+    w_m = np.zeros((size, size))
+    b = np.zeros((size, 1))
+    X = fsm_layer.encode_tokens(fsm_states)
+    Y = np.concatenate(tuple(masks[s].reshape(-1,1) for s in fsm_states), axis=1)
+    dw,db = rehebbian(w_m, b, X, Y, act, act_log)
+    w_m = w_m + dw
+    b_m = b + db
 
     # Learn recurrent weights
     w_r = np.zeros((size,size))
@@ -159,14 +169,17 @@ def test(N, pad, mask_frac, mappings, stabil=5):
     correct = 0
     masked_correct = 0
     for start,m in mappings.items():
+        start_pat = fsm_layer.coder.encode(start)
+        mask = act_log.f(b_m + w_m.dot(start_pat))
+
         for inp,end in m:
             # Start state mask, input_layer input
-            mask = masks[start]
+            #mask = masks[start]
             x = input_layer.coder.encode(inp)
 
             '''
             # Input layer mask, start state input
-            mask = masks[inp]
+            #mask = masks[inp]
             x = fsm_layer.coder.encode(start)
             '''
 
@@ -181,7 +194,7 @@ def test(N, pad, mask_frac, mappings, stabil=5):
                 masked_correct += 1
                 masked_weighted += 1.0
             else:
-                mask_size = sum(mask > 0.)
+                mask_size = np.sum(mask > 0.)
                 masked_weighted += (mask_size - len(wh[0])) / mask_size
 
             # Stabilize

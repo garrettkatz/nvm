@@ -7,7 +7,7 @@ from preprocessing import *
 from orthogonal_patterns import nearest_valid_hadamard_size
 
 class NVM:
-    def __init__(self, layer_shape, pad, activator, learning_rule, register_names, shapes={}, tokens=[], orthogonal=False):
+    def __init__(self, layer_shape, pad, activator, learning_rule, register_names, shapes={}, tokens=[], orthogonal=False, verbose=False):
 
         self.tokens = tokens
         self.orthogonal = orthogonal
@@ -17,10 +17,10 @@ class NVM:
         act = activator(pad, layer_size)
         registers = {name: Layer(name, layer_shape, act, Coder(act))
             for name in register_names}
-        self.net = NVMNet(layer_shape, pad, activator, learning_rule, registers, shapes=shapes, tokens=tokens, orthogonal=orthogonal)
+        self.net = NVMNet(layer_shape, pad, activator, learning_rule, registers, shapes=shapes, tokens=tokens, orthogonal=orthogonal, verbose=verbose)
 
     def assemble(self, programs, verbose=0, other_tokens=[]):
-        self.net.assemble(programs, verbose, self.orthogonal, other_tokens)
+        self.net.assemble(programs, verbose, self.orthogonal, self.tokens.union(other_tokens))
 
     def load(self, program_name, initial_state):
         self.net.load(program_name, initial_state)
@@ -81,7 +81,7 @@ def make_default_nvm(register_names, layer_shape=None, orthogonal=False, shapes=
         pad, activator, learning_rule, register_names,
         shapes=shapes, tokens=tokens, orthogonal=orthogonal)
 
-def make_scaled_nvm(register_names, programs, orthogonal=False, capacity_factor=.05, scale_factor=1.0, extra_tokens=[], num_addresses=None):
+def make_scaled_nvm(register_names, programs, orthogonal=False, capacity_factor=.05, scale_factor=1.0, extra_tokens=[], num_addresses=None, shapes_override={}, verbose=False):
     """
     Create an NVM with auto-scaled layer sizes based on programs that will be learned
     capacity_factor: assumes pattern capacity is at most this fraction of layer size
@@ -93,7 +93,7 @@ def make_scaled_nvm(register_names, programs, orthogonal=False, capacity_factor=
     
     layer_size = int(nearest_valid_hadamard_size(scale_factor * num_patterns)
         if orthogonal else scale_factor * num_patterns / capacity_factor)
-    ip_size = int(nearest_valid_hadamard_size(scale_factor * num_lines)
+    ip_size = int(nearest_valid_hadamard_size(scale_factor * (num_lines+1)) # +1 for program name
         if orthogonal else scale_factor * num_lines/capacity_factor)
     
     layer_shape = (layer_size, 1)
@@ -113,9 +113,11 @@ def make_scaled_nvm(register_names, programs, orthogonal=False, capacity_factor=
     activator, learning_rule = tanh_activator, rehebbian
     # activator, learning_rule = logistic_activator, rehebbian
 
+    shapes.update(shapes_override)
+
     return NVM(layer_shape,
         pad, activator, learning_rule, register_names,
-        shapes=shapes, tokens=all_tokens, orthogonal=orthogonal)
+        shapes=shapes, tokens=all_tokens, orthogonal=orthogonal, verbose=verbose)
 
 if __name__ == "__main__":
 

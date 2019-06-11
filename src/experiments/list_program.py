@@ -1,3 +1,6 @@
+"""
+Used to generate Figure 11 in the 2019 NVM paper
+"""
 import numpy as np
 import pickle as pk
 import matplotlib.pyplot as pt
