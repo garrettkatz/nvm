@@ -1,5 +1,5 @@
 """
-Used to generate Figures 13-15 in the 2019 NVM paper.
+Used to generate Figures 12-14 in the 2019 NVM paper.
 """
 import pickle as pk
 import numpy as np

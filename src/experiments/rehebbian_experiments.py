@@ -1,5 +1,5 @@
 """
-Used to generate Figure 9 in the 2019 NVM paper
+Used to generate Figure 8 in the 2019 NVM paper
 """
 import numpy as np
 import matplotlib.pyplot as pt
