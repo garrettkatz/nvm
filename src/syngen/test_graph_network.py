@@ -3,6 +3,7 @@ sys.path.append('../nvm')
 
 from random import randint, choice, sample, gauss
 from math import sqrt, asin
+from itertools import chain
 
 from layer import Layer
 from activator import *
@@ -12,6 +13,9 @@ from learning_rules import rehebbian
 import numpy as np
 import networkx as nx
 import matplotlib.pyplot as plt
+
+from test_abduction import test_data as abduction_test_data
+from test_abduction import build_fsm, abduce
 
 
 class GraphNet:
@@ -49,7 +53,7 @@ class GraphNet:
 
     def gen_mask(self, size):
         m = np.zeros((size,1))
-        m[np.random.choice(size, size / self.mask_frac, replace=False)] = 1.
+        m[np.random.choice(size, int(size / self.mask_frac), replace=False)] = 1.
         return m
 
 
@@ -114,7 +118,7 @@ class GraphNet:
 
 
     def test_recovery(self, mappings):
-        mem_states = mappings.keys() + list(
+        mem_states = list(mappings.keys()) + list(
             set(v for m in mappings.values() for k,v in m))
 
         correct,total = 0,0
@@ -422,175 +426,67 @@ def test_traj(N, pad, mask_frac):
     print("")
 
 def test_abduce(N, pad, mask_frac):
-    data = {
-        'ABCDE' : {
-            'cache' : {
-                "t0" : [],
-                "t1" : [('s1', 't0')],
-                "t2" : [('s6', 't0'), ('s10', 't0'), ('s2', 't1')],
-                "t3" : [('s7', 't0'), ('s14', 't0'), ('s8', 't1'), ('s9', 't0'), ('s11', 't0'), ('s3', 't2')],
-                "t4" : [('s4', 't3'), ('s18', 't3'), ('s12', 't3')],
-                "t5" : [('s16', 't3'), ('s5', 't4'), ('s15', 't0'), ('s13', 't3')],
-            },
-            'edge' : {
-                "t0" : [('t3', 's9'), ('t1', 's1'), ('t2', 's6'), ('t5', 's15')],
-                "t1" : [('t3', 's8'), ('t2', 's2')],
-                "t2" : [('t3', 's3')],
-                "t3" : [('t4', 's4'), ('t5', 's13')],
-                "t4" : [('t5', 's5')],
-                "t5" : [],
-            },
-            'fsm' : {
-                "s13" : [],
-                "s6" : [('C', 's7')],
-                "s14" : [('U', 's15')],
-                "s3" : [],
-                "s15" : [],
-                "s5" : [],
-                "s7" : [],
-                "s16" : [('C', 's17')],
-                "s10" : [('C', 's11')],
-                "s17" : [],
-                "s0" : [('T', 's12'), ('B', 's2'), ('D', 's4'), ('Y', 's10'), ('S', 's18'), ('C', 's3'), ('A', 's1'), ('E', 's5'), ('W', 's14')],
-                "s4" : [('E', 's16')],
-                "s18" : [('A', 's19')],
-                "s11" : [],
-                "s19" : [],
-                "s9" : [],
-                "s1" : [('B', 's6'), ('Z', 's9')],
-                "s8" : [],
-                "s2" : [('C', 's8')],
-                "s12" : [('E', 's13')],
-            }
-        },
-        'FABCU' : {
-            'cache' : {
-                "t0" : [],
-                "t1" : [('s24', 't0')],
-                "t2" : [('s21', 't1')],
-                "t3" : [('s27', 't1'), ('s22', 't2'), ('s26', 't1')],
-                "t4" : [('s28', 't1'), ('s29', 't1'), ('s23', 't3')],
-                "t5" : [('s25', 't4'), ('s31', 't0'), ('s30', 't1')],
-            },
-            'edge' : {
-                "t0" : [('t5', 's31'), ('t1', 's24')],
-                "t1" : [('t5', 's30'), ('t4', 's28'), ('t3', 's26'), ('t2', 's21')],
-                "t2" : [('t3', 's22')],
-                "t3" : [('t4', 's23')],
-                "t4" : [('t5', 's25')],
-                "t5" : [],
-            },
-            'fsm' : {
-                "s24" : [('G', 's31')],
-                "s22" : [],
-                "s21" : [('B', 's26')],
-                "s26" : [],
-                "s30" : [],
-                "s23" : [],
-                "s31" : [],
-                "s29" : [('U', 's30')],
-                "s27" : [('C', 's28')],
-                "s28" : [],
-                "s20" : [('B', 's22'), ('Y', 's27'), ('A', 's21'), ('F', 's24'), ('C', 's23'), ('W', 's29'), ('U', 's25')],
-                "s25" : [],
-            }
-        },
-        'ACCCAABABAAACBAABABC' : {
-            'cache' : {
-                "t0" : [],
-                "t1" : [('s34', 't0')],
-                "t2" : [('s37', 't0'), ('s35', 't1')],
-                "t3" : [('s34', 't2')],
-                "t4" : [('s33', 't3')],
-                "t5" : [('s33', 't4'), ('s40', 't3'), ('s43', 't3')],
-                "t6" : [('s38', 't4'), ('s36', 't4'), ('s34', 't5')],
-                "t7" : [('s45', 't5'), ('s34', 't6'), ('s41', 't5')],
-                "t8" : [('s45', 't6'), ('s34', 't7'), ('s41', 't6')],
-                "t9" : [('s33', 't8')],
-                "t10" : [('s33', 't9'), ('s46', 't6'), ('s40', 't8'), ('s43', 't8')],
-                "t11" : [('s33', 't10'), ('s40', 't9'), ('s43', 't9')],
-                "t12" : [('s35', 't11')],
-                "t13" : [('s34', 't12')],
-                "t14" : [('s45', 't12'), ('s34', 't13'), ('s41', 't12')],
-                "t15" : [('s53', 't12'), ('s48', 't12'), ('s37', 't13'), ('s35', 't14')],
-                "t16" : [('s34', 't15')],
-                "t17" : [('s37', 't15'), ('s35', 't16')],
-                "t18" : [('s33', 't17')],
-                "t19" : [('s35', 't18')],
-                "t20" : [('s34', 't19')],
-            },
-            'edge' : {
-                "t0" : [('t2', 's37'), ('t1', 's34')],
-                "t1" : [('t2', 's35')],
-                "t2" : [('t3', 's34')],
-                "t3" : [('t4', 's33'), ('t5', 's40')],
-                "t4" : [('t5', 's33'), ('t6', 's36')],
-                "t5" : [('t6', 's34'), ('t7', 's41')],
-                "t6" : [('t8', 's41'), ('t10', 's46'), ('t7', 's34')],
-                "t7" : [('t8', 's34')],
-                "t8" : [('t10', 's40'), ('t9', 's33')],
-                "t9" : [('t10', 's33'), ('t11', 's40')],
-                "t10" : [('t11', 's33')],
-                "t11" : [('t12', 's35')],
-                "t12" : [('t13', 's34'), ('t14', 's41'), ('t15', 's53')],
-                "t13" : [('t14', 's34'), ('t15', 's37')],
-                "t14" : [('t15', 's35')],
-                "t15" : [('t17', 's37'), ('t16', 's34')],
-                "t16" : [('t17', 's35')],
-                "t17" : [('t18', 's33')],
-                "t18" : [('t19', 's35')],
-                "t19" : [('t20', 's34')],
-                "t20" : [],
-            },
-            'fsm' : {
-                "s41" : [],
-                "s46" : [],
-                "s47" : [],
-                "s43" : [('U', 's44')],
-                "s34" : [('B', 's41'), ('C', 's37'), ('I', 's52')],
-                "s48" : [('T', 's49')],
-                "s52" : [],
-                "s37" : [],
-                "s44" : [],
-                "s51" : [],
-                "s38" : [('S', 's47'), ('Y', 's39')],
-                "s32" : [('T', 's45'), ('G', 's50'), ('S', 's43'), ('A', 's33'), ('C', 's35'), ('B', 's34'), ('U', 's48'), ('X', 's38')],
-                "s36" : [],
-                "s35" : [('C', 's42'), ('Z', 's54')],
-                "s33" : [('B', 's36'), ('A', 's40')],
-                "s53" : [],
-                "s50" : [('A', 's51')],
-                "s54" : [],
-                "s49" : [],
-                "s40" : [],
-                "s39" : [],
-                "s42" : [],
-                "s45" : [('S', 's46'), ('C', 's53')],
-            }
+    for knowledge, seq, answer in abduction_test_data:
+        fsm = build_fsm(knowledge)
+        timepoints, best_path = abduce(fsm, seq)
+        states = fsm.gather()
+        causes = [c for t in timepoints for c in t.causes]
+
+        data = {
+            "curr_t" : str(timepoints[0]),
+            "fsm" : str(fsm),
         }
-    }
 
-    print_header()
+        data.update({
+            str(s) : {
+                'causes' : [ str(c) for c in s.causes ],
+                'parent' : "NULL" if s.parent is None else str(s.parent),
+                'transitions' : [ inp for inp in s.transitions ],
+            } for s in states
+        })
+        for s in states:
+            data[str(s)].update({
+                inp : str(s2) for inp,s2 in s.transitions.items() })
 
-    for seq,m in data.items():
+        data.update({
+            str(t) : {
+                'causes' : [ str(c) for c in t.causes ],
+                'previous' : "NULL" if t.previous is None else str(t.previous),
+                'cache' : [ str(s) for s in t.cache ],
+            } for t in timepoints
+        })
+        for t in timepoints:
+            data[str(t)].update({
+                str(s) : str(c) for s,c in t.cache.items() })
+
+        data.update({
+            str(c) : {
+                'effects' : [ str(e) for e in c.effects ],
+                'identity' : c.identity,
+                'start_t' : str(c.start_t),
+                'end_t' : str(c.end_t)
+            } for c in causes
+        })
+
+        #for x in [str(x) for x in states + timepoints + causes]:
+        #    print(x, data[x])
+
         pairs = []
 
-        # For each set of data (cache, edge, fsm)
-        for name,data in m.items():
-            # For each map in the data set
-            for node,map_data in data.items():
-                if len(map_data) > 0:
-                    # Chain keys together
-                    pairs.append((node, name, map_data[0][0]))
-                    for (key1,val1),(key2,val2) in zip(map_data, map_data[1:]):
-                        pairs.append((key1,node,key2))
-                    pairs.append((map_data[-1][0], node, "NULL"))
-
-                    # Map values to node using keys
-                    for (key,val) in map_data:
-                        pairs.append((node,key,val))
-                else:
-                    pairs.append((node, name, "NULL"))
+        for parent,d in data.items():
+            if type(d) is dict:
+                for key,value in d.items():
+                    if type(value) is list:
+                        if len(value) > 0:
+                            # Chain data together
+                            pairs.append((parent, key, value[0]))
+                            for (v1,v2) in zip(value, value[1:]):
+                                pairs.append((v1,parent,v2))
+                            pairs.append((value[-1], parent, "NULL"))
+                        else:
+                            pairs.append((parent, key, "NULL"))
+                    else:
+                        pairs.append((parent, key, value))
 
         mappings = {}
         for pre,key,post in pairs:
@@ -599,7 +495,25 @@ def test_abduce(N, pad, mask_frac):
             else:
                 mappings[pre].append((key, post))
         print(seq)
-        #for k,v in mappings.items(): print(k,v)
+        #for k in sorted(mappings.keys()):
+        #    print(k, mappings[k])
+
+        mem_states = set()
+        reg_states = set()
+        for k,v in mappings.items():
+            mem_states.add(k)
+            for inp,res in v:
+                reg_states.add(inp)
+                mem_states.add(res)
+        reg_states = reg_states - set(mem_states)
+        print("Memory states: ", len(mem_states))
+        print("Register states: ", len(reg_states))
+        print("Total states: ", len(mem_states.union(reg_states)))
+        print("Total transitions: ", len(pairs))
+
+        print()
+        print_header()
+
         print_results("", test(N, pad, mask_frac, mappings))
 
 # Parameters
@@ -610,6 +524,7 @@ mask_frac = int(N ** 0.5)
 
 print("N=%d" % N)
 print("mask_frac = %d" % mask_frac)
+print()
 
 test_random_networks(N, pad, mask_frac)
 test_machines(N, pad, mask_frac)

@@ -3,154 +3,228 @@ from random import choice
 from itertools import chain
 
 """
-State in Finite State Machine.
-If state is terminal, len(causes) > 0.
-If state is one action away from initial state, 'action' is not None.
+State in tree-based Finite State Machine.
+
+Each state contains:
+    * set of associated |causes| (can be empty)
+    * dictionary of |transitions| keyed by input actions/causes
+    * link to |parent| state (knowledge FSMs are trees)
 """
 class FSMState:
-    def __init__(self, index=0, action=None):
-        self.index = index
-        self.action = action
-        self.causes = []
+    counter = 0
+
+    def __init__(self, prev_state=None):
+        self.index = FSMState.counter
+        FSMState.counter += 1
+
+        # TODO:
+        # State cannot have overlap between causes and transitions.
+        # This is because dictionary keys are added as explicit lists in state
+        #   dictionaries in the neural implementation.
+        # Although this seems like an unusual problem, because causes is a list
+        #   and transitions is a dictionary, a solution is to encode the overlap
+        #   in a separate list:
+        #
+        # causes = [...]
+        # transitions = [...]
+        # both = [...]
+        #
+        # Then, when iterating through causes or transition keys, the additional
+        #   list can also be traversed.
+        self.causes = set()
+        self.transitions = { }
+        self.parent = prev_state
+
+    """
+    Advance the machine using transition 'inp'.
+    Invalid transitions will cause advance() to return None.
+    """
+    def advance(self, inp):
+        return self.transitions.get(inp, None)
+
+    """
+    Move backwards through the machine from this state.
+    If this state is the initial state, retreat() returns None.
+    """
+    def retreat(self):
+        return self.parent
 
     """ Append a cause to the state. """
     def add_cause(self, cause):
-        self.causes.append(cause)
+        self.causes.add(cause)
 
     """
-    Returns an arbitrary cause associated with the FSM state, or
-      an action if no higher level causes are associated with this state.
+    Adds an effect path with a cause.
+    Runs recursively, consuming an effect each time.
+    Once effects are all consumed, the cause is added to the final state.
     """
-    def get_cause_or_action(self):
-        return self.causes[0] if len(self.causes) > 0 else self.action
+    def add_path(self, cause, effects):
+        try:
+            inp = next(effects)
+            successor = self.advance(inp)
+
+            if successor is None:
+                successor = FSMState(prev_state=self)
+                self.transitions[inp] = successor
+
+            successor.add_path(cause, effects)
+        except StopIteration:
+            self.add_cause(cause)
+
+    """ Gathers all sub-states recursively. """
+    def gather(self):
+        return list(iter(self))
+
+    """ Recursive iterator. """
+    def __iter__(self):
+        yield self
+        for s in self.transitions.values():
+            yield from iter(s)
 
     def __str__(self):
         return "s%d" % self.index
 
 
 """
-Finite State Machine encoding causal knowledge.
+Builds a Finite State Machine encoding a tree of causal knowledge.
 
-Constructor takes a list of (cause, effect) tuples encoding knowledge,
-  and a list of primitive actions which cause/explain themselves.
-    fsm = FSM(
+Constructor takes a list of (cause, effect) tuples encoding knowledge:
+    fsm = build_fsm(
         [
-            ('X', 'ABC'),   # X causes A,B,C
-            ('Y', 'AB'),    # Y causes A,B
-            ('Z', 'XY'),    # Z causes X,Y
+            ('X', 'ABC'),   # X causes A->B->C
+            ('Y', 'AB'),    # Y causes A->B
+            ('Z', 'XY'),    # Z causes X->Y
             ...
-        ],
-        'ABC'               # Primitive actions
+        ]
     )
 
 To run the machine:
-    state = fsm.init
+    state = fsm
     for v in 'ABCDE':
-        state = fsm.advance(state, inp)
+        state = state.advance(state)
         print(state.causes)
 """
-class FSM:
-    def __init__(self, knowledge, actions):
-        self.init = FSMState(index=0)
-        self.trans = { self.init : {} }
+def build_fsm(knowledge):
+    init = FSMState()
 
-        # Add states for each action (actions explain themselves)
-        for action in actions:
-            new_state = FSMState(index=len(self.trans), action=action)
-            self.trans[self.init][action] = new_state
-            self.trans[new_state] = {}
+    # Add a path for each cause-effect pair
+    for cause,effect in knowledge:
+        init.add_path(cause, iter(effect))
 
-        # For each cause-effect pair...
-        for cause,effect in knowledge:
-            # Start at initial state
-            state = self.init
+    return init
 
-            # Transition through the machine, adding states as necessary
-            for v in effect:
-                new_state = self.advance(state, v)
-
-                # If transition fails, add new state
-                if new_state is None:
-                    new_state = FSMState(index=len(self.trans))
-                    self.trans[state][v] = new_state
-                    self.trans[new_state] = {}
-                state = new_state
-
-            # Add cause to terminal state
-            state.add_cause(cause)
-
-    """
-    Advance the machine from a starting state using transition 'inp'.
-    Invalid transitions will cause advance() to return None.
-    """
-    def advance(self, state, inp):
-        return self.trans[state].get(inp, None)
 
 
 """
-Timepoint nodes that are chained into a linked list.
+Represents an observed instance of a cause with a given |identity| with a list
+  of |effects| covering time |start_t| to |end_t| (inclusive/exclusive).
+
+Primitive actions have no effects and take up a single timestep. Their |args|
+  come directly from observation, while the |args| of higher-order causes will
+  be derived from |effects|.
+"""
+class Cause:
+    counter = 0
+
+    def __init__(self, identity, end_t, effects=[], args={}):
+        self.index = Cause.counter
+        Cause.counter += 1
+
+        self.identity = identity
+        self.end_t = end_t
+        self.effects = effects
+
+        # Primitive actions have no effects and last one timestep
+        # Higher-order actions start before the first effect
+        if len(effects) == 0:
+            self.start_t = end_t.previous
+        else:
+            self.start_t = effects[0].start_t
+
+        # TODO:
+        # 1. Validate that effects match cause
+        # 2. Extract arguments from effects
+        self.args = {}
+
+    def __str__(self):
+        return "c%d" % self.index
+
+
+"""
+Timepoint nodes that are chained into a reverse linked list.
 
 Each node contains:
-    * time value
-    * pointer to next timepoint
-    * cache of active FSM states
-        - each active state keeps track of the
-              timepoint when its traversal began
-    * set of edges linking timepoints via FSM states (with actions/causes)
-        - each edge corresponds to the start and end times of a cause
+    * pointer to |previous| timepoint
+    * |cache| mapping active FSM states to the incoming transition cause
+    * set of |causes| that end at this timepoint
 """
 class Timepoint:
-    def __init__(self, time=0):
-        self.time = time
-        self.nxt = None
+    counter = 0
+
+    def __init__(self, previous=None):
+        self.index = Timepoint.counter
+        Timepoint.counter += 1
+
+        self.previous = previous
         self.cache = {}
-        self.edges = {}
-
-    """
-    Caches an FSM state.
-    Each cached state is stored with the timestep when its traversal began.
-    This way, when a terminal state is reached in the FSM, the algorithm can
-      determine when the associated cause began, and extend the cached states
-      from that timepoint.
-    """
-    def cache_state(self, fsm_state, start_t):
-        # TODO:
-        # The same FSM state may be cached with different starting timepoints.
-        #   This must depend on properties of the FSM (to be determined).
-        # Conflict can be detected in the NVM.
-        # How should this be handled?
-        if fsm_state in self.cache:
-            pass
-
-        self.cache[fsm_state] = start_t
-
-    """
-    Adds an edge to the causal graph.
-    The edge contains an FSM state representing an action or cause that
-      began immediately after the current timepoint and ended just before
-      the provided end timepoint.
-    """
-    def add_edge(self, fsm_state, end_t):
-        # TODO:
-        # Multiple edges may link two timepoints.
-        # Conflict can be detected in the NVM.
-        # Because compatibility is determined using cached states, edges are
-        #   only needed for computation of the shortest path, which may be done
-        #   periodically during execution to free up memory (trim the graph).
-        # For this reason, it may be arbitrary which state is retained.
-        # How should this be handled?
-        if end_t in self.edges:
-            pass
-
-        self.edges[end_t] = fsm_state
+        self.causes = set()
 
     """ Spawns a new timepoint and adds a pointer to the current timepoint.  """
     def incr(self):
-        self.nxt = Timepoint(self.time+1)
-        return self.nxt
+        return Timepoint(self)
+
+    """
+    Adds a |cause| to this timepoint.
+    Causes serve as edges in the causal graph because they contain pointers to
+      their start and end timepoints.
+    """
+    def add_cause(self, cause):
+        self.causes.add(cause)
+
+    """
+    Caches a FSM |state| with the |cause| of its incoming transition.
+    This way, when a cause is completed, the effects can be recovered by tracing
+      backward through the FSM using the timesteps stored in each cause/effect.
+    """
+    def cache_state(self, state, cause):
+        # TODO:
+        # The same FSM state may be cached with differentes.
+        #   This must depend on properties of the FSM (to be determined).
+        # Conflict can be detected in the NVM.
+        # How should this be handled?
+        if state in self.cache:
+            pass
+        self.cache[state] = cause
+
+    """
+    Traces back through the timepoints and collects the sequence of causes that
+      led from to the cached |state|. This is possible because states are cached
+      with their transition causes, and those causes are linked to the start
+      time of their associated effects.
+    """
+    def traceback(self, state):
+        effects = []
+        cause = self.cache[state]
+
+        while cause is not None:
+            effects.insert(0, cause)
+            state = state.retreat()
+            cause = cause.start_t.cache.get(state, None)
+
+        return effects
+
+    """ Gathers all timepoints recursively. """
+    def gather(self):
+        return list(iter(self))
+
+    """ Recursive iterator. """
+    def __iter__(self):
+        yield self
+        if self.previous is not None:
+            yield from iter(self.previous)
 
     def __str__(self):
-        return "t%d" % self.time
+        return "t%d" % self.index
 
 """
 Perform cause-effect reasoning (abduction) using an input sequence of actions
@@ -159,16 +233,11 @@ Perform cause-effect reasoning (abduction) using an input sequence of actions
 Returns a list of the shortest paths terminating at each time point.
 
 Variables for graph generation:
-    * start_time : starting timepoint
     * t          : current timepoint
     * q          : action/cause queue
     * a          : observed action
     * v          : cause (may be 'a')
-    * v_t        : timepoint of cause/action 'v'
-    * state      : cached fsm_state
-    * path_t     : starting timepoint of fsm path
-    * new_state  : restulting fsm_state after transition
-    * cause      : cause associated with terminal fsm state
+    * state      : fsm_state
 
 Time complexity (worst case):
 1. len(input_sequence) * len(causes) * len(FSM)
@@ -182,85 +251,66 @@ Space complexity (worst case):
 len(input_sequence) * len(causes) * sum(len(effects))
 """
 def abduce(fsm, input_sequence):
-    # Keep track of the starting timepoint
-    start_time = Timepoint()
-
     # Current time
-    t = start_time
+    curr_t = Timepoint()
 
     # For each action in the input sequence...
     for a in input_sequence:
-        # Create a queue of action/causes to process
-        # Initialize with observed action (start timepoint = previous t)
-        q = Queue()
-        q.put((a, t))
-
         # Increment timestep
-        t = t.incr()
+        curr_t = curr_t.incr()
+
+        # Create a queue of action/causes to process
+        # Initialize with self-cause for observed action
+        q = Queue()
+        q.put(Cause(a, curr_t))
 
         # Run until the queue is empty
         while not q.empty():
-            # Retrieve action/cause (v) and its start timepoint from queue (v_t)
-            v,v_t = q.get()
+            # Retrieve action/cause (v) and add it to the graph
+            v = q.get()
+            curr_t.add_cause(v)
 
-            # Advance cached FSM states from v's start timepoint (+initial)
-            # Cache the resulting states in the current timepoint
-            for state,path_t in chain(v_t.cache.items(), [(fsm.init, v_t)]):
-                new_state = fsm.advance(state, v)
+            # Advance all cached FSM states from v's start timepoint (+initial)
+            for state in chain([fsm], v.start_t.cache):
+                state = state.advance(v.identity)
 
                 # If the FSM advancement was successful...
-                if new_state is not None:
-                    # Cache the new state with the same starting timepoint
-                    t.cache_state(new_state, path_t)
-
-                    # If the state is terminal or an action state, add it to the
-                    #   graph linking path start timepoint to current timepoint
-                    if new_state.get_cause_or_action() is not None:
-                        path_t.add_edge(new_state,t)
+                if state is not None:
+                    # Cache the new state with the transition cause
+                    curr_t.cache_state(state, v)
 
                     # If the state is terminal, enqueue all of its causes with
                     #   the path start timepoint. Because the queue was
-                    #   initialized with the observed action, only enqueue
-                    #   high level causes.
-                    for cause in new_state.causes:
-                        q.put((cause, path_t))
+                    #   initialized with the observed action, only process
+                    #   high-level causes.
+                    for cause in state.causes:
+                        q.put(Cause(cause, curr_t,
+                            effects=curr_t.traceback(state)))
 
 
-    # Gather timepoints for convenient iteration
-    timepoints = []
-    t = start_time
-    while t is not None:
-        timepoints.append(t)
-        t = t.nxt
+    # Gather timepoints for convenient iteration (reverse order)
+    timepoints = curr_t.gather()
 
-    # Use dynamic programming to compute the shortest paths from the start
-    best_length, best_edge, best_path = {}, {}, {}
+    # Use dynamic programming to compute shortest paths from the end to start
+    shortest_edge =   { t : None  for t in timepoints }
+    shortest_length = { t : 99999 for t in timepoints }
+    shortest_length[curr_t] = 0
 
-    # Initialize data structures
     for t in timepoints:
-        best_length[t] = 99999
-        best_edge[t] = None
-        best_path[t] = ""
-    best_length[start_time] = 0
+        length = 1 + shortest_length[t]
 
-    # Iterate through the timepoints
-    for t in timepoints:
-        length = 1 + best_length[t]
+        for cause in t.causes:
+            if length < shortest_length[cause.start_t]:
+                shortest_length[cause.start_t] = length
+                shortest_edge[cause.start_t] = cause
 
-        # Iterate through the outgoing edges (action/cause and end timepoint)
-        #   and update best length and incoming edge for each end timepoint
-        for end,state in t.edges.items():
-            if length < best_length[end]:
-                best_length[end] = length
-                best_edge[end] = (state,t)
-
-    # Compute the shortest path for each node
-    # If the linking state has no causes, it is an action state
+    # Compute the shortest path from end to each node
+    shortest_path = { curr_t : "" }
     for t in timepoints[1:]:
-        state,prev_t = best_edge[t]
-        best_path[t] = best_path[prev_t] + state.get_cause_or_action()
+        cause = shortest_edge[t]
+        shortest_path[t] = shortest_path[cause.end_t] + cause.identity
 
-    return timepoints, best_path
+    return timepoints, shortest_path
 
 
 def run(fsm, seq, answer=None, verbose=False):
@@ -270,10 +320,10 @@ def run(fsm, seq, answer=None, verbose=False):
         print("Sequence: " + seq)
 
         for t in timepoints:
-            print(t.time, best_path[t])
+            print("%4s : %s" % (str(t), best_path[t]))
 
         print("Shortest path: %d" % len(best_path[timepoints[-1]]))
-        print("Num edges: %d" % sum(len(t.edges) for t in timepoints))
+        print("Num causes: %d" % sum(len(t.causes) for t in timepoints))
         print("Cache size: %d" % sum(len(t.cache) for t in timepoints))
 
         if answer is not None:
@@ -286,83 +336,75 @@ def run(fsm, seq, answer=None, verbose=False):
             print(str(t), [(str(s), str(o)) for s,o in t.cache.items()])
         print()
 
-        print("Edges")
+        print("Causes")
         for t in timepoints:
-            print(str(t), [(str(o), str(s)) for o,s in t.edges.items()])
+            print(str(t), [str(v) for v in t.causes])
         print()
 
         print("FSM")
-        for st,trans in fsm.trans.items():
-            print(str(st), [(inp, str(st2)) for inp,st2 in trans.items()])
+        for st in fsm.gather():
+            print(str(st), [(inp, str(st2)) for inp,st2 in st.transitions.items()])
         print()
 
     return best_path[timepoints[-1]]
 
+test_data = [
+    (
+        [
+            ('X', 'ABC'),
+            ('Y', 'AB'),
+            ('Z', 'BC'),
+
+            ('V', 'AZ'),
+            ('W', 'YC'),
+
+            ('S', 'D'),
+            ('T', 'D'),
+
+            ('U', 'TE'),
+
+            ('G', 'WU'),
+            ('W', 'DEC'),
+            ('U', 'SA')
+        ],
+        'ABCDE',
+        'G'
+    ),
+    (
+        [
+            ('Y', 'AB'),
+            ('W', 'YC'),
+            ('G', 'WU'),
+            ('K', 'FG'),
+        ],
+        'FABCU',
+        'K',
+    ),
+    (
+        [
+            ('X', 'AB'),
+            ('Y', 'BC'),
+            ('Z', 'XY'),
+
+            ('S', 'AA'),
+            ('T', 'BB'),
+            ('U', 'CC'),
+
+            ('G', 'SU'),
+            ('H', 'TS'),
+            ('I', 'XS'),
+            ('J', 'UT'),
+
+            ('S', 'GA'),
+            ('T', 'BI'),
+            ('U', 'TC'),
+            ('G', 'CZ'),
+        ],
+        "".join([choice('ABC') for _ in range(20)]),
+        None
+    )
+]
 
 if __name__ == "__main__":
-    run(
-        FSM(
-            [
-                ('X', 'ABC'),
-                ('Y', 'AB'),
-                ('Z', 'BC'),
-
-                ('V', 'AZ'),
-                ('W', 'YC'),
-
-                ('S', 'D'),
-                ('T', 'D'),
-
-                ('U', 'TE'),
-
-                ('G', 'WU'),
-                ('W', 'DEC'),
-                ('U', 'SA')
-            ],
-            actions="ABCDE"
-        ),
-        seq='ABCDE',
-        answer='G',
-        verbose=True)
-
-
-    run(
-        FSM(
-            [
-                ('Y', 'AB'),
-                ('W', 'YC'),
-                ('G', 'WU'),
-                ('K', 'FG'),
-            ],
-            actions="ABCFU"
-        ),
-        seq='FABCU',
-        answer='K',
-        verbose=True)
-
-
-    run(
-        FSM(
-            [
-                ('X', 'AB'),
-                ('Y', 'BC'),
-                ('Z', 'XY'),
-
-                ('S', 'AA'),
-                ('T', 'BB'),
-                ('U', 'CC'),
-
-                ('G', 'SU'),
-                ('H', 'TS'),
-                ('I', 'XS'),
-                ('J', 'UT'),
-
-                ('S', 'GA'),
-                ('T', 'BI'),
-                ('U', 'TC'),
-                ('G', 'CZ'),
-            ],
-            actions="ABC"
-        ),
-        seq="".join([choice('ABC') for _ in range(20)]),
-        verbose=True)
+    for knowledge, seq, answer in test_data:
+        run(build_fsm(knowledge), seq, answer, verbose=True)
