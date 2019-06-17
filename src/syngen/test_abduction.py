@@ -188,7 +188,7 @@ class Timepoint:
     """
     def cache_state(self, state, cause):
         # TODO:
-        # The same FSM state may be cached with differentes.
+        # The same FSM state may be cached with different causes.
         #   This must depend on properties of the FSM (to be determined).
         # Conflict can be detected in the NVM.
         # How should this be handled?

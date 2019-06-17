@@ -219,7 +219,7 @@ def gen_mappings(num_states, num_inputs, num_trans):
         others = [x for x in mem_states if x != f]
         s = np.random.choice(others, num_trans, replace=False)
         t = np.random.choice(input_tokens, num_trans, replace=False)
-        mappings[f] = zip(t,s)
+        mappings[f] = list(zip(t,s))
 
     return mappings
 
@@ -351,18 +351,21 @@ def test_param_explore(N, pad, mask_frac):
 
     print("num_states")
     for x in [N/2, N, N*2, N * 4]:
+        x = int(x)
         mappings = gen_mappings(x, num_inputs, num_trans)
         print_results(x, test(N, pad, mask_frac, mappings))
     print("")
 
     print("num_inputs")
     for x in [N/2, N, N*2, N * 4, N * 8]:
+        x = int(x)
         mappings = gen_mappings(num_states, x, num_trans)
         print_results(x, test(N, pad, mask_frac, mappings))
     print("")
 
     print("num_trans")
     for x in [N/8, N/4, N/2, N, N*2]:
+        x = int(x)
         mappings = gen_mappings(max(num_states,x+1), max(num_inputs,x), x)
         print_results(x, test(N, pad, mask_frac, mappings))
     print("")
@@ -429,7 +432,7 @@ def test_abduce(N, pad, mask_frac):
     for knowledge, seq, answer in abduction_test_data:
         fsm = build_fsm(knowledge)
         timepoints, best_path = abduce(fsm, seq)
-        states = fsm.gather()
+        fsm_states = fsm.gather()
         causes = [c for t in timepoints for c in t.causes]
 
         data = {
@@ -442,9 +445,9 @@ def test_abduce(N, pad, mask_frac):
                 'causes' : [ str(c) for c in s.causes ],
                 'parent' : "NULL" if s.parent is None else str(s.parent),
                 'transitions' : [ inp for inp in s.transitions ],
-            } for s in states
+            } for s in fsm_states
         })
-        for s in states:
+        for s in fsm_states:
             data[str(s)].update({
                 inp : str(s2) for inp,s2 in s.transitions.items() })
 
@@ -468,7 +471,7 @@ def test_abduce(N, pad, mask_frac):
             } for c in causes
         })
 
-        #for x in [str(x) for x in states + timepoints + causes]:
+        #for x in [str(x) for x in fsm_states + timepoints + causes]:
         #    print(x, data[x])
 
         pairs = []
@@ -506,6 +509,9 @@ def test_abduce(N, pad, mask_frac):
                 reg_states.add(inp)
                 mem_states.add(res)
         reg_states = reg_states - set(mem_states)
+        print("Timepoints: ", len(timepoints))
+        print("FSM states: ", len(fsm_states))
+        print("Causes: ", len(causes))
         print("Memory states: ", len(mem_states))
         print("Register states: ", len(reg_states))
         print("Total states: ", len(mem_states.union(reg_states)))
@@ -513,8 +519,8 @@ def test_abduce(N, pad, mask_frac):
 
         print()
         print_header()
-
         print_results("", test(N, pad, mask_frac, mappings))
+        print()
 
 # Parameters
 N = 32
