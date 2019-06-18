@@ -432,19 +432,19 @@ def test_abduce(N, pad, mask_frac):
     for knowledge, seq, answer in abduction_test_data:
         fsm = build_fsm(knowledge)
         timepoints, best_path = abduce(fsm, seq)
-        fsm_states = fsm.gather()
+        fsm_states = list(iter(fsm))
         causes = [c for t in timepoints for c in t.causes]
 
         data = {
-            "curr_t" : str(timepoints[0]),
-            "fsm" : str(fsm),
+            #"curr_t" : str(timepoints[0]),
+            #"fsm" : str(fsm),
         }
 
         data.update({
             str(s) : {
-                'causes' : [ str(c) for c in s.causes ],
                 'parent' : "NULL" if s.parent is None else str(s.parent),
                 'transitions' : [ inp for inp in s.transitions ],
+                'causes' : [ str(c) for c in s.causes ],
             } for s in fsm_states
         })
         for s in fsm_states:
@@ -453,23 +453,24 @@ def test_abduce(N, pad, mask_frac):
 
         data.update({
             str(t) : {
-                'causes' : [ str(c) for c in t.causes ],
                 'previous' : "NULL" if t.previous is None else str(t.previous),
-                'cache' : [ str(s) for s in t.cache ],
+                'causes' : [ str(c) for c in t.causes ],
             } for t in timepoints
         })
-        for t in timepoints:
-            data[str(t)].update({
-                str(s) : str(c) for s,c in t.cache.items() })
 
         data.update({
             str(c) : {
-                'effects' : [ str(e) for e in c.effects ],
                 'identity' : c.identity,
                 'start_t' : str(c.start_t),
-                'end_t' : str(c.end_t)
+                'end_t' : str(c.end_t),
+                'source_state' : str(c.source_state),
+                'cache' : [ str(s) for s in c.cache ],
+                'effects' : [ str(e) for e in c.effects ],
             } for c in causes
         })
+        for c in causes:
+            data[str(c)].update({
+                str(c) : str(c) for s,c in c.cache.items() })
 
         #for x in [str(x) for x in fsm_states + timepoints + causes]:
         #    print(x, data[x])
