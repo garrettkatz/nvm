@@ -442,7 +442,7 @@ def test_abduce(N, pad, mask_frac):
 
         data.update({
             str(s) : {
-                'parent' : "NULL" if s.parent is None else str(s.parent),
+                'parent' : str(s.parent),
                 'transitions' : [ inp for inp in s.transitions ],
                 'causes' : [ str(c) for c in s.causes ],
             } for s in fsm_states
@@ -453,7 +453,7 @@ def test_abduce(N, pad, mask_frac):
 
         data.update({
             str(t) : {
-                'previous' : "NULL" if t.previous is None else str(t.previous),
+                'previous' : str(t.previous),
                 'causes' : [ str(c) for c in t.causes ],
             } for t in timepoints
         })
@@ -470,7 +470,7 @@ def test_abduce(N, pad, mask_frac):
         })
         for c in causes:
             data[str(c)].update({
-                str(c) : str(c) for s,c in c.cache.items() })
+                str(s) : str(c) for s,c in c.cache.items() })
 
         #for x in [str(x) for x in fsm_states + timepoints + causes]:
         #    print(x, data[x])
@@ -486,9 +486,9 @@ def test_abduce(N, pad, mask_frac):
                             pairs.append((parent, key, value[0]))
                             for (v1,v2) in zip(value, value[1:]):
                                 pairs.append((v1,parent,v2))
-                            pairs.append((value[-1], parent, "NULL"))
+                            pairs.append((value[-1], parent, "None"))
                         else:
-                            pairs.append((parent, key, "NULL"))
+                            pairs.append((parent, key, "None"))
                     else:
                         pairs.append((parent, key, value))
 

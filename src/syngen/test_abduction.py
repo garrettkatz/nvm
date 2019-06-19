@@ -95,7 +95,7 @@ def build_fsm(knowledge):
 Represents an observed instance of a cause with a given |identity| with a list
   of |effects| covering time |start_t| to |end_t| (inclusive/exclusive).
 
-Primitive actions have no effects and take up a single timestep. Their |args|
+  Primitive actions have no effects and take up a single timestep. Their |args|
   come directly from observation, while the |args| of higher-order causes will
   be derived from |effects|.
 """
@@ -189,22 +189,131 @@ Perform cause-effect reasoning (abduction) using an input sequence of actions
 Returns a list of the shortest paths terminating at each time point.
 
 Variables for graph generation:
-    * t          : current timepoint
-    * q          : action/cause queue
+    * curr_t     : current timepoint
     * a          : observed action
+    * q          : action/cause queue
     * v          : cause (may be 'a')
     * state      : fsm_state
 
-Time complexity (worst case):
-1. len(input_sequence) * len(causes) * len(FSM)
-      -> Queue contains actions/causes
-      -> Caches contain FSM states
-2. len(input_sequence)
-3. len(input_sequence) * len(causes)
-4. len(input_sequence)
+    FSM transitioning (process)
+    * curr_t     : current timepoint
+    * v          : current cause of transition
+    * pre_cause  : cause of prior transition
+    * pre_state  : prior state
 
-Space complexity (worst case):
-len(input_sequence) * len(causes) * sum(len(effects))
+Time complexity (worst case):
+1. Graph generation (TODO)
+
+    For each timestep (length of action sequence):
+       For each cause v generated at curr_t:
+           For each cause at v's start time (v_t):
+               For each cached state:
+                   If terminal transition:
+                       For each cause in state, create new cause:
+                           For each effect in FSM path:
+                               Reverse transition through FSM
+
+    Worst case:
+    O = len(action_sequence) * len(causes) * len(causes) *
+        * (len(FSM) + sum(len(cause_effect) for cause_effect in knowledge))
+
+
+    When the same causal identity can be decomposed into the same
+        sequence of primitive actions in two different ways:
+
+    X : A
+    Y : A->X  (A->A)
+    Y : X->A  (A->A)
+
+    Then two causes can share identities and start/end timepoints, and can
+        be used to transition to the same state in the same timepoint.
+
+    If this is not the case, then the double loop over causes and caches
+        is guaranteed not to exceed the total number of transitions in the
+        finite state machine.
+
+    O = len(action_sequence) * len(causes)
+        * (len(FSM) + sum(len(cause_effect) for cause_effect in knowledge))
+
+    If the start time is also cached, and the effects list does not need to
+        be computed during graph generation, then Cause construction is O(1).
+    If each terminal node is restricted to having a single cause, then then
+        each transition is O(1):
+
+    O = len(action_sequence) * len(causes) * len(FSM)
+
+    By pruning the graph to keep the total number of timepoints and causes
+        below a constant of memory size, the len(action_sequence) + len(causes)
+        terms are eliminated, and the complexity is bounded to the size of
+        the finite state machine:
+
+    C = len(memory) >= len(action_sequence) + len(causes)
+    O = C * len(FSM) = O(FSM)
+
+    This limits the maximum length of the action sequence that can be processed,
+        and limits the quality of causal explanations that can be constructed
+        as the sequence gets longer.  However, as long as the length of the
+        sequence fits in memory, the trivially true explanation (each action
+        explains itself) can still be returned.
+
+
+    Practically speaking, the total number of cached states at each timepoint
+       will be much smaller than the size of the FSM, but in extremely
+       degenerate cases, it may be equal. For example:
+
+    X : A
+    X : A->A
+    X : A->A->A
+    ...
+
+    A sequence of A's will fill the cache with all the states in the FSM.
+    Therefore, the total cache size at a timepoint depends on properties of
+        the input action sequence and the knowledge base.
+
+    My intuition is that the complexity can be reduced with additional
+        guarantees about repetition in the input sequence and knowledge base.
+    The strategy for determining this should be to consider the possible
+        set of active FSM states at any given timepoint.
+
+    To summarize, if:
+        1. No causal identity can be decomposed into the same action sequence in
+            more than one way
+        2. Cause construction does not require computing effects lists
+        3. Each terminal FSM node only contains a single causal identity
+        4. Memory constrains action sequence length and size of Cause set
+
+    Then the computational complexity of the algorithm is:
+    O(FSM) = len(FSM)
+
+    If 2. is not true, then the complexity is bounded by the total size of the
+        knowledge base, which is the sum of effect sequence length for each
+        causal relationship:
+    O(knowledge) = sum(len(cause_effect) for cause_effect in knowledge)
+
+
+2. Dynamic programming
+   O = len(causes)
+3. Computing shortest path
+   O = len(input_sequence)
+
+Space complexity:
+    Memory states:
+        Fixed based on knowledge base:
+            States in FSM
+            Unique causal identities
+        Varies based on action sequence:
+            Timepoints
+            Causes identified during inference
+
+        O = len(FSM) + len(set(causal_identities))
+            + len(action_sequence) + len(causes)
+
+        Bounding the sequence length number of identified causes:
+        C = len(memory) >= len(action_sequence) + len(causes)
+        O = len(FSM) + len(set(causal_identities)) + C
+
+
+    Transitions:
 """
 def abduce(fsm, input_sequence):
     # Current time
@@ -226,7 +335,7 @@ def abduce(fsm, input_sequence):
             v = q.get()
             curr_t.add_cause(v)
 
-            def process(v, t, pre_cause, pre_state):
+            def process(pre_cause, pre_state):
                 state = pre_state.advance(v.identity)
 
                 # If the FSM advancement was successful...
@@ -239,15 +348,15 @@ def abduce(fsm, input_sequence):
                     #   initialized with the observed action, only process
                     #   high-level causes.
                     for cause in state.causes:
-                        q.put(Cause(cause, t, state, v))
+                        q.put(Cause(cause, curr_t, state, v))
 
             # Process initial state
-            process(v, curr_t, None, fsm)
+            process(None, fsm)
 
             # Process all states cached in causes at v's start time
             for pre_cause in v.start_t.causes:
                 for pre_state in pre_cause.cache:
-                    process(v, curr_t, pre_cause, pre_state)
+                    process(pre_cause, pre_state)
 
 
 
