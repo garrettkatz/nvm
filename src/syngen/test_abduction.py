@@ -213,82 +213,128 @@ Time complexity (worst case):
                            For each effect in FSM path:
                                Reverse transition through FSM
 
+    Because Cause caches cannot have repeat FSM states, and FSM states only have
+        one parent, the inner-most loops can be combined. The total number of
+        constructed Causes constructed during iteration over a given cache is
+        bounded by the number of cause-effect relations in the knowledge base.
+        Because Cause construction requires tracing back through the FSM, the
+        total number of operations is the cumulative length of effect sequences
+        in the knowledge base:
+
     Worst case:
-    O = len(action_sequence) * len(causes) * len(causes) *
-        * (len(FSM) + sum(len(cause_effect) for cause_effect in knowledge))
+    O = len(action_sequence)
+            * len(causes)
+                * len(causes)
+                    * (len(FSM)
+                        + sum(len(effects) for (cause,effects) in knowledge))
 
 
-    When the same causal identity can be decomposed into the same
-        sequence of primitive actions in two different ways:
+    Identify bounds for any given timepoint based on the knowledge base only:
+        1. The number of causes constructed
+        2. The cumulative cache length for constructed Causes
+        3. The cumulative length of effect sequences in the cause-effect pairs
+            used for construction of Causes
 
-    X : A
-    Y : A->X  (A->A)
-    Y : X->A  (A->A)
+    For the following analyses, the example knowledge base will be:
+        X : A->B->B
+        X : A->B
+        X : B
+        Y : X
 
-    Then two causes can share identities and start/end timepoints, and can
-        be used to transition to the same state in the same timepoint.
+    1. Cause construction
 
-    If this is not the case, then the double loop over causes and caches
-        is guaranteed not to exceed the total number of transitions in the
-        finite state machine.
+    Define set(suffix) as the set of causal action decompositions that share a
+        common |suffix|.
 
-    O = len(action_sequence) * len(causes)
-        * (len(FSM) + sum(len(cause_effect) for cause_effect in knowledge))
+    set(B):
+        X : A->B->B
+        X : A->B
+        X : B
+        Y : X : A->B->B
+        Y : X : A->B
+        Y : X : B
 
-    If the start time is also cached, and the effects list does not need to
-        be computed during graph generation, then Cause construction is O(1).
-    If each terminal node is restricted to having a single cause, then then
-        each transition is O(1):
+    Define C as the length of the largest set(suffix) for all possible suffixes
+        in the knowledge base. C is the maximum number of Causes that can be
+        constructed during any given timepoint. It is evident that at least one
+        of the suffixes that satisfy this condition will be of length 1. Thus,
+        C can be computed by looping over all primitive actions and recursively
+        decomposing cause-effect relations.
 
-    O = len(action_sequence) * len(causes) * len(FSM)
+    2. Cumulative cache length
 
-    By pruning the graph to keep the total number of timepoints and causes
-        below a constant of memory size, the len(action_sequence) + len(causes)
-        terms are eliminated, and the complexity is bounded to the size of
-        the finite state machine:
+    Define covers(sequence) as the complete set of covers for a given sequence.
+    Define paths(covers(sequence)) as the set FSM states with a path from the
+        initial state that is contained in covers(sequence).
 
-    C = len(memory) >= len(action_sequence) + len(causes)
-    O = C * len(FSM) = O(FSM)
+    Define S as the length of the largest paths(covers(subsequence)) for all
+        possible effects subsequences in the knowledge base. S is the maximum
+        number of cached states at any given time point.  This definition is
+        tautological because the abduction algorithm itself is necessary to
+        compute it, but it can be computed given only the knowledge base.
 
-    This limits the maximum length of the action sequence that can be processed,
-        and limits the quality of causal explanations that can be constructed
-        as the sequence gets longer.  However, as long as the length of the
-        sequence fits in memory, the trivially true explanation (each action
-        explains itself) can still be returned.
+    An alternative, looser bound uses set(suffix):
+    Define T(causal_identity) as the number of transitions in the FSM associated
+        with a causal identity.
+    Define T(set(suffix)) as the sum of T(causal_identity) for the causal
+        identies of all elements of set(suffix).
+    Define S as the largest T(set(suffix)) for all possible suffixes in the
+        knowledge base. As with C, it is evident that S will be associated with
+        a suffix of length 1, and it can be computed in a similar fashion to S.
+    This works by considering possible sets of causes evoked during a timestep,
+        and all possible transitions that they could be effectively associated
+        with. In practice, the actual number of possible transitions depends on
+        the cache from the prior timestep, but using this information to bound
+        the current cache size requires the previously outlined method of
+        computing possible covers.
+
+    3. Cumulative length of evoked effects sequences
+
+    Define effects(set(suffix)) as the list of all of effects sequences
+        associated with the action decompositions in set(suffix).
+
+    effects(set(B)):
+        A->B->B
+        A->B
+        B
+        X
+        X
+        X
+
+    Define len(effects(set(suffix))) as the cumulative length of effects
+        sequences in effects(set(suffix)).
+    Define E as the maximum len(effects(set(suffix))) for all possible suffixes
+        in the knowledge base. E is the maximum number of tracebacks in the FSM
+        that will occur at any given timestep.
 
 
-    Practically speaking, the total number of cached states at each timepoint
-       will be much smaller than the size of the FSM, but in extremely
-       degenerate cases, it may be equal. For example:
 
-    X : A
-    X : A->A
-    X : A->A->A
-    ...
+    Given these definitions of C, S, and E:
 
-    A sequence of A's will fill the cache with all the states in the FSM.
-    Therefore, the total cache size at a timepoint depends on properties of
-        the input action sequence and the knowledge base.
+    (C * S) is the total number of transitions in the FSM that can be attempted
+        in a given timestep. This correspond to each pair (state,cause), where
+        |state| is cached in a cause evoked at time t-1, and |cause| is a cause
+        evoked at time t.
+    Regardless of the number of attempted transitions, the number of tracebacks
+        is bounded by E. For this reason, the computational complexity of each
+        timestep is ((C * S) + E)
 
-    My intuition is that the complexity can be reduced with additional
-        guarantees about repetition in the input sequence and knowledge base.
-    The strategy for determining this should be to consider the possible
-        set of active FSM states at any given timepoint.
+    Therefore:
+        O = len(action_sequence) * ((C * S) + E)
 
-    To summarize, if:
-        1. No causal identity can be decomposed into the same action sequence in
-            more than one way
-        2. Cause construction does not require computing effects lists
-        3. Each terminal FSM node only contains a single causal identity
-        4. Memory constrains action sequence length and size of Cause set
 
-    Then the computational complexity of the algorithm is:
-    O(FSM) = len(FSM)
+    In the restricted case where:
+        1. Effects do not need to be computed when Causes are evoked. This means
+            that Cause construction is O(1), but requires that start times be
+            cached along with active states
+        2. Each cause-effect relation in the knowledge base is used at most once
+            during a timestep
+    Define max_T = sum(T(cause.identity) for (cause,effects) in knowledge)
+    This is the sum of transition counts for the causal identities of each
+        cause-effect relation in the knowledge base
 
-    If 2. is not true, then the complexity is bounded by the total size of the
-        knowledge base, which is the sum of effect sequence length for each
-        causal relationship:
-    O(knowledge) = sum(len(cause_effect) for cause_effect in knowledge)
+    The complexity of the algorithm can be easily bounded by
+        O = len(action_sequence) * len(knowledge) * max_T
 
 
 2. Dynamic programming
