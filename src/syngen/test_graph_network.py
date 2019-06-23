@@ -19,7 +19,7 @@ from test_abduction import build_fsm, abduce
 
 
 class GraphNet:
-    def __init__(self, N, pad, mask_frac, stabil=10):
+    def __init__(self, N, pad, mask_frac, stabil=5):
         self.stabil = stabil
         self.mask_frac = mask_frac
 
@@ -121,8 +121,20 @@ class GraphNet:
         mem_states = list(mappings.keys()) + list(
             set(v for m in mappings.values() for k,v in m))
 
-        correct,total = 0,0
+        # Accuracy of Hebbian mem recovery
+        w_correct = 0.
 
+        # Symbolic final correct
+        correct = 0
+
+        # Total tests
+        total = 0
+
+        #print("--Testing recovery:")
+        #print("--  mask_frac = %d" % self.mask_frac)
+        #print("--  num_masks = %d" % len(self.masks))
+        #print("--  mem_states = %d" % len(mem_states))
+        #print("--  total = %d" % (len(self.masks) * len(mem_states)))
         for mask in self.masks.values():
             for tok in mem_states:
                 complete = self.ptr_layer.coder.encode(tok)
@@ -131,16 +143,22 @@ class GraphNet:
 
                 # Stabilize
                 for _ in range(self.stabil):
-                    old_y = y
+                    #old_y = y
                     y = self.act.f(self.w_pp.dot(y))
-                    if np.array_equal(y, old_y):
-                        break
+                    #if np.array_equal(y, old_y):
+                    #    break
                 out = self.ptr_layer.coder.decode(y)
 
                 # Check output
-                correct += (out == tok)
+                if out == tok:
+                    w_correct += 1
+                    correct += 1
+                else:
+                    w_correct += (
+                        np.sum(np.sign(y) == np.sign(complete)) / y.size)
                 total += 1
-        return float(correct) / total
+
+        return float(correct) / total, w_correct / total
 
     def test_traversal(self, mappings):
         reg_states = list(set(k for m in mappings.values() for k,v in m))
@@ -149,9 +167,24 @@ class GraphNet:
             for k,v in m:
                 key_pairs[k].add((start,v))
 
-        correct,total = 0,0
+        # SSE-based accuracy of transition from mem->ptr
+        t_correct = 0.
 
-        stats = []
+        # Accuracy of Hebbian ptr recovery
+        p_correct = 0.
+
+        # Accuracy of Hebbian mem recovery
+        w_correct = 0.
+
+        # Symbolic final correct
+        correct = 0
+
+        # Total tests
+        total = 0
+
+        #print("--Testing traversal:")
+        #print("--  num_inputs = %d" % (len(key_pairs)))
+        #print("--  num_transits = %d" % sum(len(s) for s in key_pairs.values()))
 
         for inp,s in key_pairs.items():
             # Masks have already been replaced with reconstructed versions
@@ -165,34 +198,48 @@ class GraphNet:
                 x = np.multiply(start_pat, mask)
                 y = np.multiply(self.act.f(self.w_pm.dot(x)), mask)
 
+                t_correct += 1 - (
+                    np.sum(
+                        np.multiply(mask,
+                            ((y - self.ptr_layer.coder.encode(end)) / 2) ** 2))
+                    / int(y.size / self.mask_frac))
+
                 # Stabilize ptr
                 for _ in range(self.stabil):
-                    old_y = y
+                    #old_y = y
                     y = self.act.f(self.w_pp.dot(y))
-                    if np.array_equal(y, old_y):
-                        break
+                    #if np.array_equal(y, old_y):
+                    #    break
+
+                p_correct += (
+                    np.sum(np.sign(y) == np.sign(
+                        self.ptr_layer.coder.encode(end)))
+                    / y.size)
 
                 # Compute mem activation
-                y = self.act.f(self.w_mp.dot(y))
+                y = self.act.f(self.w_mp.dot(np.sign(y)))
 
                 # Stabilize mem
                 for _ in range(self.stabil):
-                    old_y = y
+                    #old_y = y
                     y = self.act.f(self.w_mm.dot(y))
-                    if np.array_equal(y, old_y):
-                        break
+                    #if np.array_equal(y, old_y):
+                    #    break
 
                 out = self.mem_layer.coder.decode(y)
 
                 # Check output
-                correct += (out == end)
+                if out == end:
+                    w_correct += 1
+                    correct += 1
+                else:
+                    w_correct += (
+                        np.sum(np.sign(y) == np.sign(
+                            self.mem_layer.coder.encode(end)))
+                        / y.size)
                 total += 1
 
-                #if out != end:
-                #    diff = sum(np.sign(y) != np.sign(self.mem_layer.coder.encode(end)))
-                #    print("Incorrect:",start,inp,end,out,diff,float(diff)/y.size)
-
-        return float(correct) / total
+        return float(correct) / total, w_correct / total, t_correct / total, p_correct / total
 
     def test(self, mappings):
         return {
@@ -202,7 +249,8 @@ class GraphNet:
 def print_results(prefix, results):
     print(
         ("%7s" % prefix) +
-        " ".join("%12.4f" % results[k]
+        #" ".join("%12.4f / %6.4f" % results[k]
+        " ".join("      " + " / ".join("%6.4f" % r for r in results[k])
             for k in [
                 "trans_acc", "recall_acc" ]))
 
@@ -237,7 +285,9 @@ def test(N, pad, mask_frac, mappings):
     return n.test(mappings)
 
 def print_header():
-    print("       " + " ".join("%12s" % x for x in ["trans_acc", "recall_acc"]))
+    print("                   " + " ".join(
+		"%21s" % x for x in [
+        "final_acc         trans_acc", "recall_acc"]))
 
 def test_random_networks(N, pad, mask_frac):
     print_header()
@@ -428,8 +478,43 @@ def test_traj(N, pad, mask_frac):
     print_results("Rev-ndx", test(N, pad, mask_frac, mappings))
     print("")
 
-def test_abduce(N, pad, mask_frac):
-    for knowledge, seq, answer in abduction_test_data:
+def test_abduce(pad):
+    test_data = []
+    actions = 'ABC'
+    causes = 'XYZSTUGHIJ'
+    symbols = actions + causes
+
+    p = [1. / len(actions) for a in actions]
+    p = [x /sum(p) for x in p]
+
+    knowledge = []
+    for i in range(12):
+        knowledge.append((
+            sample(causes,1)[0] , tuple(
+                symbols[i] for i in np.random.choice(len(p),2, p=p))))
+
+    p = [.5 / len(actions) for a in actions] + [.5 / len(causes) for c in causes]
+    p = [x /sum(p) for x in p]
+    for i in range(8):
+        knowledge.append((
+            sample(causes,1)[0] , tuple(
+                symbols[i] for i in np.random.choice(len(p),2, p=p))))
+
+    print("Knowledge:")
+    for k in knowledge:
+        print("  " + str(k))
+
+    seq = "".join([choice('ABC') for _ in range(32)])
+    for l in (2, 4, 8, 16, 32):
+        test_data.append(
+            (
+                knowledge,
+                seq[:l],
+                None
+            ))
+
+    for knowledge, seq, answer in test_data:
+    #for knowledge, seq, answer in abduction_test_data:
         fsm = build_fsm(knowledge)
         timepoints, best_path = abduce(fsm, seq)
         fsm_states = list(iter(fsm))
@@ -520,21 +605,23 @@ def test_abduce(N, pad, mask_frac):
 
         print()
         print_header()
-        print_results("", test(N, pad, mask_frac, mappings))
+        for N in [16, 24, 32]:
+            print_results(N, test(N, pad, (N**0.5)/2, mappings))
         print()
 
 # Parameters
-N = 32
-pad = 0.0001
+for N in [16, 24, 32]:
+    pad = 0.0001
+    mask_frac = (N ** 0.5) / 2
 
-mask_frac = int(N ** 0.5)
+    print("-" * 80)
+    print("N=%d" % N)
+    print("mask_frac = %s" % mask_frac)
+    print()
 
-print("N=%d" % N)
-print("mask_frac = %d" % mask_frac)
-print()
-
-test_random_networks(N, pad, mask_frac)
-test_machines(N, pad, mask_frac)
-test_param_explore(N, pad, mask_frac)
-test_traj(N, pad, mask_frac)
-test_abduce(N, pad, mask_frac)
+    test_random_networks(N, pad, mask_frac)
+    test_machines(N, pad, mask_frac)
+    test_param_explore(N, pad, mask_frac)
+    test_traj(N, pad, mask_frac)
+print("-" * 80)
+test_abduce(pad)
