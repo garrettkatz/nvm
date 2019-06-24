@@ -25,6 +25,8 @@ class GraphNet:
 
         ### Create layers
         size = N**2
+        self.size = size
+        self.mask_size = int(self.size / self.mask_frac)
         self.act = tanh_activator(pad, size)
         #self.act_mask = gate_activator(pad, size)
         #self.act_mask = logistic_activator(pad, size)
@@ -38,7 +40,6 @@ class GraphNet:
         self.w_mask = np.zeros((size,size))
 
         # Weight matrices
-        self.w_pp = np.zeros((size,size))
         self.w_mm = np.zeros((size,size))
         self.w_pm = np.zeros((size,size))
         self.w_mp = np.zeros((size,size))
@@ -46,14 +47,11 @@ class GraphNet:
         # Dummy bias to avoid extra memory allocation
         self.dummy_bias = np.zeros((size, 1))
 
-        # Current keys/values stored
-        self.keys = set()
-        self.values = set()
 
-
-    def gen_mask(self, size):
-        m = np.zeros((size,1))
-        m[np.random.choice(size, int(size / self.mask_frac), replace=False)] = 1.
+    def gen_masks(self, num):
+        m = np.zeros((self.size,num))
+        for i in range(num):
+            m[np.random.choice(self.size, self.mask_size, replace=False),i] = 1.
         return m
 
 
@@ -61,57 +59,38 @@ class GraphNet:
         self.learn([(k,start,v) for start,m in mappings.items() for k,v in m])
 
     def learn(self, kfts):
-        kfts = tuple(kfts)
-        key_syms, from_syms, to_syms = zip(*kfts)
+        key_syms, from_syms, to_syms = zip(*tuple(kfts))
         mem_syms = list(set(from_syms + to_syms))
+        uniq_keys = list(set(key_syms))
 
-        # Construct masks for missing keys
-        missing_keys = tuple(k for k in key_syms if k not in self.keys)
-        self.masks.update({
-            key_sym : self.gen_mask(self.reg_layer.size)
-            for key_sym in missing_keys
-        })
-        self.keys.update(missing_keys)
+        # Learn all memory attractors and mem->ptr transfers
+        X_ptr = self.ptr_layer.encode_tokens(mem_syms)
+        X_mem = self.mem_layer.encode_tokens(mem_syms)
+        self.w_mm += rehebbian(self.w_mm, self.dummy_bias, X_mem, X_mem, self.act, self.act)[0]
+        self.w_pm += rehebbian(self.w_pm, self.dummy_bias, X_mem, X_ptr, self.act, self.act)[0]
 
-        # Learn masks
-        if len(missing_keys) > 0:
-            X = self.reg_layer.encode_tokens(missing_keys)
-            Y_mem = np.concatenate(
-                tuple(self.masks[k] for k in missing_keys), axis=1)
+        # Construct and learn masks
+        X_reg = self.reg_layer.encode_tokens(uniq_keys)
+        Y_masks = self.gen_masks(len(uniq_keys))
+        self.w_mask += rehebbian(self.w_mask, self.dummy_bias, X_reg, Y_masks, self.act, self.act_mask)[0]
 
-            self.w_mask += rehebbian(self.w_mask, self.dummy_bias,
-                X, Y_mem, self.act, self.act_mask)[0]
-
-        # Replace masks with reconstructed versions
+        # Reconstruct randomly generated masks
         self.masks = {
-            key : self.act_mask.f(
+            k : self.act_mask.f(
                     self.w_mask.dot(
-                        self.reg_layer.coder.encode(key)))
-            for key in self.masks
+                        self.reg_layer.coder.encode(k)))
+            for k in uniq_keys
         }
 
-        # Learn recurrent weights
-        X = self.ptr_layer.encode_tokens(mem_syms)
-        self.w_pp += rehebbian(self.w_pp, self.dummy_bias, X, X, self.act, self.act)[0]
-
-        X = self.mem_layer.encode_tokens(mem_syms)
-        self.w_mm += rehebbian(self.w_mm, self.dummy_bias, X, X, self.act, self.act)[0]
-
-        self.values.update(mem_syms)
-
-        #  Learn inter-regional weights
-        # mem -> ptr
-        X = np.multiply(
-            self.mem_layer.encode_tokens(from_syms),
-            np.concatenate(tuple(self.masks[k] for k in key_syms), axis=1))
-        Y = np.multiply(
-            self.ptr_layer.encode_tokens(to_syms),
-            np.concatenate(tuple(self.masks[k] for k in key_syms), axis=1))
-        self.w_pm += rehebbian(self.w_pm, self.dummy_bias, X, Y, self.act, self.act)[0]
-
-        # ptr -> mem
-        X = self.ptr_layer.encode_tokens(to_syms)
+        # Relearn from/to ptr/mem attractors
+        X = self.ptr_layer.encode_tokens(from_syms)
         Y = self.mem_layer.encode_tokens(to_syms)
+        self.w_mm += rehebbian(self.w_mm, self.dummy_bias, Y, Y, self.act, self.act)[0]
+
+        # Learn from/to ptr/mem transitions
+        all_masks = np.concatenate(tuple(self.masks[k] for k in key_syms), axis=1)
+        X = np.multiply(X, all_masks)
+        Y = np.multiply(Y, all_masks)
         self.w_mp += rehebbian(self.w_mp, self.dummy_bias, X, Y, self.act, self.act)[0]
 
 
@@ -137,17 +116,14 @@ class GraphNet:
         #print("--  total = %d" % (len(self.masks) * len(mem_states)))
         for mask in self.masks.values():
             for tok in mem_states:
-                complete = self.ptr_layer.coder.encode(tok)
+                complete = self.mem_layer.coder.encode(tok)
                 partial = np.multiply(complete, mask)
-                y = self.act.f(self.w_pp.dot(partial))
+                y = self.act.f(self.w_mm.dot(partial))
 
                 # Stabilize
                 for _ in range(self.stabil):
-                    #old_y = y
-                    y = self.act.f(self.w_pp.dot(y))
-                    #if np.array_equal(y, old_y):
-                    #    break
-                out = self.ptr_layer.coder.decode(y)
+                    y = self.act.f(self.w_mm.dot(y))
+                out = self.mem_layer.coder.decode(y)
 
                 # Check output
                 if out == tok:
@@ -169,9 +145,6 @@ class GraphNet:
 
         # SSE-based accuracy of transition from mem->ptr
         t_correct = 0.
-
-        # Accuracy of Hebbian ptr recovery
-        p_correct = 0.
 
         # Accuracy of Hebbian mem recovery
         w_correct = 0.
@@ -195,37 +168,21 @@ class GraphNet:
                 start_pat = self.mem_layer.coder.encode(start)
 
                 # Compute ptr activation
-                x = np.multiply(start_pat, mask)
-                y = np.multiply(self.act.f(self.w_pm.dot(x)), mask)
+                y = self.act.f(self.w_pm.dot(start_pat))
+
+                # Compute mem activation
+                y = np.multiply(y, mask)
+                y = np.multiply(self.act.f(self.w_mp.dot(np.sign(y))), mask)
 
                 t_correct += 1 - (
                     np.sum(
                         np.multiply(mask,
-                            ((y - self.ptr_layer.coder.encode(end)) / 2) ** 2))
+                            ((y - self.mem_layer.coder.encode(end)) / 2) ** 2))
                     / int(y.size / self.mask_frac))
-
-                # Stabilize ptr
-                for _ in range(self.stabil):
-                    #old_y = y
-                    y = self.act.f(self.w_pp.dot(y))
-                    #if np.array_equal(y, old_y):
-                    #    break
-
-                p_correct += (
-                    np.sum(np.sign(y) == np.sign(
-                        self.ptr_layer.coder.encode(end)))
-                    / y.size)
-
-                # Compute mem activation
-                y = self.act.f(self.w_mp.dot(np.sign(y)))
 
                 # Stabilize mem
                 for _ in range(self.stabil):
-                    #old_y = y
                     y = self.act.f(self.w_mm.dot(y))
-                    #if np.array_equal(y, old_y):
-                    #    break
-
                 out = self.mem_layer.coder.decode(y)
 
                 # Check output
@@ -239,7 +196,7 @@ class GraphNet:
                         / y.size)
                 total += 1
 
-        return float(correct) / total, w_correct / total, t_correct / total, p_correct / total
+        return float(correct) / total, w_correct / total, t_correct / total
 
     def test(self, mappings):
         return {
@@ -285,9 +242,9 @@ def test(N, pad, mask_frac, mappings):
     return n.test(mappings)
 
 def print_header():
-    print("                   " + " ".join(
+    print("                " + " ".join(
 		"%21s" % x for x in [
-        "final_acc         trans_acc", "recall_acc"]))
+        "final_acc trans_acc", "recall_acc"]))
 
 def test_random_networks(N, pad, mask_frac):
     print_header()
