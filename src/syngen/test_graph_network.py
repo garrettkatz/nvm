@@ -19,14 +19,16 @@ from test_abduction import build_fsm, abduce
 
 
 class GraphNet:
-    def __init__(self, N, pad, mask_frac, stabil=5):
+    def __init__(self, N, mask_frac, stabil=10):
         self.stabil = stabil
         self.mask_frac = mask_frac
 
-        ### Create layers
         size = N**2
         self.size = size
         self.mask_size = int(self.size / self.mask_frac)
+        pad = 0.0001
+
+        ### Create layers
         self.act = tanh_activator(pad, size)
         #self.act_mask = gate_activator(pad, size)
         #self.act_mask = logistic_activator(pad, size)
@@ -48,30 +50,24 @@ class GraphNet:
         self.dummy_bias = np.zeros((size, 1))
 
 
-    def gen_masks(self, num):
-        m = np.zeros((self.size,num))
-        for i in range(num):
-            m[np.random.choice(self.size, self.mask_size, replace=False),i] = 1.
-        return m
-
-
-    def learn_mappings(self, mappings):
-        self.learn([(k,start,v) for start,m in mappings.items() for k,v in m])
-
-    def learn(self, kfts):
+    def learn(self, mappings):
+        kfts = [(k,start,v) for start,m in mappings.items() for k,v in m]
         key_syms, from_syms, to_syms = zip(*tuple(kfts))
         mem_syms = list(set(from_syms + to_syms))
         uniq_keys = list(set(key_syms))
 
         # Learn all memory attractors and mem->ptr transfers
-        X_ptr = self.ptr_layer.encode_tokens(mem_syms)
         X_mem = self.mem_layer.encode_tokens(mem_syms)
+        X_ptr = self.ptr_layer.encode_tokens(mem_syms)
         self.w_mm += rehebbian(self.w_mm, self.dummy_bias, X_mem, X_mem, self.act, self.act)[0]
         self.w_pm += rehebbian(self.w_pm, self.dummy_bias, X_mem, X_ptr, self.act, self.act)[0]
 
         # Construct and learn masks
+        Y_masks = np.zeros((self.size,len(uniq_keys)))
+        for i in range(len(uniq_keys)):
+            Y_masks[np.random.choice(
+                self.size, self.mask_size, replace=False),i] = 1.
         X_reg = self.reg_layer.encode_tokens(uniq_keys)
-        Y_masks = self.gen_masks(len(uniq_keys))
         self.w_mask += rehebbian(self.w_mask, self.dummy_bias, X_reg, Y_masks, self.act, self.act_mask)[0]
 
         # Reconstruct randomly generated masks
@@ -97,33 +93,32 @@ class GraphNet:
 
 
     def test_recovery(self, mappings):
-        mem_states = list(mappings.keys()) + list(
-            set(v for m in mappings.values() for k,v in m))
-
         # Accuracy of Hebbian mem recovery
         w_correct = 0.
-
         # Symbolic final correct
         correct = 0
-
         # Total tests
         total = 0
+
+        mem_states = set(k for k in mappings.keys()).union(
+            set(v for m in mappings.values() for k,v in m))
 
         #print("--Testing recovery:")
         #print("--  mask_frac = %d" % self.mask_frac)
         #print("--  num_masks = %d" % len(self.masks))
         #print("--  mem_states = %d" % len(mem_states))
         #print("--  total = %d" % (len(self.masks) * len(mem_states)))
-        for mask in self.masks.values():
-            for tok in mem_states:
-                complete = self.mem_layer.coder.encode(tok)
+        for tok in mem_states:
+            complete = self.mem_layer.coder.encode(tok)
+
+            for mask in self.masks.values():
                 partial = np.multiply(complete, mask)
-                y = self.act.f(self.w_mm.dot(partial))
+                y_mem = self.act.f(self.w_mm.dot(partial))
 
                 # Stabilize
                 for _ in range(self.stabil):
-                    y = self.act.f(self.w_mm.dot(y))
-                out = self.mem_layer.coder.decode(y)
+                    y_mem = self.act.f(self.w_mm.dot(y_mem))
+                out = self.mem_layer.coder.decode(y_mem)
 
                 # Check output
                 if out == tok:
@@ -131,59 +126,54 @@ class GraphNet:
                     correct += 1
                 else:
                     w_correct += (
-                        np.sum(np.sign(y) == np.sign(complete)) / y.size)
+                        np.sum(np.sign(y_mem) == np.sign(complete))
+                        / y_mem.size)
                 total += 1
 
         return float(correct) / total, w_correct / total
 
     def test_traversal(self, mappings):
-        reg_states = list(set(k for m in mappings.values() for k,v in m))
-        key_pairs = { k:set() for k in reg_states }
-        for start,m in mappings.items():
-            for k,v in m:
-                key_pairs[k].add((start,v))
-
-        # SSE-based accuracy of transition from mem->ptr
+        # Accuracy of transfer from mem->ptr
+        p_correct = 0.
+        # Accuracy of gated transition from ptr->mem
         t_correct = 0.
-
         # Accuracy of Hebbian mem recovery
         w_correct = 0.
-
         # Symbolic final correct
         correct = 0
-
         # Total tests
         total = 0
 
+        input_keys = set(k for m in mappings.values() for k,v in m)
+
         #print("--Testing traversal:")
-        #print("--  num_inputs = %d" % (len(key_pairs)))
-        #print("--  num_transits = %d" % sum(len(s) for s in key_pairs.values()))
+        #print("--  num_inputs = %d" % (len(input_keys)))
+        #print("--  num_transits = %d" % sum(len(m) for m in mappings.values()))
 
-        for inp,s in key_pairs.items():
-            # Masks have already been replaced with reconstructed versions
-            # Retrieve to save computations
-            mask = self.masks[inp]
+        for start,m in mappings.items():
+            start_pat = self.mem_layer.coder.encode(start)
+            ptr_target = self.ptr_layer.coder.encode(start)
 
-            for start,end in s:
-                start_pat = self.mem_layer.coder.encode(start)
+            for inp,end in m:
+                mask = self.masks[inp]
+                mem_target = self.mem_layer.coder.encode(end)
 
                 # Compute ptr activation
-                y = self.act.f(self.w_pm.dot(start_pat))
+                y_ptr = np.sign(self.act.f(self.w_pm.dot(start_pat)))
+                p_correct += (np.sum(y_ptr == np.sign(ptr_target)) / y_ptr.size)
 
-                # Compute mem activation
-                y = np.multiply(y, mask)
-                y = np.multiply(self.act.f(self.w_mp.dot(np.sign(y))), mask)
+                # Mask and transit
+                y_ptr = np.multiply(y_ptr, mask)
+                y_mem = np.multiply(self.act.f(self.w_mp.dot(y_ptr)), mask)
 
                 t_correct += 1 - (
-                    np.sum(
-                        np.multiply(mask,
-                            ((y - self.mem_layer.coder.encode(end)) / 2) ** 2))
-                    / int(y.size / self.mask_frac))
+                    np.sum(np.multiply(mask, np.abs(y_mem - mem_target) / 2))
+                    / self.mask_size)
 
                 # Stabilize mem
                 for _ in range(self.stabil):
-                    y = self.act.f(self.w_mm.dot(y))
-                out = self.mem_layer.coder.decode(y)
+                    y_mem = self.act.f(self.w_mm.dot(y_mem))
+                out = self.mem_layer.coder.decode(y_mem)
 
                 # Check output
                 if out == end:
@@ -191,12 +181,14 @@ class GraphNet:
                     correct += 1
                 else:
                     w_correct += (
-                        np.sum(np.sign(y) == np.sign(
-                            self.mem_layer.coder.encode(end)))
-                        / y.size)
+                        np.sum(np.sign(y_mem) == np.sign(mem_target))
+                        / y_mem.size)
                 total += 1
 
-        return float(correct) / total, w_correct / total, t_correct / total
+        return (float(correct) / total,
+            w_correct / total,
+            t_correct / total,
+            p_correct / total)
 
     def test(self, mappings):
         return {
@@ -206,7 +198,6 @@ class GraphNet:
 def print_results(prefix, results):
     print(
         ("%7s" % prefix) +
-        #" ".join("%12.4f / %6.4f" % results[k]
         " ".join("      " + " / ".join("%6.4f" % r for r in results[k])
             for k in [
                 "trans_acc", "recall_acc" ]))
@@ -236,21 +227,21 @@ def table_to_mappings(table):
         for i in range(len(table))
     }
 
-def test(N, pad, mask_frac, mappings):
-    n = GraphNet(N, pad, mask_frac)
-    n.learn_mappings(mappings)
+def test(N, mask_frac, mappings):
+    n = GraphNet(N, mask_frac)
+    n.learn(mappings)
     return n.test(mappings)
 
 def print_header():
-    print("                " + " ".join(
-		"%21s" % x for x in [
-        "final_acc trans_acc", "recall_acc"]))
+    print("                   " + " ".join(
+        "%21s" % x for x in [
+        "final_acc         trans_acc", "recall_acc"]))
 
-def test_random_networks(N, pad, mask_frac):
+def test_random_networks(N, mask_frac):
     print_header()
 
     num_nodes = N * 2
-    for p in [0.1, 0.25, 0.5, 0.75, 1.0]:
+    for p in [0.1, 0.5]:
         net = nx.fast_gnp_random_graph(num_nodes, p, directed=True)
         #print(len(net.nodes), len(net.edges))
 
@@ -266,12 +257,12 @@ def test_random_networks(N, pad, mask_frac):
                 for i,v in zip(sample(keys,len(vs)), vs)]
                 #for i,v in enumerate(vs)]
 
-        n = GraphNet(N, pad, mask_frac)
-        n.learn_mappings(mappings)
+        n = GraphNet(N, mask_frac)
+        n.learn(mappings)
         print_results("%d/%d" % (num_nodes, len(net.edges)), n.test(mappings))
     print("")
 
-def test_machines(N, pad, mask_frac):
+def test_machines(N, mask_frac):
     print_header()
 
     table = [
@@ -286,7 +277,7 @@ def test_machines(N, pad, mask_frac):
     ]
 
     mappings = table_to_mappings(table)
-    print_results("Machine A", test(N, pad, mask_frac, mappings))
+    print_results("Machine A", test(N, mask_frac, mappings))
 
     mappings = {
         "1" : [("A", "2"), ("B", "3"), ("C", "4"), ("D", "6")],
@@ -300,44 +291,10 @@ def test_machines(N, pad, mask_frac):
         "9" : [("A", "3")],
     }
 
-    print_results("Machine B", test(N, pad, mask_frac, mappings))
+    print_results("Machine B", test(N, mask_frac, mappings))
     print("")
 
-    mappings = {
-        "0" : [('A', "1"), ('S', "16"), ('T', "10"), ('B', "4"), ('Y', "7"), ('D', "9"), ('W', "12")],
-        "3" : [],
-        "10" : [('E', "11")],
-        "4" : [('C', "5")],
-        "11" : [],
-        "5" : [],
-        "12" : [('U', "13")],
-        "1" : [('B', "2"), ('Z', "6")],
-        "13" : [],
-        "8" : [],
-        "6" : [],
-        "14" : [('C', "15")],
-        "7" : [('C', "8")],
-        "15" : [],
-        "9" : [('E', "14")],
-        "2" : [('C', "3")],
-        "16" : [('A', "17")],
-        "17" : [],
-    }
-    inputs = set()
-    for st,trans in mappings.items():
-        for inp,x in trans:
-            inputs.add(inp)
-
-    for st,trans in mappings.items():
-        for inp in inputs:
-            if inp not in trans:
-                trans.append((inp, "NULL"))
-
-    print("Causal Knowledge FSM:")
-    print_results("", test(N, pad, mask_frac, mappings))
-    print("")
-
-def test_param_explore(N, pad, mask_frac):
+def test_param_explore(N, mask_frac):
     num_states = N * 2
     num_inputs = int(N ** 0.5)
     num_trans = int(N ** 0.5)
@@ -350,34 +307,33 @@ def test_param_explore(N, pad, mask_frac):
     print_header()
 
     print("mask_frac")
-    for x in [N/4, N/2, N, N*2]:
-        x = int(x ** 0.5)
+    for x in [mask_frac, mask_frac ** 2]:
         mappings = gen_mappings(num_states, num_inputs, num_trans)
-        print_results(x, test(N, pad, x, mappings))
+        print_results(x, test(N, x, mappings))
     print("")
 
     print("num_states")
-    for x in [N/2, N, N*2, N * 4]:
+    for x in [N*2, N * 4]:
         x = int(x)
         mappings = gen_mappings(x, num_inputs, num_trans)
-        print_results(x, test(N, pad, mask_frac, mappings))
+        print_results(x, test(N, mask_frac, mappings))
     print("")
 
     print("num_inputs")
-    for x in [N/2, N, N*2, N * 4, N * 8]:
+    for x in [N * 4, N * 8]:
         x = int(x)
         mappings = gen_mappings(num_states, x, num_trans)
-        print_results(x, test(N, pad, mask_frac, mappings))
+        print_results(x, test(N, mask_frac, mappings))
     print("")
 
     print("num_trans")
-    for x in [N/8, N/4, N/2, N, N*2]:
+    for x in [N, N*2]:
         x = int(x)
         mappings = gen_mappings(max(num_states,x+1), max(num_inputs,x), x)
-        print_results(x, test(N, pad, mask_frac, mappings))
+        print_results(x, test(N, mask_frac, mappings))
     print("")
 
-def test_traj(N, pad, mask_frac):
+def test_traj(N, mask_frac):
     # Create field
     field_states = [("f%d" % i) for i in range(N * 2)]
 
@@ -411,7 +367,7 @@ def test_traj(N, pad, mask_frac):
 
     print_header()
     #for k,v in mappings.items(): print(k,v)
-    print_results("Traj", test(N, pad, mask_frac, mappings))
+    print_results("Traj", test(N, mask_frac, mappings))
 
     # Use numerical indices from head to each state
     mappings = {}
@@ -421,7 +377,7 @@ def test_traj(N, pad, mask_frac):
         mappings[h] = list(enumerate(traj))
 
     #for k,v in mappings.items(): print(k,v)
-    print_results("Indexed", test(N, pad, mask_frac, mappings))
+    print_results("Indexed", test(N, mask_frac, mappings))
 
     # Use states as index into head
     mappings = {}
@@ -432,10 +388,10 @@ def test_traj(N, pad, mask_frac):
             mappings[h].append((pre, post))
 
     #for k,v in mappings.items(): print(k,v)
-    print_results("Rev-ndx", test(N, pad, mask_frac, mappings))
+    print_results("Rev-ndx", test(N, mask_frac, mappings))
     print("")
 
-def test_abduce(pad):
+def test_abduce():
     test_data = []
     actions = 'ABC'
     causes = 'XYZSTUGHIJ'
@@ -461,7 +417,7 @@ def test_abduce(pad):
     for k in knowledge:
         print("  " + str(k))
 
-    seq = "".join([choice('ABC') for _ in range(32)])
+    seq = "".join([choice('ABC') for _ in range(256)])
     for l in (2, 4, 8, 16, 32):
         test_data.append(
             (
@@ -563,12 +519,11 @@ def test_abduce(pad):
         print()
         print_header()
         for N in [16, 24, 32]:
-            print_results(N, test(N, pad, (N**0.5)/2, mappings))
+            print_results(N, test(N, (N**0.5)/2, mappings))
         print()
 
 # Parameters
 for N in [16, 24, 32]:
-    pad = 0.0001
     mask_frac = (N ** 0.5) / 2
 
     print("-" * 80)
@@ -576,9 +531,9 @@ for N in [16, 24, 32]:
     print("mask_frac = %s" % mask_frac)
     print()
 
-    test_random_networks(N, pad, mask_frac)
-    test_machines(N, pad, mask_frac)
-    test_param_explore(N, pad, mask_frac)
-    test_traj(N, pad, mask_frac)
+    test_random_networks(N, mask_frac)
+    test_machines(N, mask_frac)
+    test_param_explore(N, mask_frac)
+    test_traj(N, mask_frac)
 print("-" * 80)
-test_abduce(pad)
+test_abduce()
