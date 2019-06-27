@@ -1,0 +1,255 @@
+Unchanged:
+subv lab            Call the sub-routine starting on the line labeled lab.
+ret                 Return from the current sub-routine to the line where it was called.
+
+?
+subr reg            Like subv but the target label is stored in register reg.
+
+
+Collapse register:
+movv reg sym        Move the literal symbol sym into register reg.
+mem reg             Write the symbol in register reg to the current memory location.
+rem reg             Read the symbol at the current memory location into register reg.
+ref reg             Reference the current memory location by the symbol in register reg.
+drf reg             Dereference a new memory location from the symbol in register reg.
+
+jmpr reg            Jump to the line whose label is stored in register reg.
+
+
+Modify:
+cmpv reg sym        Compare the symbol in register reg with the literal symbol sym.
+jmpv lab            Jump to the line labeled lab.
+jier reg            Like jiev but the target label is stored in register reg.
+jiev lab            Jump, if the last compare was equal, to the line labeled lab.
+
+
+Unnecessary:
+
+nop                 Do nothing (no operation).
+exit                Halt execution.
+
+movr dst src        Move (copy) the symbol in register src into register dst.
+cmpr reg1 reg2      Compare the symbols in registers reg1 and reg2.
+nxt                 Shift the read/write head to the next memory location.
+prv                 Shift the read/write head to the previous memory location.
+
+================================================================================
+
+1. Calling functions and returning
+subv lab            Call the sub-routine starting on the line labeled lab.
+subr                Like subv but the target label is stored in register reg.
+ret                 Return from the current sub-routine to the line where it was called.
+
+2. Setting register symbol
+movv sym            Move the literal symbol sym into register reg.
+
+3. Register-memory interactions
+mem                 Write the symbol in register reg to the current memory location.
+rem                 Read the symbol at the current memory location into register reg.
+ref                 Reference the current memory location by the symbol in register reg.
+drf                 Dereference a new memory location from the symbol in register reg.
+
+4. Comparison
+cmp_load            Load register pattern as a point of comparison
+cmp_check           Compare register pattern to loaded pattern to produce true/false
+cmp_loadv sym       Load literal pattern as a point of comparison
+cmp_checkv sym      Compare literal pattern to loaded pattern to produce true/false
+
+5. Control structures
+jmpv lab            Jump to the line labeled lab.
+jmpr                Jump to the line whose label is stored in register
+jiev lab            Jump, if the last compare was equal, to the line labeled lab.
+jier                Like jiev but the target label is stored in register reg.
+
+================================================================================
+
+GLOBAL STRUCTURES
+1. Heap
+    -> contains an ordered set of unused memory patterns
+2. Stack
+    -> contains an ordered set of environment nodes
+        * maps variables to values (including function arguments)
+        * return address
+        * return values
+
+# drf var    : PROG(var) -> MEM
+# ref var    : learn PROG(var) -> MEM
+
+# ld_ptr     : CTX -> PTR & MEM -> PTR
+# ld_ctx var : PROG(var) -> CTX
+# ld_ctx     : MEM -> CTX
+
+# trans      : CTX -> MEM & PTR -> MEM
+# auto       : MEM -> MEM
+
+# ltrans     : CTX -> MEM & learn PTR -> MEM
+# lauto      : learn MEM -> MEM
+
+# ld_cmp     : learn MEM -> CMP
+# cmp        : MEM -> CMP
+
+GLOBAL VARIABLES
+* temp           :
+* null           : points to null memory state
+* transit_target : used for learning transits from current MEM/CTX to target
+* heap           : pointer to the front of heap stack
+* env            : pointer to top of stack (current environment)
+
+### Global variable macros
+# Activate a global variable in MEM
+get_global(var):
+  drf var
+
+# Set a global variable to activation in MEM
+set_global(var):
+  ref var
+
+### Null comparison
+# Compares the current MEM state to null (result stored in CMP)
+is_null():
+  ld_cmp
+  get_global(null)
+  cmp
+
+### Transitions
+# Execute a transition from current MEM state using current CTX
+transit():
+  ld_ptr
+  trans
+  auto
+
+# Learn a transition from current MEM state to value of global
+#      |transit_target| using current CTX
+learn_transit():
+  ld_ptr
+  get_global(transit_target)
+  lauto
+  ltrans
+
+### Stack functions
+# Pop a state from a global stack and activate it in MEM
+#   Stacks are ordered sets
+#   The stack variable points to the top of the stack
+#   Each element is linked to the element below it via the stack variable
+#   The last element is null
+# TODO: how is the global variable handled?
+pop(stack):
+  get_global(stack)
+  is_null()
+
+  # If the stack is empty, null is returned and the stack is unchanged
+  # if equal: return
+  # else:
+  set_global(temp)
+  ld_ctx stack
+  transit()
+  set_global(stack)
+  get_global(temp)
+
+# Push the current MEM state onto a global stack
+push(stack):
+  set_global(temp)
+  get_global(stack)
+  set_global(transit_target)
+  get_global(temp)
+  ld_ctx stack
+  learn_transit()
+
+# Activate true/false in CMP based on whether a stack is empty
+empty(stack):
+  get_global(stack)
+  is_null()
+
+# Checks if the heap is empty
+out_of_mem():
+  empty(heap)
+
+# Activate an unused state in MEM from the heap
+# If out of memory, null will be returned
+malloc():
+  pop(heap)
+
+# Add the current MEM state to the heap
+free():
+  push(heap)
+
+### Local variable macros
+# Activate a local variable in MEM
+get_local(var):
+  ld_ctx var
+  get_global(env)
+  transit()
+
+# Set a local variable in CTX to activation in MEM
+set_local(var):
+  set_global(transit_target)
+  ld_ctx var
+  get_global(env)
+  learn_transit()
+
+
+
+
+
+
+
+
+# TODO: Update for local variables
+#   Queue must be a dictionary so that it can be updated in a function
+#   Argument (local variable) must be a pointer to the queue dictionary
+#
+# Dequeue an element from a queue
+#   Queues are ordered sets
+#   The queue variable points to the front of the queue
+#   Each element is linked to the element after it via the queue variable
+#   The last element is null
+#   A queue_end variable points to the end of the queue
+#   If the queue is empty, this will be null
+#   Otherwise, it will be a non-null element
+dequeue(queue, queue_end):
+  # Dequeueing is identical to stack popping
+  # However, dequeueing the last element requires moving the end pointer to null
+  pop(queue)
+  is_null()
+
+  # If the queue is empty, null is returned and the queue is unchanged
+  # if equal: return
+  # else:
+  get_global(queue)
+  is_null()
+
+  # if equal:
+  set_global(queue_end)
+
+# Enqueue the current MEM state into a queue
+enqueue(queue, queue_end):
+  set_global(temp)
+  get_global(queue_end)
+  is_null()
+
+  # if equal:
+  set_global(transit_target)
+  get_global(temp)
+  set_global(queue_end)
+  ld_ctx queue
+  learn_transit()
+
+  # else:
+  get_global(temp)
+  set_global(transit_target)
+  ld_ctx queue
+  get_global(queue_end)
+  learn_transit()
+  get_global(temp)
+  set_global(queue_end)
+
+
+# TODO
+To call a function:
+  args = malloc()
+
+  learn_transit(
+
+To bind an argument:
+  args = malloc()
+  learn_transit(args,arg,var)
