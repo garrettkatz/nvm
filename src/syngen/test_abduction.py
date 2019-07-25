@@ -1,154 +1,103 @@
 from queue import Queue
 from random import choice
-from itertools import chain
 
 """
-State in tree-based Finite State Machine.
-
-Each state contains:
-    * set of associated |causes| (can be empty)
-    * dictionary of |transitions| keyed by input actions/causes
-    * link to |parent| state (knowledge FSMs are trees)
+Represents a cause-effect relation in the knowledge base.
+  |cause| is an intention that results in |effects|
 """
-class FSMState:
-    counter = 0
+class Relation:
+    def __init__(self, cause, effects):
+        self.cause = cause
+        self.effects = effects
 
-    def __init__(self, prev_state=None):
-        self.index = FSMState.counter
-        FSMState.counter += 1
-
-        # TODO:
-        # State cannot have overlap between causes and transitions.
-        # This is because dictionary keys are added as explicit lists in state
-        #   dictionaries in the neural implementation.
-        # Although this seems like an unusual problem, because causes is a list
-        #   and transitions is a dictionary, a solution is to encode the overlap
-        #   in a separate list:
-        #
-        # causes = [...]
-        # transitions = [...]
-        # both = [...]
-        #
-        # Then, when iterating through causes or transition keys, the additional
-        #   list can also be traversed.
-        self.causes = [ ]
-        self.transitions = { }
-        self.parent = prev_state
-
-    """
-    Advance the machine using transition 'inp'.
-    Invalid transitions will cause advance() to return None.
-    """
-    def advance(self, inp):
-        return self.transitions.get(inp, None)
-
-    """ Recursive iterator. """
-    def __iter__(self):
-        yield self
-        yield from chain.from_iterable(self.transitions.values())
-
-    def __str__(self):
-        return "s%d" % self.index
-
+        # TODO: argument validation/extraction
 
 """
-Builds a Finite State Machine encoding a tree of causal knowledge.
-
-Constructor takes a list of (cause, effect) tuples encoding knowledge:
-    fsm = build_fsm(
-        [
-            ('X', 'ABC'),   # X causes A->B->C
-            ('Y', 'AB'),    # Y causes A->B
-            ('Z', 'XY'),    # Z causes X->Y
-            ...
-        ]
-    )
-
-To run the machine:
-    state = fsm
-    for v in 'ABCDE':
-        state = state.advance(state)
-        print(state.causes)
+Knowledge base of cause-effect relations.
+  |knowledge| is a list of cause-effect tuples
 """
-def build_fsm(knowledge):
-    init = FSMState()
+class KnowledgeBase:
+    def __init__(self, knowledge):
+        self.relations = { effects[0] : [] for cause,effects in knowledge}
 
-    # Add a path for each cause-effect pair
-    for cause,effects in knowledge:
-        state = init
+        for cause,effects in knowledge:
+            self.relations[effects[0]].append(Relation(cause, effects))
 
-        for effect in effects:
-            successor = state.advance(effect)
-
-            if successor is None:
-                successor = FSMState(prev_state=state)
-                state.transitions[effect] = successor
-            state = successor
-
-        state.causes.append(cause)
-
-    return init
-
-
+    def evoke(self, effect):
+        return self.relations.get(effect, [])
 
 """
-Represents an observed instance of a cause with a given |identity| with a list
-  of |effects| covering time |start_t| to |end_t| (inclusive/exclusive).
-
-  Primitive actions have no effects and take up a single timestep. Their |args|
-  come directly from observation, while the |args| of higher-order causes will
-  be derived from |effects|.
+Represents an identified possible cause.
+  |identity| is the causal identity
+  |start_time| indicates the timestep before the first effect
+  |end_time| indicates the last timestep of the last effect
+  |hypothesis| provides a link back to the observational support for the cause
+    if the cause is self-evidential (action causes itself), |hypothesis| is null
 """
 class Cause:
     counter = 0
 
-    def __init__(self, identity, end_t, source_state=None, source_cause=None, args={}):
+    def __init__(self, identity, start_time, end_time, args=None):
         self.index = Cause.counter
         Cause.counter += 1
 
         self.identity = identity
-        self.end_t = end_t
-        self.source_state = source_state
-        self.cache = { }
-        self.effects = [ ]
-
-        if source_cause is None:
-            # Primitive actions have no effects and last one timestep
-            self.start_t = end_t.previous
-        else:
-            # Higher-order actions start before the first effect
-            # Trace back to the first effect in the path
-            while source_cause is not None:
-                self.effects.insert(0, source_cause)
-                source_cause = source_cause.cache[source_state]
-                source_state = source_state.parent
-            self.start_t = self.effects[0].start_t
-
-        # TODO:
-        # 1. Validate that effects match cause
-        # 2. Extract arguments from effects
-        self.args = {}
-
-    """
-    Caches a FSM |state| with the |cause| of its incoming transition.
-    This way, when a cause is completed, the effects can be recovered by tracing
-      backward through the FSM using the timesteps stored in each cause/effect.
-    """
-    def cache_state(self, state, cause):
-        if state in self.cache:
-            pass
-        self.cache[state] = cause
+        self.start_time = start_time
+        self.end_time = end_time
+        self.args = args
 
     def __str__(self):
         return "c%d" % self.index
 
+"""
+Represents a hypothesis that a cause-effect |relation| explains a sequence of
+  effects starting at the given |start_time|.
+
+Hypotheses keep track of the observed effects that correspond to the effects
+  list in the relation.
+"""
+class Hypothesis:
+    counter = 0
+
+    def __init__(self, relation, effect):
+        self.index = Hypothesis.counter
+        Hypothesis.counter += 1
+
+        self.relation = relation
+        self.effects = [effect]
+        self.args = None
+
+    def complete(self):
+        return len(self.effects) == len(self.relation.effects)
+
+    def extend(self, effect):
+        if self.complete():
+            raise Exception
+
+        if effect.identity == self.relation.effects[len(self.effects)]:
+            self.effects.append(effect)
+            # TODO: update arguments based on effect
+            return True
+        else:
+            return False
+
+    def gen_cause(self):
+        if not self.complete():
+            raise Exception
+
+        return Cause(self.relation.cause,
+                        self.effects[0].start_time,
+                        self.effects[-1].end_time,
+                        self.args)
+
+    def __str__(self):
+        return "h%d" % self.index
 
 """
 Timepoint nodes that are chained into a reverse linked list.
 
 Each node contains:
     * pointer to |previous| timepoint
-    * |cache| mapping active FSM states to the incoming transition cause
     * set of |causes| that end at this timepoint
 """
 class Timepoint:
@@ -159,19 +108,27 @@ class Timepoint:
         Timepoint.counter += 1
 
         self.previous = previous
-        self.causes = [ ]
+        self.hypotheses = set()
+        self.causes = set()
 
     """ Spawns a new timepoint and adds a pointer to the current timepoint.  """
     def incr(self):
         return Timepoint(self)
 
-    """
-    Adds a |cause| to this timepoint.
-    Causes serve as edges in the causal graph because they contain pointers to
-      their start and end timepoints.
-    """
+    def get_hypotheses(self):
+        return set(self.hypotheses)
+
+    def add_hypothesis(self, to_add):
+        self.hypotheses.add(to_add)
+
+    def remove_hypothesis(self, to_remove):
+        self.hypotheses.remove(to_remove)
+
+    def get_complete_hypotheses(self):
+        return set(hyp for hyp in self.hypotheses if hyp.complete())
+
     def add_cause(self, cause):
-        self.causes.append(cause)
+        self.causes.add(cause)
 
     """ Recursive iterator. """
     def __iter__(self):
@@ -182,186 +139,9 @@ class Timepoint:
     def __str__(self):
         return "t%d" % self.index
 
-"""
-Perform cause-effect reasoning (abduction) using an input sequence of actions
-  and a Finite State Machine encoding causal knowledge.
-
-Returns a list of the shortest paths terminating at each time point.
-
-Variables for graph generation:
-    * curr_t     : current timepoint
-    * a          : observed action
-    * q          : action/cause queue
-    * v          : cause (may be 'a')
-    * state      : fsm_state
-
-    FSM transitioning (process)
-    * curr_t     : current timepoint
-    * v          : current cause of transition
-    * pre_cause  : cause of prior transition
-    * pre_state  : prior state
-
-Time complexity (worst case):
-1. Graph generation (TODO)
-
-    For each timestep (length of action sequence):
-       For each cause v generated at curr_t:
-           For each cause at v's start time (v_t):
-               For each cached state:
-                   If terminal transition:
-                       For each cause in state, create new cause:
-                           For each effect in FSM path:
-                               Reverse transition through FSM
-
-    Because Cause caches cannot have repeat FSM states, and FSM states only have
-        one parent, the inner-most loops can be combined. The total number of
-        constructed Causes constructed during iteration over a given cache is
-        bounded by the number of cause-effect relations in the knowledge base.
-        Because Cause construction requires tracing back through the FSM, the
-        total number of operations is the cumulative length of effect sequences
-        in the knowledge base:
-
-    Worst case:
-    O = len(action_sequence)
-            * len(causes)
-                * len(causes)
-                    * (len(FSM)
-                        + sum(len(effects) for (cause,effects) in knowledge))
 
 
-    Identify bounds for any given timepoint based on the knowledge base only:
-        1. The number of causes constructed
-        2. The cumulative cache length for constructed Causes
-        3. The cumulative length of effect sequences in the cause-effect pairs
-            used for construction of Causes
-
-    For the following analyses, the example knowledge base will be:
-        X : A->B->B
-        X : A->B
-        X : B
-        Y : X
-
-    1. Cause construction
-
-    Define set(suffix) as the set of causal action decompositions that share a
-        common |suffix|.
-
-    set(B):
-        X : A->B->B
-        X : A->B
-        X : B
-        Y : X : A->B->B
-        Y : X : A->B
-        Y : X : B
-
-    Define C as the length of the largest set(suffix) for all possible suffixes
-        in the knowledge base. C is the maximum number of Causes that can be
-        constructed during any given timepoint. It is evident that at least one
-        of the suffixes that satisfy this condition will be of length 1. Thus,
-        C can be computed by looping over all primitive actions and recursively
-        decomposing cause-effect relations.
-
-    2. Cumulative cache length
-
-    Define covers(sequence) as the complete set of covers for a given sequence.
-    Define paths(covers(sequence)) as the set FSM states with a path from the
-        initial state that is contained in covers(sequence).
-
-    Define S as the length of the largest paths(covers(subsequence)) for all
-        possible effects subsequences in the knowledge base. S is the maximum
-        number of cached states at any given time point.  This definition is
-        tautological because the abduction algorithm itself is necessary to
-        compute it, but it can be computed given only the knowledge base.
-
-    An alternative, looser bound uses set(suffix):
-    Define T(causal_identity) as the number of transitions in the FSM associated
-        with a causal identity.
-    Define T(set(suffix)) as the sum of T(causal_identity) for the causal
-        identies of all elements of set(suffix).
-    Define S as the largest T(set(suffix)) for all possible suffixes in the
-        knowledge base. As with C, it is evident that S will be associated with
-        a suffix of length 1, and it can be computed in a similar fashion to S.
-    This works by considering possible sets of causes evoked during a timestep,
-        and all possible transitions that they could be effectively associated
-        with. In practice, the actual number of possible transitions depends on
-        the cache from the prior timestep, but using this information to bound
-        the current cache size requires the previously outlined method of
-        computing possible covers.
-
-    3. Cumulative length of evoked effects sequences
-
-    Define effects(set(suffix)) as the list of all of effects sequences
-        associated with the action decompositions in set(suffix).
-
-    effects(set(B)):
-        A->B->B
-        A->B
-        B
-        X
-        X
-        X
-
-    Define len(effects(set(suffix))) as the cumulative length of effects
-        sequences in effects(set(suffix)).
-    Define E as the maximum len(effects(set(suffix))) for all possible suffixes
-        in the knowledge base. E is the maximum number of tracebacks in the FSM
-        that will occur at any given timestep.
-
-
-
-    Given these definitions of C, S, and E:
-
-    (C * S) is the total number of transitions in the FSM that can be attempted
-        in a given timestep. This correspond to each pair (state,cause), where
-        |state| is cached in a cause evoked at time t-1, and |cause| is a cause
-        evoked at time t.
-    Regardless of the number of attempted transitions, the number of tracebacks
-        is bounded by E. For this reason, the computational complexity of each
-        timestep is ((C * S) + E)
-
-    Therefore:
-        O = len(action_sequence) * ((C * S) + E)
-
-
-    In the restricted case where:
-        1. Effects do not need to be computed when Causes are evoked. This means
-            that Cause construction is O(1), but requires that start times be
-            cached along with active states
-        2. Each cause-effect relation in the knowledge base is used at most once
-            during a timestep
-    Define max_T = sum(T(cause.identity) for (cause,effects) in knowledge)
-    This is the sum of transition counts for the causal identities of each
-        cause-effect relation in the knowledge base
-
-    The complexity of the algorithm can be easily bounded by
-        O = len(action_sequence) * len(knowledge) * max_T
-
-
-2. Dynamic programming
-   O = len(causes)
-3. Computing shortest path
-   O = len(input_sequence)
-
-Space complexity:
-    Memory states:
-        Fixed based on knowledge base:
-            States in FSM
-            Unique causal identities
-        Varies based on action sequence:
-            Timepoints
-            Causes identified during inference
-
-        O = len(FSM) + len(set(causal_identities))
-            + len(action_sequence) + len(causes)
-
-        Bounding the sequence length number of identified causes:
-        C = len(memory) >= len(action_sequence) + len(causes)
-        O = len(FSM) + len(set(causal_identities)) + C
-
-
-    Transitions:
-"""
-def abduce(fsm, input_sequence):
+def abduce(kb, input_sequence):
     # Current time
     curr_t = Timepoint()
 
@@ -373,7 +153,7 @@ def abduce(fsm, input_sequence):
         # Create a queue of action/causes to process
         # Initialize with self-cause for observed action
         q = Queue()
-        q.put(Cause(a, curr_t))
+        q.put(Cause(a, curr_t.previous, curr_t))
 
         # Run until the queue is empty
         while not q.empty():
@@ -381,29 +161,18 @@ def abduce(fsm, input_sequence):
             v = q.get()
             curr_t.add_cause(v)
 
-            def process(pre_cause, pre_state):
-                state = pre_state.advance(v.identity)
+            # Evoke new hypotheses in current time
+            for relation in kb.evoke(v.identity):
+                hyp = Hypothesis(relation, v)
+                if hyp.complete(): q.put(hyp.gen_cause())
+                else:              curr_t.add_hypothesis(hyp)
 
-                # If the FSM advancement was successful...
-                if state is not None:
-                    # Cache the new state with the transition cause
-                    v.cache_state(state, pre_cause)
-
-                    # If the state is terminal, enqueue all of its causes
-                    #   with the path start timepoint. Because the queue was
-                    #   initialized with the observed action, only process
-                    #   high-level causes.
-                    for cause in state.causes:
-                        q.put(Cause(cause, curr_t, state, v))
-
-            # Process initial state
-            process(None, fsm)
-
-            # Process all states cached in causes at v's start time
-            for pre_cause in v.start_t.causes:
-                for pre_state in pre_cause.cache:
-                    process(pre_cause, pre_state)
-
+            # Extend hypotheses to current time if possible
+            for hyp in v.start_time.get_hypotheses():
+                if hyp.extend(v):
+                    v.start_time.remove_hypothesis(hyp)
+                    if hyp.complete(): q.put(hyp.gen_cause())
+                    else:              curr_t.add_hypothesis(hyp)
 
 
     # Gather timepoints for convenient iteration (reverse order)
@@ -418,21 +187,21 @@ def abduce(fsm, input_sequence):
         length = 1 + shortest_length[t]
 
         for cause in t.causes:
-            if length < shortest_length[cause.start_t]:
-                shortest_length[cause.start_t] = length
-                shortest_edge[cause.start_t] = cause
+            if length < shortest_length[cause.start_time]:
+                shortest_length[cause.start_time] = length
+                shortest_edge[cause.start_time] = cause
 
     # Compute the shortest path from end to each node
     shortest_path = { curr_t : "" }
     for t in timepoints[1:]:
         cause = shortest_edge[t]
-        shortest_path[t] = shortest_path[cause.end_t] + cause.identity
+        shortest_path[t] = shortest_path[cause.end_time] + cause.identity
 
     return timepoints, shortest_path
 
 
-def run(fsm, seq, answer=None, verbose=False):
-    timepoints, best_path = abduce(fsm, seq)
+def run(kb, seq, answer=None, verbose=False):
+    timepoints, best_path = abduce(kb, seq)
 
     if verbose:
         print("Sequence: " + seq)
@@ -442,27 +211,22 @@ def run(fsm, seq, answer=None, verbose=False):
 
         print("Shortest path: %d" % len(best_path[timepoints[-1]]))
         print("Num causes: %d" % sum(len(t.causes) for t in timepoints))
-        print("Cache size: %d" % sum(len(c.cache) for t in timepoints for c in t.causes))
 
         if answer is not None:
             print("Correct: %s" % (best_path[timepoints[-1]] == answer))
         print()
 
-        # Label the FSM states and timepoints
-        print("Caches")
-        for t in timepoints:
-            for c in t.causes:
-                print(str(c), [(str(s), str(o)) for s,o in c.cache.items()])
-        print()
-
         print("Timepoints")
         for t in timepoints:
-            print(str(t), [str(v) for v in t.causes])
+            print(str(t))
+            print("  Hypoth:", [str(h) for h in t.hypotheses])
+            print("  Causes:", [str(v) for v in t.causes])
         print()
 
-        print("FSM")
-        for st in iter(fsm):
-            print(str(st), [(inp, str(st2)) for inp,st2 in st.transitions.items()])
+        print("Knowledge Base")
+        for k,v in kb.relations.items():
+            for r in iter(v):
+                print(r.cause, r.effects)
         print()
 
     return best_path[timepoints[-1]]
@@ -526,4 +290,4 @@ test_data = [
 
 if __name__ == "__main__":
     for knowledge, seq, answer in test_data:
-        run(build_fsm(knowledge), seq, answer, verbose=True)
+        run(KnowledgeBase(knowledge), seq, answer, verbose=True)
