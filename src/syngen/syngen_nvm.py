@@ -267,12 +267,6 @@ def make_syngen_network(nvmnet):
                 "learning" : True
             })
 
-        # Normalization factor for plasticity
-        if to_name == "co":
-            norm = to_layer.activator.on ** 2
-        else:
-            norm = from_layer.size * (to_layer.activator.on ** 2)
-
         # Weights
         connections.append({
             "name" : get_conn_name(to_name, from_name, "weights"),
@@ -282,7 +276,8 @@ def make_syngen_network(nvmnet):
             "opcode" : "add",
             "gated" : gated,
             "plastic" : plastic,
-            "norm" : norm,
+            # Normalization factor for plasticity
+            "norm" : to_layer.activator.on ** 2,
         })
 
         # Biases (skip if all zero)
@@ -433,7 +428,7 @@ def make_checker_module(nvmnet):
         ]
     }
 
-def make_custom_input_module(structure, layer_names, name, cb, clear):
+def make_custom_input_module(structure, layer_names, name, cb, clear=True):
 
     def custom_callback(ID, size, ptr):
         cb(layer_names[ID], FloatArray(size,ptr).to_np_array())

@@ -14,8 +14,8 @@ import numpy as np
 import networkx as nx
 import matplotlib.pyplot as plt
 
-from test_abduction import test_data as abduction_test_data
-from test_abduction import build_fsm, abduce
+#from test_abduction import test_data as abduction_test_data
+#from test_abduction import build_fsm, abduce
 
 
 class GraphNet:
@@ -532,8 +532,8 @@ for N in [16, 24, 32]:
     print()
 
     test_random_networks(N, mask_frac)
-    test_machines(N, mask_frac)
-    test_param_explore(N, mask_frac)
-    test_traj(N, mask_frac)
-print("-" * 80)
-test_abduce()
+    #test_machines(N, mask_frac)
+    #test_param_explore(N, mask_frac)
+    #test_traj(N, mask_frac)
+#print("-" * 80)
+#test_abduce()

@@ -31,8 +31,7 @@ Represents an identified possible cause.
   |identity| is the causal identity
   |start_time| indicates the timestep before the first effect
   |end_time| indicates the last timestep of the last effect
-  |hypothesis| provides a link back to the observational support for the cause
-    if the cause is self-evidential (action causes itself), |hypothesis| is null
+  |args| are inherited arguments from observed actions
 """
 class Cause:
     counter = 0
@@ -59,12 +58,14 @@ Hypotheses keep track of the observed effects that correspond to the effects
 class Hypothesis:
     counter = 0
 
-    def __init__(self, relation, effect):
+    def __init__(self, relation, start_time):
         self.index = Hypothesis.counter
         Hypothesis.counter += 1
 
         self.relation = relation
-        self.effects = [effect]
+        self.effects = []
+        self.start_time = start_time
+        self.curr_time = start_time
         self.args = None
 
     def complete(self):
@@ -74,8 +75,10 @@ class Hypothesis:
         if self.complete():
             raise Exception
 
-        if effect.identity == self.relation.effects[len(self.effects)]:
+        if (effect.start_time == self.curr_time
+            and effect.identity == self.relation.effects[len(self.effects)]):
             self.effects.append(effect)
+            self.curr_time = effect.end_time
             # TODO: update arguments based on effect
             return True
         else:
@@ -108,24 +111,11 @@ class Timepoint:
         Timepoint.counter += 1
 
         self.previous = previous
-        self.hypotheses = set()
         self.causes = set()
 
     """ Spawns a new timepoint and adds a pointer to the current timepoint.  """
     def incr(self):
         return Timepoint(self)
-
-    def get_hypotheses(self):
-        return set(self.hypotheses)
-
-    def add_hypothesis(self, to_add):
-        self.hypotheses.add(to_add)
-
-    def remove_hypothesis(self, to_remove):
-        self.hypotheses.remove(to_remove)
-
-    def get_complete_hypotheses(self):
-        return set(hyp for hyp in self.hypotheses if hyp.complete())
 
     def add_cause(self, cause):
         self.causes.add(cause)
@@ -145,6 +135,9 @@ def abduce(kb, input_sequence):
     # Current time
     curr_t = Timepoint()
 
+    # Set of evoked hypotheses that haven't been matched yet
+    hypotheses = set()
+
     # For each action in the input sequence...
     for a in input_sequence:
         # Increment timestep
@@ -163,16 +156,16 @@ def abduce(kb, input_sequence):
 
             # Evoke new hypotheses in current time
             for relation in kb.evoke(v.identity):
-                hyp = Hypothesis(relation, v)
-                if hyp.complete(): q.put(hyp.gen_cause())
-                else:              curr_t.add_hypothesis(hyp)
+                hypotheses.add(Hypothesis(relation, v.start_time))
 
-            # Extend hypotheses to current time if possible
-            for hyp in v.start_time.get_hypotheses():
-                if hyp.extend(v):
-                    v.start_time.remove_hypothesis(hyp)
-                    if hyp.complete(): q.put(hyp.gen_cause())
-                    else:              curr_t.add_hypothesis(hyp)
+            # Extend hypotheses and generate causes for complete hypotheses
+            for hyp in hypotheses:
+                hyp.extend(v)
+                if hyp.complete():
+                    q.put(hyp.gen_cause())
+
+            # Remove completed hypotheses from the active set
+            hypotheses = set(hyp for hyp in hypotheses if not hyp.complete())
 
 
     # Gather timepoints for convenient iteration (reverse order)
@@ -197,11 +190,11 @@ def abduce(kb, input_sequence):
         cause = shortest_edge[t]
         shortest_path[t] = shortest_path[cause.end_time] + cause.identity
 
-    return timepoints, shortest_path
+    return timepoints, shortest_path, hypotheses
 
 
 def run(kb, seq, answer=None, verbose=False):
-    timepoints, best_path = abduce(kb, seq)
+    timepoints, best_path, hypotheses = abduce(kb, seq)
 
     if verbose:
         print("Sequence: " + seq)
@@ -218,9 +211,10 @@ def run(kb, seq, answer=None, verbose=False):
 
         print("Timepoints")
         for t in timepoints:
-            print(str(t))
-            print("  Hypoth:", [str(h) for h in t.hypotheses])
-            print("  Causes:", [str(v) for v in t.causes])
+            print(str(t), "  Causes:", [str(v) for v in t.causes])
+        print()
+
+        print("Unfinished hypotheses: ", len(hypotheses))
         print()
 
         print("Knowledge Base")
