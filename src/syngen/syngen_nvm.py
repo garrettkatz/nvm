@@ -282,15 +282,16 @@ def make_syngen_network(nvmnet):
 
         # Biases (skip if all zero)
         if np.count_nonzero(nvmnet.biases[(to_name, from_name)]) > 0:
-            connections.append({
-                "name" : get_conn_name(to_name, from_name, "biases"),
-                "from layer" : "bias",
-                "to layer" : to_name,
-                "type" : "fully connected",
-                "opcode" : "add",
-                "gated" : gated,
-                "plastic" : False,
-            })
+            if to_name != "co":
+                connections.append({
+                    "name" : get_conn_name(to_name, from_name, "biases"),
+                    "from layer" : "bias",
+                    "to layer" : to_name,
+                    "type" : "fully connected",
+                    "opcode" : "add",
+                    "gated" : gated,
+                    "plastic" : False,
+                })
 
     # Set structures
     for conn in connections:
@@ -309,9 +310,9 @@ def init_syngen_nvm_weights(nvmnet, syngen_net):
 
     # Initialize biases
     for (to_name, from_name), b in nvmnet.biases.items():
-        if np.count_nonzero(b) > 0:
-            syngen_net.get_weight_matrix(
-                get_conn_name(to_name, from_name, "biases")).copy_from(b.flat)
+        if to_name != "co" and np.count_nonzero(b) > 0:
+                syngen_net.get_weight_matrix(
+                    get_conn_name(to_name, from_name, "biases")).copy_from(b.flat)
 
     # Initialize exit detector
     exit_pattern = np.sign(nvmnet.layers["opc"].coder.encode("exit"))
