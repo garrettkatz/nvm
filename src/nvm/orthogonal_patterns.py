@@ -47,6 +47,8 @@ def calculate_half(n):
     return -1;
 
 def nearest_valid_hadamard_size(i):
+    #print("Checking for size", i)
+    i = i//1
     multiple = give_new_number(i)
     return multiple[0]
     # return nearest_power_of_2(i)
@@ -126,6 +128,7 @@ def random_hadamard(N, P):
     # Randomly interchange N pairs of rows
     for _ in range(N):
         m, n = np.random.randint(N), np.random.randint(N)
+        #print("m,n", m,n)
         R[n,:], R[m,:] = R[m,:].copy(), R[n,:].copy()
     
     # # Interchange every pair of rows with some probability (N^2 time)
